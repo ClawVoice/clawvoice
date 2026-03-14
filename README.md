@@ -204,6 +204,8 @@ Key settings in `openclaw.plugin.json` `configSchema`:
 
 ## Documentation
 
+- [`docs/SETUP.md`](docs/SETUP.md) - Full setup guide with step-by-step instructions and configuration reference
+- [`docs/FEATURES.md`](docs/FEATURES.md) - Complete feature list
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - System architecture, voice providers, memory isolation design
 - [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) - Project background, reference code inventory, competitive landscape
 - [`docs/BUSINESS_MODEL.md`](docs/BUSINESS_MODEL.md) - Pricing strategy, COGS analysis, revenue projections (internal)

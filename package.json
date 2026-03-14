@@ -1,7 +1,7 @@
 {
   "name": "clawvoice",
-  "version": "0.1.0",
-  "description": "Voice calling plugin scaffolding for OpenClaw",
+  "version": "1.0.0",
+  "description": "Voice calling plugin for OpenClaw — give your AI agent a phone number",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
