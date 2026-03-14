@@ -13,8 +13,9 @@ ClawVoice is a voice calling plugin for OpenClaw that adds PSTN voice channels f
   - `voice_assistant.hangup`
   - `voice_assistant.status`
   - `voice_assistant.promote_memory`
-- Interactive setup wizard via CLI (`clawvoice setup`) for managed and self-hosted operation.
-- Managed mode with service-token onboarding and relay configuration.
+- Interactive setup wizard via CLI (`clawvoice setup`).
+- Configurable voice persona via `voiceSystemPrompt` to define agent behavior on calls.
+- Enable/disable inbound call answering via `inboundEnabled` config flag.
 - Configuration precedence with deterministic resolution:
   - environment variables
   - plugin configuration
@@ -26,11 +27,6 @@ ClawVoice is a voice calling plugin for OpenClaw that adds PSTN voice channels f
 - Voice memory isolation by redirecting voice writes to the `voice-memory` namespace.
 - Call lifecycle service with active call tracking and provider adapter abstraction.
 - Webhook route scaffolding for telephony provider event ingestion.
-
-## Delivery Modes
-
-- Self-hosted mode (bring your own provider credentials).
-- Managed mode (service token + relay path).
 
 ## Interfaces Exposed
 

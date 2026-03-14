@@ -13,20 +13,6 @@ type WritableConfig = {
   setMany?(values: Record<string, unknown>): Promise<void>;
 };
 
-function parseManagedTokenArg(args: string[]): string | undefined {
-  const inline = args.find((arg) => arg.startsWith("--token="));
-  if (inline) {
-    return inline.slice("--token=".length).trim() || undefined;
-  }
-
-  const index = args.indexOf("--token");
-  if (index >= 0 && typeof args[index + 1] === "string") {
-    return args[index + 1].trim() || undefined;
-  }
-
-  return undefined;
-}
-
 function maskSecret(value: string | undefined): string {
   if (!value) {
     return "(not set)";
@@ -96,26 +82,7 @@ export async function runSetupWizard(
   args: string[],
   prompter: SetupPrompter = createReadlinePrompter()
 ): Promise<void> {
-  const tokenFromArg = parseManagedTokenArg(args);
-  const mode = tokenFromArg ? "managed" : await askChoice(prompter, "Select mode (self-hosted/managed): ", ["self-hosted", "managed"]);
-
-  const values: Record<string, unknown> = {
-    mode
-  };
-
-  if (mode === "managed") {
-    const token = tokenFromArg ?? (await askNonEmpty(prompter, "Service token: "));
-    values.serviceToken = token;
-    values.relayUrl = "wss://relay.clawvoice.dev";
-    await saveConfig(api, values);
-    api.log.info("ClawVoice setup complete", {
-      mode,
-      serviceToken: maskSecret(token),
-      relayUrl: String(values.relayUrl)
-    });
-    prompter.close();
-    return;
-  }
+  const values: Record<string, unknown> = {};
 
   const telephonyProvider = await askChoice(prompter, "Telephony provider (telnyx/twilio): ", ["telnyx", "twilio"]);
   values.telephonyProvider = telephonyProvider;
@@ -146,7 +113,6 @@ export async function runSetupWizard(
   await saveConfig(api, values);
 
   api.log.info("ClawVoice setup complete", {
-    mode,
     telephonyProvider,
     voiceProvider,
     deepgramApiKey: maskSecret(String(values.deepgramApiKey)),

@@ -43,7 +43,6 @@ test("manifest configSchema includes expanded Story 1.2 fields", () => {
   const properties = manifest.configSchema.properties;
 
   const requiredKeys = [
-    "serviceToken",
     "telnyxApiKey",
     "telnyxConnectionId",
     "telnyxPhoneNumber",
@@ -64,7 +63,8 @@ test("manifest configSchema includes expanded Story 1.2 fields", () => {
     "disclosureEnabled",
     "disclosureStatement",
     "amdEnabled",
-    "relayUrl"
+    "voiceSystemPrompt",
+    "inboundEnabled"
   ];
 
   for (const key of requiredKeys) {

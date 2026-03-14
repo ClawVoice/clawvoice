@@ -19,7 +19,6 @@ function textContext() {
 
 function baseConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     telnyxApiKey: "key",
@@ -35,9 +34,10 @@ function baseConfig(overrides = {}) {
     disclosureStatement: "AI assistant calling.",
     recordCalls: false,
     amdEnabled: true,
-    relayUrl: "wss://relay.clawvoice.dev",
     restrictTools: true,
     deniedTools: ["exec"],
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }

@@ -4,7 +4,6 @@ const { PostCallService } = require("../dist/services/post-call.js");
 
 function baseConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     deepgramVoice: "aura-asteria-en",
@@ -16,12 +15,13 @@ function baseConfig(overrides = {}) {
     disclosureStatement: "AI calling.",
     recordCalls: false,
     amdEnabled: true,
-    relayUrl: "wss://relay.clawvoice.dev",
     restrictTools: true,
     deniedTools: ["exec"],
     notifyTelegram: false,
     notifyDiscord: false,
     notifySlack: false,
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }

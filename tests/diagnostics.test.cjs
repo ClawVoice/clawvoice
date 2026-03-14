@@ -4,7 +4,6 @@ const { runDiagnostics } = require("../dist/diagnostics/health.js");
 
 function validConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     deepgramVoice: "aura-asteria-en",
@@ -15,7 +14,6 @@ function validConfig(overrides = {}) {
     maxCallDuration: 1800,
     restrictTools: true,
     deniedTools: ["exec"],
-    serviceToken: "",
     disclosureEnabled: true,
     disclosureStatement: "This call is from an AI.",
     notifyTelegram: false,
@@ -27,6 +25,8 @@ function validConfig(overrides = {}) {
     telnyxWebhookSecret: "",
     elevenlabsApiKey: "",
     elevenlabsAgentId: "",
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }
@@ -36,13 +36,6 @@ describe("Diagnostics (Story 5.3)", () => {
     const report = runDiagnostics(validConfig());
     assert.equal(report.overall, "pass");
     assert.ok(report.checks.every((c) => c.status === "pass"));
-  });
-
-  it("fails when managed mode has no service token", () => {
-    const report = runDiagnostics(validConfig({ mode: "managed", serviceToken: "" }));
-    const modeCheck = report.checks.find((c) => c.name === "mode");
-    assert.equal(modeCheck.status, "fail");
-    assert.equal(report.overall, "fail");
   });
 
   it("fails when twilio credentials missing", () => {

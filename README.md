@@ -12,47 +12,18 @@ ClawVoice connects your OpenClaw agent to the phone network. Your agent can rece
 - **Post-call analysis**: After every call, get a summary, mood analysis, topic extraction, and action items written to voice memory.
 - **Inbound + outbound**: Your agent can take calls and initiate them.
 
-## Two Ways to Use It
+## Quick Start
 
-### 1. Self-Hosted (Free, OSS)
+### 1. Install
 
 Bring your own API keys. You control everything.
-
-```bash
-openclaw plugins install @clawvoice/voice-assistant
-```
+<br>
 
 Configure your providers in `.env` or via `openclaw config set`:
 - **Telephony**: Telnyx (recommended) or Twilio
 - **Voice**: Deepgram Voice Agent or ElevenLabs Conversational AI
 - **Analysis**: OpenAI (optional, falls back to OpenClaw's configured model)
 
-### 2. Managed Service (Paid)
-
-One command. Get a phone number. Zero config.
-
-```bash
-openclaw plugins install @clawvoice/voice-assistant
-openclaw clawvoice setup --token YOUR_SERVICE_TOKEN
-```
-
-You get:
-- Pre-provisioned dedicated phone number
-- Deepgram Voice Agent included
-- Post-call analysis included
-- Dashboard for call history and voice memory review
-- No public endpoint needed (outbound WebSocket relay)
-
-Plans:
-| Plan | Price | Minutes | Voice |
-|------|-------|---------|-------|
-| Free | $0 | 10/mo | Deepgram Aura |
-| Standard | $15/mo | 150/mo | Deepgram Aura |
-| Premium | $35/mo | 300/mo | ElevenLabs (BYOK) |
-
-## Quick Start (Self-Hosted)
-
-### 1. Install
 
 ```bash
 openclaw plugins install @clawvoice/voice-assistant
@@ -150,7 +121,7 @@ Reviews pending voice memories and lets you approve/reject promotion to main `ME
 ## CLI Commands
 
 ```bash
-openclaw clawvoice setup [--token TOKEN]   # Set up managed service
+openclaw clawvoice setup                   # Interactive setup wizard
 openclaw clawvoice call <number>           # Initiate outbound call
 openclaw clawvoice status                  # Show active calls and config
 openclaw clawvoice promote                 # Review and promote voice memories
@@ -183,8 +154,6 @@ Phone ──PSTN──> Telnyx ──WebSocket──> ClawVoice Plugin ──> O
                                    (sandboxed writes)
 ```
 
-For the managed service, the plugin connects outbound to our relay servers — no public endpoint needed on your side.
-
 ## Configuration Reference
 
 See [`.env.example`](.env.example) for all environment variables.
@@ -195,6 +164,8 @@ Key settings in `openclaw.plugin.json` `configSchema`:
 |---------|------|---------|-------------|
 | `telephonyProvider` | `"telnyx" \| "twilio"` | `"telnyx"` | PSTN provider |
 | `voiceProvider` | `"deepgram-agent" \| "elevenlabs-conversational"` | `"deepgram-agent"` | Voice pipeline |
+| `voiceSystemPrompt` | `string` | `""` | Instructions for how the agent behaves on calls |
+| `inboundEnabled` | `boolean` | `true` | Accept inbound calls (disable to only allow outbound) |
 | `mainMemoryAccess` | `"read" \| "none"` | `"read"` | Can voice agent read main MEMORY.md? |
 | `autoExtractMemories` | `boolean` | `true` | Extract memories from transcripts after calls |
 | `restrictTools` | `boolean` | `true` | Restrict tool access for voice sessions |
@@ -202,13 +173,22 @@ Key settings in `openclaw.plugin.json` `configSchema`:
 | `maxCallDuration` | `number` | `1800` | Maximum call length in seconds |
 | `recordCalls` | `boolean` | `false` | Save call recordings |
 
+## Customizing the Agent's Voice Persona
+
+Set `voiceSystemPrompt` to control how your agent behaves on phone calls:
+
+```bash
+openclaw config set clawvoice.voiceSystemPrompt "You are a friendly customer support agent for Acme Corp. Be concise, helpful, and professional. Always confirm the caller's name before proceeding."
+```
+
+This prompt is injected into the voice agent's system instructions alongside OpenClaw's base personality. If left empty, the agent uses OpenClaw's default system prompt.
+
 ## Documentation
 
 - [`docs/SETUP.md`](docs/SETUP.md) - Full setup guide with step-by-step instructions and configuration reference
 - [`docs/FEATURES.md`](docs/FEATURES.md) - Complete feature list
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - System architecture, voice providers, memory isolation design
 - [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) - Project background, reference code inventory, competitive landscape
-- [`docs/BUSINESS_MODEL.md`](docs/BUSINESS_MODEL.md) - Pricing strategy, COGS analysis, revenue projections (internal)
 - [`docs/OPENCLAW_PLUGIN_GUIDE.md`](docs/OPENCLAW_PLUGIN_GUIDE.md) - Technical guide for building the OpenClaw plugin
 
 ## Development

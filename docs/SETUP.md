@@ -6,7 +6,7 @@ Step-by-step instructions for installing and configuring ClawVoice with your Ope
 
 - [OpenClaw](https://openclaw.dev) installed and running
 - Node.js 20+
-- A phone number from Telnyx or Twilio (self-hosted mode)
+- A phone number from Telnyx or Twilio
 - API keys for your chosen voice provider
 
 ## Installation
@@ -28,21 +28,7 @@ npm test  # 169 tests should pass
 openclaw plugins install --link .
 ```
 
-## Configuration Modes
-
-### Self-Hosted (bring your own keys)
-
-You provide API keys for telephony and voice providers. Full control, no recurring costs beyond provider usage.
-
-### Managed (one-command setup)
-
-```bash
-openclaw clawvoice setup --token YOUR_SERVICE_TOKEN
-```
-
-Pre-provisioned phone number, Deepgram Voice Agent included, no public endpoint needed.
-
-## Self-Hosted Setup
+## Setup
 
 ### Step 1: Choose a Telephony Provider
 
@@ -150,9 +136,10 @@ openclaw clawvoice call +15559876543
 
 | Setting | Env Variable | Default | Description |
 |---------|-------------|---------|-------------|
-| `mode` | `CLAWVOICE_MODE` | `self-hosted` | `self-hosted` or `managed` |
 | `telephonyProvider` | `CLAWVOICE_TELEPHONY_PROVIDER` | `telnyx` | `telnyx` or `twilio` |
 | `voiceProvider` | `CLAWVOICE_VOICE_PROVIDER` | `deepgram-agent` | `deepgram-agent` or `elevenlabs-conversational` |
+| `voiceSystemPrompt` | `CLAWVOICE_VOICE_SYSTEM_PROMPT` | `""` | Instructions for how the agent behaves on calls |
+| `inboundEnabled` | `CLAWVOICE_INBOUND_ENABLED` | `true` | Accept inbound calls (set to `false` for outbound-only) |
 
 ### Telnyx Settings
 

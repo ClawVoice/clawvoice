@@ -10,11 +10,6 @@
   "configSchema": {
     "type": "object",
     "properties": {
-      "mode": {
-        "type": "string",
-        "enum": ["self-hosted", "managed"],
-        "default": "self-hosted"
-      },
       "telephonyProvider": {
         "type": "string",
         "enum": ["telnyx", "twilio"],
@@ -25,9 +20,15 @@
         "enum": ["deepgram-agent", "elevenlabs-conversational"],
         "default": "deepgram-agent"
       },
-      "serviceToken": {
+      "voiceSystemPrompt": {
         "type": "string",
-        "description": "Managed service authentication token."
+        "default": "",
+        "description": "System prompt that defines the agent's persona and behavior on calls."
+      },
+      "inboundEnabled": {
+        "type": "boolean",
+        "default": true,
+        "description": "Accept inbound calls. Set to false for outbound-only."
       },
       "telnyxApiKey": {
         "type": "string"
@@ -105,10 +106,6 @@
       "amdEnabled": {
         "type": "boolean",
         "default": true
-      },
-      "relayUrl": {
-        "type": "string",
-        "default": "wss://relay.clawvoice.dev"
       },
       "restrictTools": {
         "type": "boolean",

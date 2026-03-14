@@ -6,7 +6,6 @@ const {
 
 function validConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     deepgramVoice: "aura-asteria-en",
@@ -16,12 +15,13 @@ function validConfig(overrides = {}) {
     maxCallDuration: 1800,
     restrictTools: true,
     deniedTools: ["exec"],
-    serviceToken: "",
     disclosureEnabled: false,
     disclosureStatement: "",
     notifyTelegram: false,
     notifyDiscord: false,
     notifySlack: false,
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }

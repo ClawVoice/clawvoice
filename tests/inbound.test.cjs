@@ -10,7 +10,6 @@ const {
 
 function baseConfig(overrides) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     amdEnabled: true,
@@ -20,6 +19,8 @@ function baseConfig(overrides) {
     maxCallDuration: 1800,
     disclosureEnabled: true,
     disclosureStatement: "AI call.",
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }

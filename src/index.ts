@@ -4,7 +4,6 @@ import { resolveConfig, validateConfig } from "./config";
 import { registerHooks } from "./hooks";
 import { registerRoutes } from "./routes";
 import { MemoryExtractionService } from "./services/memory-extraction";
-import { WebSocketRelayService } from "./services/relay";
 import { VoiceCallService } from "./services/voice-call";
 import { registerTools } from "./tools";
 
@@ -27,17 +26,11 @@ const plugin: Plugin = {
     registerHooks(api, config);
 
     api.services.register("clawvoice-calls", callService);
-    if (config.mode === "managed") {
-      api.services.register(
-        "clawvoice-relay",
-        new WebSocketRelayService(config),
-      );
-    }
 
     api.log.info("ClawVoice initialized", {
-      mode: config.mode,
       telephonyProvider: config.telephonyProvider,
       voiceProvider: config.voiceProvider,
+      inboundEnabled: config.inboundEnabled,
     });
   },
 };

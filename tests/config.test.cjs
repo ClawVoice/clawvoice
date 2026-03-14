@@ -6,7 +6,6 @@ const { resolveConfig, validateConfig } = require("../dist/config.js");
 test("resolveConfig uses defaults when no values are provided", () => {
   const config = resolveConfig({}, {});
 
-  assert.equal(config.mode, "self-hosted");
   assert.equal(config.telephonyProvider, "telnyx");
   assert.equal(config.voiceProvider, "deepgram-agent");
   assert.equal(config.maxCallDuration, 1800);
@@ -21,7 +20,8 @@ test("resolveConfig uses defaults when no values are provided", () => {
   assert.equal(config.autoExtractMemories, true);
   assert.equal(config.recordCalls, false);
   assert.equal(config.amdEnabled, true);
-  assert.equal(config.relayUrl, "wss://relay.clawvoice.dev");
+  assert.equal(config.voiceSystemPrompt, "");
+  assert.equal(config.inboundEnabled, true);
   assert.ok(Array.isArray(config.deniedTools));
   assert.ok(config.deniedTools.includes("exec"));
 });
@@ -29,7 +29,6 @@ test("resolveConfig uses defaults when no values are provided", () => {
 test("resolveConfig uses plugin config values when env vars are absent", () => {
   const config = resolveConfig(
     {
-      mode: "managed",
       telephonyProvider: "twilio",
       voiceProvider: "elevenlabs-conversational",
       maxCallDuration: 900,
@@ -37,12 +36,12 @@ test("resolveConfig uses plugin config values when env vars are absent", () => {
       disclosureStatement: "This call may be monitored.",
       restrictTools: false,
       deniedTools: ["exec"],
-      serviceToken: "plugin-token"
+      voiceSystemPrompt: "You are a friendly assistant.",
+      inboundEnabled: false
     },
     {}
   );
 
-  assert.equal(config.mode, "managed");
   assert.equal(config.telephonyProvider, "twilio");
   assert.equal(config.voiceProvider, "elevenlabs-conversational");
   assert.equal(config.maxCallDuration, 900);
@@ -50,13 +49,13 @@ test("resolveConfig uses plugin config values when env vars are absent", () => {
   assert.equal(config.disclosureStatement, "This call may be monitored.");
   assert.equal(config.restrictTools, false);
   assert.deepEqual(config.deniedTools, ["exec"]);
-  assert.equal(config.serviceToken, "plugin-token");
+  assert.equal(config.voiceSystemPrompt, "You are a friendly assistant.");
+  assert.equal(config.inboundEnabled, false);
 });
 
 test("resolveConfig prioritizes environment variables over plugin config", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "telnyx",
       voiceProvider: "deepgram-agent",
       maxCallDuration: 1800,
@@ -64,7 +63,6 @@ test("resolveConfig prioritizes environment variables over plugin config", () =>
       deniedTools: ["exec"]
     },
     {
-      CLAWVOICE_MODE: "managed",
       CLAWVOICE_TELEPHONY_PROVIDER: "twilio",
       CLAWVOICE_VOICE_PROVIDER: "elevenlabs-conversational",
       CLAWVOICE_MAX_CALL_DURATION: "1200",
@@ -72,11 +70,11 @@ test("resolveConfig prioritizes environment variables over plugin config", () =>
       CLAWVOICE_DISCLOSURE_STATEMENT: "This is an automated assistant call.",
       CLAWVOICE_RESTRICT_TOOLS: "false",
       CLAWVOICE_DENIED_TOOLS: "exec,browser,web_fetch",
-      CLAWVOICE_SERVICE_TOKEN: "env-token"
+      CLAWVOICE_VOICE_SYSTEM_PROMPT: "Be helpful",
+      CLAWVOICE_INBOUND_ENABLED: "false"
     }
   );
 
-  assert.equal(config.mode, "managed");
   assert.equal(config.telephonyProvider, "twilio");
   assert.equal(config.voiceProvider, "elevenlabs-conversational");
   assert.equal(config.maxCallDuration, 1200);
@@ -87,20 +85,19 @@ test("resolveConfig prioritizes environment variables over plugin config", () =>
   );
   assert.equal(config.restrictTools, false);
   assert.deepEqual(config.deniedTools, ["exec", "browser", "web_fetch"]);
-  assert.equal(config.serviceToken, "env-token");
+  assert.equal(config.voiceSystemPrompt, "Be helpful");
+  assert.equal(config.inboundEnabled, false);
 });
 
 test("resolveConfig falls back to defaults for invalid enum values", () => {
   const config = resolveConfig(
     {
-      mode: "invalid",
       telephonyProvider: "vonage",
       voiceProvider: "whisper"
     },
     {}
   );
 
-  assert.equal(config.mode, "self-hosted", "invalid mode should fall back to default");
   assert.equal(config.telephonyProvider, "telnyx", "invalid telephony should fall back to default");
   assert.equal(config.voiceProvider, "deepgram-agent", "invalid voice provider should fall back to default");
 });
@@ -109,24 +106,22 @@ test("resolveConfig falls back to defaults for invalid env enum values", () => {
   const config = resolveConfig(
     {},
     {
-      CLAWVOICE_MODE: "banana",
       CLAWVOICE_TELEPHONY_PROVIDER: "banana",
       CLAWVOICE_VOICE_PROVIDER: "banana"
     }
   );
 
-  assert.equal(config.mode, "self-hosted");
   assert.equal(config.telephonyProvider, "telnyx");
   assert.equal(config.voiceProvider, "deepgram-agent");
 });
 
 test("resolveConfig handles empty string env vars as absent", () => {
   const config = resolveConfig(
-    { mode: "managed" },
-    { CLAWVOICE_MODE: "" }
+    { voiceSystemPrompt: "Be helpful" },
+    { CLAWVOICE_VOICE_SYSTEM_PROMPT: "" }
   );
 
-  assert.equal(config.mode, "managed", "empty env var should not override plugin config");
+  assert.equal(config.voiceSystemPrompt, "Be helpful", "empty env var should not override plugin config");
 });
 
 test("resolveConfig resolves full provider field set from env and plugin config", () => {
@@ -139,7 +134,6 @@ test("resolveConfig resolves full provider field set from env and plugin config"
       autoExtractMemories: false,
       recordCalls: true,
       amdEnabled: false,
-      relayUrl: "wss://plugin-relay.example"
     },
     {
       TELNYX_API_KEY: "env-telnyx-key",
@@ -157,8 +151,7 @@ test("resolveConfig resolves full provider field set from env and plugin config"
       CLAWVOICE_MAIN_MEMORY_ACCESS: "read",
       CLAWVOICE_AUTO_EXTRACT_MEMORIES: "true",
       CLAWVOICE_RECORD_CALLS: "false",
-      CLAWVOICE_AMD_ENABLED: "true",
-      CLAWVOICE_RELAY_URL: "wss://env-relay.example"
+      CLAWVOICE_AMD_ENABLED: "true"
     }
   );
 
@@ -179,13 +172,11 @@ test("resolveConfig resolves full provider field set from env and plugin config"
   assert.equal(config.autoExtractMemories, true);
   assert.equal(config.recordCalls, false);
   assert.equal(config.amdEnabled, true);
-  assert.equal(config.relayUrl, "wss://env-relay.example");
 });
 
-test("validateConfig passes for self-hosted telnyx + deepgram", () => {
+test("validateConfig passes for telnyx + deepgram", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "telnyx",
       voiceProvider: "deepgram-agent",
       telnyxApiKey: "a",
@@ -201,10 +192,9 @@ test("validateConfig passes for self-hosted telnyx + deepgram", () => {
   assert.equal(result.errors.length, 0);
 });
 
-test("validateConfig passes for self-hosted twilio + deepgram", () => {
+test("validateConfig passes for twilio + deepgram", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "twilio",
       voiceProvider: "deepgram-agent",
       twilioAccountSid: "sid",
@@ -222,7 +212,6 @@ test("validateConfig passes for self-hosted twilio + deepgram", () => {
 test("validateConfig fails for telnyx + elevenlabs when elevenlabs requirements missing", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "telnyx",
       voiceProvider: "elevenlabs-conversational",
       telnyxApiKey: "a",
@@ -239,21 +228,9 @@ test("validateConfig fails for telnyx + elevenlabs when elevenlabs requirements 
   assert.ok(result.errors.some((message) => message.includes("elevenlabsAgentId")));
 });
 
-test("validateConfig requires serviceToken in managed mode", () => {
-  const withoutToken = resolveConfig({ mode: "managed" }, {});
-  const missingTokenResult = validateConfig(withoutToken);
-  assert.equal(missingTokenResult.ok, false);
-  assert.ok(missingTokenResult.errors.some((message) => message.includes("serviceToken")));
-
-  const withToken = resolveConfig({ mode: "managed", serviceToken: "token" }, {});
-  const withTokenResult = validateConfig(withToken);
-  assert.equal(withTokenResult.ok, true);
-});
-
 test("validateConfig requires positive maxCallDuration", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "telnyx",
       voiceProvider: "deepgram-agent",
       telnyxApiKey: "a",
@@ -277,7 +254,6 @@ test("validateConfig requires positive maxCallDuration", () => {
 test("validateConfig requires disclosure statement when disclosure is enabled", () => {
   const config = resolveConfig(
     {
-      mode: "self-hosted",
       telephonyProvider: "telnyx",
       voiceProvider: "deepgram-agent",
       telnyxApiKey: "a",

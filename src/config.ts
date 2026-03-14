@@ -1,12 +1,12 @@
-export type PluginMode = "self-hosted" | "managed";
 export type TelephonyProvider = "telnyx" | "twilio";
 export type VoiceProvider = "deepgram-agent" | "elevenlabs-conversational";
 export type MainMemoryAccess = "read" | "none";
 
 export interface ClawVoiceConfig {
-  mode: PluginMode;
   telephonyProvider: TelephonyProvider;
   voiceProvider: VoiceProvider;
+  voiceSystemPrompt: string;
+  inboundEnabled: boolean;
   telnyxApiKey?: string;
   telnyxConnectionId?: string;
   telnyxPhoneNumber?: string;
@@ -28,13 +28,11 @@ export interface ClawVoiceConfig {
   disclosureStatement: string;
   recordCalls: boolean;
   amdEnabled: boolean;
-  relayUrl: string;
   restrictTools: boolean;
   deniedTools: string[];
   notifyTelegram: boolean;
   notifyDiscord: boolean;
   notifySlack: boolean;
-  serviceToken?: string;
 }
 
 export interface ValidationResult {
@@ -43,9 +41,10 @@ export interface ValidationResult {
 }
 
 const DEFAULT_CONFIG: ClawVoiceConfig = {
-  mode: "self-hosted",
   telephonyProvider: "telnyx",
   voiceProvider: "deepgram-agent",
+  voiceSystemPrompt: "",
+  inboundEnabled: true,
   deepgramVoice: "aura-asteria-en",
   analysisModel: "gpt-4o-mini",
   mainMemoryAccess: "read",
@@ -56,7 +55,6 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
     "Hello, this call is from an AI assistant calling on behalf of a user.",
   recordCalls: false,
   amdEnabled: true,
-  relayUrl: "wss://relay.clawvoice.dev",
   restrictTools: true,
   deniedTools: [
     "exec",
@@ -136,10 +134,6 @@ function getValue<T>(envValue: T | undefined, configValue: T | undefined, fallba
   return fallback;
 }
 
-function parseMode(value: unknown): PluginMode | undefined {
-  return value === "self-hosted" || value === "managed" ? value : undefined;
-}
-
 function parseTelephonyProvider(value: unknown): TelephonyProvider | undefined {
   return value === "telnyx" || value === "twilio" ? value : undefined;
 }
@@ -152,7 +146,6 @@ export function resolveConfig(
   pluginConfig: Record<string, unknown> = {},
   env: NodeJS.ProcessEnv = process.env
 ): ClawVoiceConfig {
-  const envMode = parseMode(envString(env, "CLAWVOICE_MODE"));
   const envTelephony = parseTelephonyProvider(envString(env, "CLAWVOICE_TELEPHONY_PROVIDER"));
   const envVoice = parseVoiceProvider(envString(env, "CLAWVOICE_VOICE_PROVIDER"));
   const envTelnyxApiKey = envString(env, "TELNYX_API_KEY");
@@ -179,19 +172,16 @@ export function resolveConfig(
     "CLAWVOICE_DISCLOSURE_STATEMENT",
   );
   const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
-  const envRelayUrl = envString(env, "CLAWVOICE_RELAY_URL");
   const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
   const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
-  const envServiceToken = envString(env, "CLAWVOICE_SERVICE_TOKEN");
+  const envVoiceSystemPrompt = envString(env, "CLAWVOICE_VOICE_SYSTEM_PROMPT");
+  const envInboundEnabled = envString(env, "CLAWVOICE_INBOUND_ENABLED");
 
-  const configMode = parseMode(pluginConfig.mode);
   const configTelephony = parseTelephonyProvider(pluginConfig.telephonyProvider);
   const configVoice = parseVoiceProvider(pluginConfig.voiceProvider);
   const configMainMemoryAccess = parseMainMemoryAccess(pluginConfig.mainMemoryAccess);
-  const configServiceToken = typeof pluginConfig.serviceToken === "string" ? pluginConfig.serviceToken : undefined;
 
   return {
-    mode: getValue(envMode, configMode, DEFAULT_CONFIG.mode),
     telephonyProvider: getValue(envTelephony, configTelephony, DEFAULT_CONFIG.telephonyProvider),
     voiceProvider: getValue(envVoice, configVoice, DEFAULT_CONFIG.voiceProvider),
     telnyxApiKey: getValue(envTelnyxApiKey, typeof pluginConfig.telnyxApiKey === "string" ? pluginConfig.telnyxApiKey : undefined, undefined),
@@ -242,7 +232,11 @@ export function resolveConfig(
       getValue(envAmdEnabled, typeof pluginConfig.amdEnabled === "undefined" ? undefined : String(pluginConfig.amdEnabled), String(DEFAULT_CONFIG.amdEnabled)),
       DEFAULT_CONFIG.amdEnabled
     ),
-    relayUrl: getValue(envRelayUrl, typeof pluginConfig.relayUrl === "string" ? pluginConfig.relayUrl : undefined, DEFAULT_CONFIG.relayUrl),
+    voiceSystemPrompt: getValue(envVoiceSystemPrompt, typeof pluginConfig.voiceSystemPrompt === "string" ? pluginConfig.voiceSystemPrompt : undefined, DEFAULT_CONFIG.voiceSystemPrompt),
+    inboundEnabled: parseBoolean(
+      getValue(envInboundEnabled, typeof pluginConfig.inboundEnabled === "undefined" ? undefined : String(pluginConfig.inboundEnabled), String(DEFAULT_CONFIG.inboundEnabled)),
+      DEFAULT_CONFIG.inboundEnabled
+    ),
     restrictTools: parseBoolean(
       getValue(envRestrictTools, typeof pluginConfig.restrictTools === "undefined" ? undefined : String(pluginConfig.restrictTools), String(DEFAULT_CONFIG.restrictTools)),
       DEFAULT_CONFIG.restrictTools
@@ -263,7 +257,6 @@ export function resolveConfig(
       getValue(envString(env, "CLAWVOICE_NOTIFY_SLACK"), typeof pluginConfig.notifySlack === "undefined" ? undefined : String(pluginConfig.notifySlack), String(DEFAULT_CONFIG.notifySlack)),
       DEFAULT_CONFIG.notifySlack
     ),
-    serviceToken: getValue(envServiceToken, configServiceToken, undefined)
   };
 }
 
@@ -292,25 +285,21 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     );
   }
 
-  if (config.mode === "managed") {
-    pushMissing(missingFields, "serviceToken", config.serviceToken);
+  if (config.telephonyProvider === "telnyx") {
+    pushMissing(missingFields, "telnyxApiKey", config.telnyxApiKey);
+    pushMissing(missingFields, "telnyxConnectionId", config.telnyxConnectionId);
+    pushMissing(missingFields, "telnyxPhoneNumber", config.telnyxPhoneNumber);
   } else {
-    if (config.telephonyProvider === "telnyx") {
-      pushMissing(missingFields, "telnyxApiKey", config.telnyxApiKey);
-      pushMissing(missingFields, "telnyxConnectionId", config.telnyxConnectionId);
-      pushMissing(missingFields, "telnyxPhoneNumber", config.telnyxPhoneNumber);
-    } else {
-      pushMissing(missingFields, "twilioAccountSid", config.twilioAccountSid);
-      pushMissing(missingFields, "twilioAuthToken", config.twilioAuthToken);
-      pushMissing(missingFields, "twilioPhoneNumber", config.twilioPhoneNumber);
-    }
+    pushMissing(missingFields, "twilioAccountSid", config.twilioAccountSid);
+    pushMissing(missingFields, "twilioAuthToken", config.twilioAuthToken);
+    pushMissing(missingFields, "twilioPhoneNumber", config.twilioPhoneNumber);
+  }
 
-    pushMissing(missingFields, "deepgramApiKey", config.deepgramApiKey);
+  pushMissing(missingFields, "deepgramApiKey", config.deepgramApiKey);
 
-    if (config.voiceProvider === "elevenlabs-conversational") {
-      pushMissing(missingFields, "elevenlabsApiKey", config.elevenlabsApiKey);
-      pushMissing(missingFields, "elevenlabsAgentId", config.elevenlabsAgentId);
-    }
+  if (config.voiceProvider === "elevenlabs-conversational") {
+    pushMissing(missingFields, "elevenlabsApiKey", config.elevenlabsApiKey);
+    pushMissing(missingFields, "elevenlabsAgentId", config.elevenlabsAgentId);
   }
 
   if (missingFields.length === 0 && validationErrors.length === 0) {

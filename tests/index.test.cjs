@@ -5,13 +5,14 @@ const plugin = require("../dist/index.js").default;
 
 function validSelfHostedConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     telnyxApiKey: "telnyx-key",
     telnyxConnectionId: "connection-id",
     telnyxPhoneNumber: "+15550001111",
     deepgramApiKey: "deepgram-key",
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides
   };
 }
@@ -121,21 +122,7 @@ test("plugin init registers expected CLI command names", async () => {
   ]);
 });
 
-test("plugin init registers relay service in managed mode", async () => {
-  const { api, state } = createMockApi(
-    validSelfHostedConfig({
-      mode: "managed",
-      serviceToken: "managed-token"
-    })
-  );
-
-  await plugin.init(api);
-
-  const names = state.services.map((service) => service.name).sort();
-  assert.deepEqual(names, ["clawvoice-calls", "clawvoice-relay"]);
-});
-
-test("plugin init does NOT register relay service in self-hosted mode", async () => {
+test("plugin init registers only calls service", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
   await plugin.init(api);

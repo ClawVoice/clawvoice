@@ -38,18 +38,20 @@ export function registerRoutes(
       return;
     }
 
-    const parsed = parseWebhookBody(request.body);
-    if (parsed) {
-      const event = classifyInboundEvent(
-        parsed.providerCallId,
-        parsed.from,
-        parsed.to,
-        "telnyx",
-        parsed.amdResult,
-      );
-      const decision = decideInboundAction(event, config);
-      const record = buildInboundRecord(event, decision);
-      onInbound?.(record);
+    if (config.inboundEnabled) {
+      const parsed = parseWebhookBody(request.body);
+      if (parsed) {
+        const event = classifyInboundEvent(
+          parsed.providerCallId,
+          parsed.from,
+          parsed.to,
+          "telnyx",
+          parsed.amdResult,
+        );
+        const decision = decideInboundAction(event, config);
+        const record = buildInboundRecord(event, decision);
+        onInbound?.(record);
+      }
     }
 
     response.status(200).json({ ok: true });
@@ -70,18 +72,20 @@ export function registerRoutes(
       return;
     }
 
-    const parsed = parseWebhookBody(request.body);
-    if (parsed) {
-      const event = classifyInboundEvent(
-        parsed.providerCallId,
-        parsed.from,
-        parsed.to,
-        "twilio",
-        parsed.amdResult,
-      );
-      const decision = decideInboundAction(event, config);
-      const record = buildInboundRecord(event, decision);
-      onInbound?.(record);
+    if (config.inboundEnabled) {
+      const parsed = parseWebhookBody(request.body);
+      if (parsed) {
+        const event = classifyInboundEvent(
+          parsed.providerCallId,
+          parsed.from,
+          parsed.to,
+          "twilio",
+          parsed.amdResult,
+        );
+        const decision = decideInboundAction(event, config);
+        const record = buildInboundRecord(event, decision);
+        onInbound?.(record);
+      }
     }
 
     response.status(200).json({ ok: true });

@@ -137,7 +137,9 @@ export class VoiceCallService {
       voiceProviderCodec: "mulaw",
       sampleRate: 8000,
       greeting,
-      systemPrompt: request.purpose,
+      systemPrompt: this.config.voiceSystemPrompt
+        ? (request.purpose ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${request.purpose}` : this.config.voiceSystemPrompt)
+        : (request.purpose ?? ""),
       voiceModel: this.config.deepgramVoice,
       keepAliveIntervalMs: 5000,
       greetingGracePeriodMs: 3000,

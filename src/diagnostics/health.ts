@@ -37,18 +37,10 @@ export function runDiagnostics(config: ClawVoiceConfig): DiagnosticReport {
 }
 
 function checkMode(config: ClawVoiceConfig): HealthCheck {
-  if (config.mode === "managed" && !config.serviceToken) {
-    return {
-      name: "mode",
-      status: "fail",
-      detail: "Managed mode requires a service token.",
-      remediation: "Run 'clawvoice setup' or set CLAWVOICE_SERVICE_TOKEN.",
-    };
-  }
   return {
     name: "mode",
     status: "pass",
-    detail: `Mode: ${config.mode}`,
+    detail: `Inbound: ${config.inboundEnabled ? "enabled" : "disabled"}`,
   };
 }
 

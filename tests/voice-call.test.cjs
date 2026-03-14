@@ -5,7 +5,6 @@ const { VoiceCallService } = require("../dist/services/voice-call.js");
 
 function validTelnyxConfig(overrides = {}) {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     telnyxApiKey: "telnyx-key",
@@ -22,7 +21,6 @@ function validTelnyxConfig(overrides = {}) {
       "Hello, this call is from an AI assistant calling on behalf of a user.",
     recordCalls: false,
     amdEnabled: true,
-    relayUrl: "wss://relay.clawvoice.dev",
     restrictTools: true,
     deniedTools: [
       "exec",
@@ -32,6 +30,8 @@ function validTelnyxConfig(overrides = {}) {
       "cron",
       "sessions_spawn",
     ],
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
     ...overrides,
   };
 }

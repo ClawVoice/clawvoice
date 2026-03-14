@@ -6,7 +6,6 @@ const { VoiceBridgeService } = require("../dist/voice/bridge");
 
 function validConfig() {
   return {
-    mode: "self-hosted",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     deepgramApiKey: "dg-test-key",
@@ -19,12 +18,13 @@ function validConfig() {
     disclosureStatement: "This call is from an AI assistant.",
     recordCalls: false,
     amdEnabled: true,
-    relayUrl: "wss://relay.clawvoice.dev",
     restrictTools: true,
     deniedTools: [],
     twilioAccountSid: "AC123",
     twilioAuthToken: "auth123",
     twilioPhoneNumber: "+15551234567",
+    voiceSystemPrompt: "",
+    inboundEnabled: true,
   };
 }
 

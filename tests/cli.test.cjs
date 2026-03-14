@@ -36,23 +36,9 @@ function createApi() {
   return { api, state };
 }
 
-test("runSetupWizard saves managed mode token from --token", async () => {
-  const { api, state } = createApi();
-  const prompter = createPrompter([]);
-
-  await runSetupWizard(api, ["--token=managed-token"], prompter);
-
-  assert.equal(state.saved.mode, "managed");
-  assert.equal(state.saved.serviceToken, "managed-token");
-  assert.equal(state.saved.relayUrl, "wss://relay.clawvoice.dev");
-  assert.equal(state.logs.length, 1);
-  assert.equal(state.logs[0].metadata.serviceToken, "mana...");
-});
-
-test("runSetupWizard collects self-hosted twilio + elevenlabs credentials", async () => {
+test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   const { api, state } = createApi();
   const prompter = createPrompter([
-    "self-hosted",
     "twilio",
     "AC123",
     "auth123",
@@ -65,7 +51,6 @@ test("runSetupWizard collects self-hosted twilio + elevenlabs credentials", asyn
 
   await runSetupWizard(api, [], prompter);
 
-  assert.equal(state.saved.mode, "self-hosted");
   assert.equal(state.saved.telephonyProvider, "twilio");
   assert.equal(state.saved.twilioAccountSid, "AC123");
   assert.equal(state.saved.twilioAuthToken, "auth123");
@@ -117,7 +102,6 @@ function createCliApi() {
 
 function validCliConfig() {
   return {
-    mode: "self-hosted",
     telephonyProvider: "telnyx",
     voiceProvider: "deepgram-agent",
     telnyxApiKey: "key",
@@ -130,7 +114,9 @@ function validCliConfig() {
     mainMemoryAccess: "read",
     deepgramVoice: "evelyn",
     disclosureEnabled: true,
-    disclosureStatement: "This is an AI call."
+    disclosureStatement: "This is an AI call.",
+    voiceSystemPrompt: "",
+    inboundEnabled: true
   };
 }
 
