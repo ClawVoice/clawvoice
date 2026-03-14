@@ -1,3 +1,4 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { ClawVoiceConfig } from "../config";
 
 export interface WebhookVerificationResult {
@@ -8,7 +9,7 @@ export interface WebhookVerificationResult {
 
 /**
  * Verify Telnyx webhook signature using HMAC-SHA256.
- * Telnyx signs payloads with the webhook signing secret.
+ * Telnyx signs `timestamp|payload` with the webhook signing secret.
  */
 export function verifyTelnyxSignature(
   payload: string,
@@ -31,23 +32,32 @@ export function verifyTelnyxSignature(
     };
   }
 
-  // In production, use crypto.timingSafeEqual with ed25519 verification
-  // For now, validate that secret, signature, and timestamp are all present
-  // and non-empty — actual crypto verification is wired when telnyx SDK is available
-  if (signatureHeader.length < 10) {
+  const expectedSig = createHmac("sha256", secret)
+    .update(`${timestampHeader}|${payload}`)
+    .digest("hex");
+
+  const sigBuffer = Buffer.from(signatureHeader, "hex");
+  const expectedBuffer = Buffer.from(expectedSig, "hex");
+
+  if (sigBuffer.length !== expectedBuffer.length) {
     return {
       valid: false,
       provider: "telnyx",
-      reason: "Signature too short to be valid",
+      reason: "Signature length mismatch",
     };
+  }
+
+  const match = timingSafeEqual(sigBuffer, expectedBuffer);
+  if (!match) {
+    return { valid: false, provider: "telnyx", reason: "Signature mismatch" };
   }
 
   return { valid: true, provider: "telnyx" };
 }
 
 /**
- * Verify Twilio webhook signature using X-Twilio-Signature header.
- * Twilio signs requests with the auth token using HMAC-SHA1.
+ * Verify Twilio webhook signature using HMAC-SHA1.
+ * Twilio computes HMAC-SHA1 of the request URL + sorted POST params.
  */
 export function verifyTwilioSignature(
   url: string,
@@ -70,14 +80,31 @@ export function verifyTwilioSignature(
     };
   }
 
-  // In production, use Twilio's validateRequest helper or HMAC-SHA1 directly.
-  // For now, validate structural requirements.
-  if (signatureHeader.length < 10) {
+  // Twilio signature = Base64(HMAC-SHA1(AuthToken, URL + sorted-params-concatenated))
+  const sortedKeys = Object.keys(params).sort();
+  let dataToSign = url;
+  for (const key of sortedKeys) {
+    dataToSign += key + params[key];
+  }
+
+  const expectedSig = createHmac("sha1", authToken)
+    .update(dataToSign)
+    .digest("base64");
+
+  const sigBuffer = Buffer.from(signatureHeader);
+  const expectedBuffer = Buffer.from(expectedSig);
+
+  if (sigBuffer.length !== expectedBuffer.length) {
     return {
       valid: false,
       provider: "twilio",
-      reason: "Signature too short to be valid",
+      reason: "Signature mismatch",
     };
+  }
+
+  const match = timingSafeEqual(sigBuffer, expectedBuffer);
+  if (!match) {
+    return { valid: false, provider: "twilio", reason: "Signature mismatch" };
   }
 
   return { valid: true, provider: "twilio" };

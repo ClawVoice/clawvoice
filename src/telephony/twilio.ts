@@ -15,19 +15,18 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
 
   public async startCall(input: StartCallInput): Promise<StartCallResult> {
     const normalizedTo = normalizeE164(input.to);
-    const callId = simulatedCallId("twilio");
 
     if (
       !this.config.twilioAccountSid ||
       !this.config.twilioAuthToken ||
       !this.config.twilioPhoneNumber
     ) {
-      return {
-        providerCallId: `simulated-${callId}`,
-        normalizedTo,
-      };
+      throw new Error(
+        "Twilio credentials missing: twilioAccountSid, twilioAuthToken, and twilioPhoneNumber are required"
+      );
     }
 
+    const callId = simulatedCallId("twilio");
     return {
       providerCallId: callId,
       normalizedTo,

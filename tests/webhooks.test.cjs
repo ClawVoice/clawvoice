@@ -1,6 +1,22 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
+const { createHmac } = require("node:crypto");
 const { verifyTelnyxSignature, verifyTwilioSignature } = require("../dist/webhooks/verify");
+
+function telnyxHmac(secret, timestamp, payload) {
+  return createHmac("sha256", secret)
+    .update(`${timestamp}|${payload}`)
+    .digest("hex");
+}
+
+function twilioHmac(authToken, url, params) {
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const key of sortedKeys) {
+    data += key + params[key];
+  }
+  return createHmac("sha1", authToken).update(data).digest("base64");
+}
 
 describe("Webhook Signature Verification (Story 3.3)", () => {
   describe("verifyTelnyxSignature", () => {
@@ -23,19 +39,24 @@ describe("Webhook Signature Verification (Story 3.3)", () => {
       assert.match(result.reason, /missing/i);
     });
 
-    it("rejects when signature is too short", () => {
-      const result = verifyTelnyxSignature("{}", "short", "12345", "secret123");
-      assert.equal(result.valid, false);
-      assert.match(result.reason, /too short/i);
-    });
-
-    it("accepts valid signature structure", () => {
+    it("rejects when signature does not match", () => {
       const result = verifyTelnyxSignature(
-        '{"data":{"event_type":"call.initiated"}}',
-        "abcdefghijklmnop",
+        '{"data":"test"}',
+        "aa".repeat(32),
         "1678901234",
         "whsec_test123"
       );
+      assert.equal(result.valid, false);
+      assert.match(result.reason, /mismatch/i);
+    });
+
+    it("accepts valid HMAC-SHA256 signature", () => {
+      const secret = "whsec_test_secret";
+      const timestamp = "1678901234";
+      const payload = '{"data":{"event_type":"call.initiated"}}';
+      const sig = telnyxHmac(secret, timestamp, payload);
+
+      const result = verifyTelnyxSignature(payload, sig, timestamp, secret);
       assert.equal(result.valid, true);
       assert.equal(result.provider, "telnyx");
     });
@@ -55,19 +76,24 @@ describe("Webhook Signature Verification (Story 3.3)", () => {
       assert.match(result.reason, /X-Twilio-Signature/i);
     });
 
-    it("rejects when signature is too short", () => {
-      const result = verifyTwilioSignature("https://example.com/webhook", {}, "short", "token123");
-      assert.equal(result.valid, false);
-      assert.match(result.reason, /too short/i);
-    });
-
-    it("accepts valid signature structure", () => {
+    it("rejects when signature does not match", () => {
       const result = verifyTwilioSignature(
         "https://example.com/clawvoice/webhooks/twilio/voice",
         { CallSid: "CA123", CallStatus: "ringing" },
-        "abcdefghijklmnop",
+        "invalidbase64signature==",
         "auth_token_test"
       );
+      assert.equal(result.valid, false);
+      assert.match(result.reason, /mismatch/i);
+    });
+
+    it("accepts valid HMAC-SHA1 signature", () => {
+      const authToken = "auth_token_test";
+      const url = "https://example.com/clawvoice/webhooks/twilio/voice";
+      const params = { CallSid: "CA123", CallStatus: "ringing" };
+      const sig = twilioHmac(authToken, url, params);
+
+      const result = verifyTwilioSignature(url, params, sig, authToken);
       assert.equal(result.valid, true);
       assert.equal(result.provider, "twilio");
     });

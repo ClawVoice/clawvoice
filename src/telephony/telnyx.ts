@@ -15,19 +15,18 @@ export class TelnyxTelephonyAdapter implements TelephonyProviderAdapter {
 
   public async startCall(input: StartCallInput): Promise<StartCallResult> {
     const normalizedTo = normalizeE164(input.to);
-    const callId = simulatedCallId("telnyx");
 
     if (
       !this.config.telnyxApiKey ||
       !this.config.telnyxConnectionId ||
       !this.config.telnyxPhoneNumber
     ) {
-      return {
-        providerCallId: `simulated-${callId}`,
-        normalizedTo,
-      };
+      throw new Error(
+        "Telnyx credentials missing: telnyxApiKey, telnyxConnectionId, and telnyxPhoneNumber are required"
+      );
     }
 
+    const callId = simulatedCallId("telnyx");
     return {
       providerCallId: callId,
       normalizedTo,
