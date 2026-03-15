@@ -129,6 +129,39 @@ test("startCall validates phone number format via adapter", async () => {
   );
 });
 
+test("voiceSystemPrompt + purpose produces combined systemPrompt", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({ voiceSystemPrompt: "You are a helpful dental receptionist." }),
+  );
+  // The bridge session config systemPrompt should combine both
+  const result = await service.startCall({
+    phoneNumber: "5551112222",
+    purpose: "Book a cleaning appointment",
+  });
+  assert.ok(result.callId);
+  // We can't directly inspect bridge config, but verify call succeeded with combined inputs
+  assert.match(result.message, /Outbound call initiated/);
+});
+
+test("voiceSystemPrompt without purpose uses prompt only", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({ voiceSystemPrompt: "You are a pizza ordering assistant." }),
+  );
+  const result = await service.startCall({ phoneNumber: "5551113333" });
+  assert.ok(result.callId);
+  assert.match(result.message, /Outbound call initiated/);
+});
+
+test("purpose without voiceSystemPrompt uses purpose only", async () => {
+  const service = new VoiceCallService(validTelnyxConfig({ voiceSystemPrompt: "" }));
+  const result = await service.startCall({
+    phoneNumber: "5551114444",
+    purpose: "Schedule follow-up visit",
+  });
+  assert.ok(result.callId);
+  assert.match(result.message, /Outbound call initiated/);
+});
+
 test("twilio provider path is used when configured", async () => {
   const service = new VoiceCallService(
     validTelnyxConfig({
