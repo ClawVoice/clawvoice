@@ -142,7 +142,7 @@ function formatDuration(ms: number): string {
 export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: VoiceCallService): void {
   api.cli.register({
     name: "clawvoice setup",
-    description: "Set up ClawVoice (configure providers or connect to managed service)",
+    description: "Set up ClawVoice (configure telephony and voice providers)",
     run: async (args) => {
       await runSetupWizard(api, args);
     },

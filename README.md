@@ -187,8 +187,7 @@ This prompt is injected into the voice agent's system instructions alongside Ope
 
 - [`docs/SETUP.md`](docs/SETUP.md) - Full setup guide with step-by-step instructions and configuration reference
 - [`docs/FEATURES.md`](docs/FEATURES.md) - Complete feature list
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) - System architecture, voice providers, memory isolation design
-- [`docs/PROJECT_CONTEXT.md`](docs/PROJECT_CONTEXT.md) - Project background, reference code inventory, competitive landscape
+
 - [`docs/OPENCLAW_PLUGIN_GUIDE.md`](docs/OPENCLAW_PLUGIN_GUIDE.md) - Technical guide for building the OpenClaw plugin
 
 ## Development

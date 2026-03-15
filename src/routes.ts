@@ -113,16 +113,18 @@ export function registerRoutes(
       : amdStatus === "fax" ? "fax"
       : "unknown";
 
-    const event = classifyInboundEvent(
-      callSid,
-      typeof params.From === "string" ? params.From : "",
-      typeof params.To === "string" ? params.To : "",
-      "twilio",
-      amdResult,
-    );
-    const decision = decideInboundAction(event, config);
-    const record = buildInboundRecord(event, decision);
-    onInbound?.(record);
+    if (config.inboundEnabled) {
+      const event = classifyInboundEvent(
+        callSid,
+        typeof params.From === "string" ? params.From : "",
+        typeof params.To === "string" ? params.To : "",
+        "twilio",
+        amdResult,
+      );
+      const decision = decideInboundAction(event, config);
+      const record = buildInboundRecord(event, decision);
+      onInbound?.(record);
+    }
 
     response.status(200).json({ ok: true });
   });
