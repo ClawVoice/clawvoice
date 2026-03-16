@@ -35,4 +35,12 @@ const plugin: Plugin = {
   },
 };
 
+export async function activate(api: PluginAPI): Promise<void> {
+  await plugin.init(api);
+}
+
+export async function register(api: PluginAPI): Promise<void> {
+  await activate(api);
+}
+
 export default plugin;
