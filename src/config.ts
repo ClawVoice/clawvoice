@@ -26,6 +26,7 @@ export interface ClawVoiceConfig {
   maxCallDuration: number;
   disclosureEnabled: boolean;
   disclosureStatement: string;
+  dailyCallLimit: number;
   recordCalls: boolean;
   amdEnabled: boolean;
   restrictTools: boolean;
@@ -41,7 +42,7 @@ export interface ValidationResult {
 }
 
 const DEFAULT_CONFIG: ClawVoiceConfig = {
-  telephonyProvider: "telnyx",
+  telephonyProvider: "twilio",
   voiceProvider: "deepgram-agent",
   voiceSystemPrompt: "",
   inboundEnabled: true,
@@ -53,6 +54,7 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   disclosureEnabled: true,
   disclosureStatement:
     "Hello, this call is from an AI assistant calling on behalf of a user.",
+  dailyCallLimit: 50,
   recordCalls: false,
   amdEnabled: true,
   restrictTools: true,
@@ -176,6 +178,7 @@ export function resolveConfig(
   const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
   const envVoiceSystemPrompt = envString(env, "CLAWVOICE_VOICE_SYSTEM_PROMPT");
   const envInboundEnabled = envString(env, "CLAWVOICE_INBOUND_ENABLED");
+  const envDailyCallLimit = envString(env, "CLAWVOICE_DAILY_CALL_LIMIT");
 
   const configTelephony = parseTelephonyProvider(pluginConfig.telephonyProvider);
   const configVoice = parseVoiceProvider(pluginConfig.voiceProvider);
@@ -223,6 +226,10 @@ export function resolveConfig(
         ? pluginConfig.disclosureStatement
         : undefined,
       DEFAULT_CONFIG.disclosureStatement,
+    ),
+    dailyCallLimit: parseNumber(
+      getValue(envDailyCallLimit, typeof pluginConfig.dailyCallLimit === "undefined" ? undefined : String(pluginConfig.dailyCallLimit), String(DEFAULT_CONFIG.dailyCallLimit)),
+      DEFAULT_CONFIG.dailyCallLimit
     ),
     recordCalls: parseBoolean(
       getValue(envRecordCalls, typeof pluginConfig.recordCalls === "undefined" ? undefined : String(pluginConfig.recordCalls), String(DEFAULT_CONFIG.recordCalls)),

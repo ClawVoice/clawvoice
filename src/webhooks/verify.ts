@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, verify as cryptoVerify, timingSafeEqual } from "node:crypto";
 import { ClawVoiceConfig } from "../config";
 
 export interface WebhookVerificationResult {
@@ -8,20 +8,22 @@ export interface WebhookVerificationResult {
 }
 
 /**
- * Verify Telnyx webhook signature using HMAC-SHA256.
- * Telnyx signs `timestamp|payload` with the webhook signing secret.
+ * Verify Telnyx webhook signature using Ed25519 public-key cryptography.
+ * Telnyx sends `telnyx-signature-ed25519` and `telnyx-timestamp` headers.
+ * The signed payload is `timestamp|payload`.
+ * The `secret` parameter is the Ed25519 public key from the Telnyx dashboard.
  */
 export function verifyTelnyxSignature(
   payload: string,
   signatureHeader: string | undefined,
   timestampHeader: string | undefined,
-  secret: string | undefined
+  publicKey: string | undefined,
 ): WebhookVerificationResult {
-  if (!secret) {
+  if (!publicKey) {
     return {
       valid: false,
       provider: "telnyx",
-      reason: "No webhook secret configured (telnyxWebhookSecret)",
+      reason: "No webhook public key configured (telnyxWebhookSecret)",
     };
   }
   if (!signatureHeader || !timestampHeader) {
@@ -32,27 +34,29 @@ export function verifyTelnyxSignature(
     };
   }
 
-  const expectedSig = createHmac("sha256", secret)
-    .update(`${timestampHeader}|${payload}`)
-    .digest("hex");
+  try {
+    const signedPayload = `${timestampHeader}|${payload}`;
+    const signatureBytes = Buffer.from(signatureHeader, "hex");
+    const publicKeyDer = Buffer.concat([
+      Buffer.from("302a300506032b6570032100", "hex"),
+      Buffer.from(publicKey, "base64"),
+    ]);
 
-  const sigBuffer = Buffer.from(signatureHeader, "hex");
-  const expectedBuffer = Buffer.from(expectedSig, "hex");
+    const valid = cryptoVerify(
+      null,
+      Buffer.from(signedPayload),
+      { key: publicKeyDer, format: "der", type: "spki" },
+      signatureBytes,
+    );
 
-  if (sigBuffer.length !== expectedBuffer.length) {
-    return {
-      valid: false,
-      provider: "telnyx",
-      reason: "Signature length mismatch",
-    };
+    if (!valid) {
+      return { valid: false, provider: "telnyx", reason: "Signature mismatch" };
+    }
+
+    return { valid: true, provider: "telnyx" };
+  } catch {
+    return { valid: false, provider: "telnyx", reason: "Signature verification failed" };
   }
-
-  const match = timingSafeEqual(sigBuffer, expectedBuffer);
-  if (!match) {
-    return { valid: false, provider: "telnyx", reason: "Signature mismatch" };
-  }
-
-  return { valid: true, provider: "telnyx" };
 }
 
 /**

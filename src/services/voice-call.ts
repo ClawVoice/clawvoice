@@ -45,14 +45,19 @@ export class VoiceCallService {
   private readonly inboundRecords: InboundCallRecord[] = [];
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
   private readonly telephonyAdapter: TelephonyProviderAdapter;
+  private dailyCallCount = 0;
+  private dailyResetDate = new Date().toISOString().slice(0, 10);
   public readonly bridge: VoiceBridgeService;
   public readonly postCall: PostCallService;
 
-  public constructor(private readonly config: ClawVoiceConfig) {
+  public constructor(
+    private readonly config: ClawVoiceConfig,
+    fetchFn?: typeof globalThis.fetch,
+  ) {
     this.telephonyAdapter =
       config.telephonyProvider === "twilio"
-        ? new TwilioTelephonyAdapter(config)
-        : new TelnyxTelephonyAdapter(config);
+        ? new TwilioTelephonyAdapter(config, fetchFn)
+        : new TelnyxTelephonyAdapter(config, fetchFn);
     this.bridge = new VoiceBridgeService(config);
     this.postCall = new PostCallService(config);
   }
@@ -86,9 +91,21 @@ export class VoiceCallService {
     return `call-${now}-${random}`;
   }
 
+  private checkDailyLimit(): void {
+    const today = new Date().toISOString().slice(0, 10);
+    if (today !== this.dailyResetDate) {
+      this.dailyCallCount = 0;
+      this.dailyResetDate = today;
+    }
+    if (this.config.dailyCallLimit > 0 && this.dailyCallCount >= this.config.dailyCallLimit) {
+      throw new Error(`Daily call limit reached (${this.config.dailyCallLimit}). Try again tomorrow.`);
+    }
+  }
+
   public async startCall(
     request: StartCallRequest,
   ): Promise<StartCallResponse> {
+    this.checkDailyLimit();
     const baseGreeting =
       request.greeting?.trim() ||
       "Hello, this is an AI assistant calling on behalf of my user.";
@@ -124,6 +141,7 @@ export class VoiceCallService {
     this.activeCalls.set(callId, record);
     this.recentCalls.unshift(record);
     this.recentCalls.splice(20);
+    this.dailyCallCount++;
     this.scheduleAutoHangup(callId);
 
     const bridgeEvent = this.bridge.createSession({

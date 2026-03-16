@@ -6,9 +6,10 @@ const { resolveConfig, validateConfig } = require("../dist/config.js");
 test("resolveConfig uses defaults when no values are provided", () => {
   const config = resolveConfig({}, {});
 
-  assert.equal(config.telephonyProvider, "telnyx");
+  assert.equal(config.telephonyProvider, "twilio");
   assert.equal(config.voiceProvider, "deepgram-agent");
   assert.equal(config.maxCallDuration, 1800);
+  assert.equal(config.dailyCallLimit, 50);
   assert.equal(config.disclosureEnabled, true);
   assert.equal(
     config.disclosureStatement,
@@ -98,7 +99,7 @@ test("resolveConfig falls back to defaults for invalid enum values", () => {
     {}
   );
 
-  assert.equal(config.telephonyProvider, "telnyx", "invalid telephony should fall back to default");
+  assert.equal(config.telephonyProvider, "twilio", "invalid telephony should fall back to default");
   assert.equal(config.voiceProvider, "deepgram-agent", "invalid voice provider should fall back to default");
 });
 
@@ -111,7 +112,7 @@ test("resolveConfig falls back to defaults for invalid env enum values", () => {
     }
   );
 
-  assert.equal(config.telephonyProvider, "telnyx");
+  assert.equal(config.telephonyProvider, "twilio");
   assert.equal(config.voiceProvider, "deepgram-agent");
 });
 

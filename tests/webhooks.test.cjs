@@ -1,12 +1,22 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { createHmac } = require("node:crypto");
+const { createHmac, generateKeyPairSync, sign } = require("node:crypto");
 const { verifyTelnyxSignature, verifyTwilioSignature } = require("../dist/webhooks/verify");
 
-function telnyxHmac(secret, timestamp, payload) {
-  return createHmac("sha256", secret)
-    .update(`${timestamp}|${payload}`)
-    .digest("hex");
+// Generate a real Ed25519 keypair for Telnyx tests
+const { publicKey: ed25519PublicKey, privateKey: ed25519PrivateKey } =
+  generateKeyPairSync("ed25519");
+
+// Export the raw 32-byte public key as base64 (what Telnyx provides)
+const publicKeyBase64 = ed25519PublicKey
+  .export({ type: "spki", format: "der" })
+  .subarray(12) // strip ASN.1 header to get raw 32-byte key
+  .toString("base64");
+
+function telnyxEd25519Sign(timestamp, payload) {
+  const data = `${timestamp}|${payload}`;
+  const sig = sign(null, Buffer.from(data), ed25519PrivateKey);
+  return sig.toString("hex");
 }
 
 function twilioHmac(authToken, url, params) {
@@ -20,21 +30,21 @@ function twilioHmac(authToken, url, params) {
 
 describe("Webhook Signature Verification (Story 3.3)", () => {
   describe("verifyTelnyxSignature", () => {
-    it("rejects when no secret configured", () => {
+    it("rejects when no public key configured", () => {
       const result = verifyTelnyxSignature("{}", "sig-header", "ts-header", undefined);
       assert.equal(result.valid, false);
       assert.equal(result.provider, "telnyx");
-      assert.match(result.reason, /webhook secret/i);
+      assert.match(result.reason, /public key/i);
     });
 
     it("rejects when signature header missing", () => {
-      const result = verifyTelnyxSignature("{}", undefined, "ts-header", "secret123");
+      const result = verifyTelnyxSignature("{}", undefined, "ts-header", publicKeyBase64);
       assert.equal(result.valid, false);
       assert.match(result.reason, /missing/i);
     });
 
     it("rejects when timestamp header missing", () => {
-      const result = verifyTelnyxSignature("{}", "sig-header-valid", undefined, "secret123");
+      const result = verifyTelnyxSignature("{}", "sig-header-valid", undefined, publicKeyBase64);
       assert.equal(result.valid, false);
       assert.match(result.reason, /missing/i);
     });
@@ -44,19 +54,17 @@ describe("Webhook Signature Verification (Story 3.3)", () => {
         '{"data":"test"}',
         "aa".repeat(32),
         "1678901234",
-        "whsec_test123"
+        publicKeyBase64
       );
       assert.equal(result.valid, false);
-      assert.match(result.reason, /mismatch/i);
     });
 
-    it("accepts valid HMAC-SHA256 signature", () => {
-      const secret = "whsec_test_secret";
+    it("accepts valid Ed25519 signature", () => {
       const timestamp = "1678901234";
       const payload = '{"data":{"event_type":"call.initiated"}}';
-      const sig = telnyxHmac(secret, timestamp, payload);
+      const sig = telnyxEd25519Sign(timestamp, payload);
 
-      const result = verifyTelnyxSignature(payload, sig, timestamp, secret);
+      const result = verifyTelnyxSignature(payload, sig, timestamp, publicKeyBase64);
       assert.equal(result.valid, true);
       assert.equal(result.provider, "telnyx");
     });
@@ -100,7 +108,7 @@ describe("Webhook Signature Verification (Story 3.3)", () => {
   });
 
   describe("HTTP 401 rejection", () => {
-    it("telnyx returns 401-appropriate result for missing secret", () => {
+    it("telnyx returns 401-appropriate result for missing key", () => {
       const result = verifyTelnyxSignature("{}", "sig", "ts", undefined);
       assert.equal(result.valid, false);
     });

@@ -14,6 +14,7 @@ function validConfig() {
     mainMemoryAccess: "read",
     autoExtractMemories: true,
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     disclosureEnabled: true,
     disclosureStatement: "This call is from an AI assistant.",
     recordCalls: false,
@@ -490,12 +491,12 @@ describe("VoiceBridgeService — disconnection detection and recovery", () => {
 
     bridge.onDisconnection((record) => {
       assert.equal(record.reason, "heartbeat_timeout");
-      assert.ok(record.detail.includes("50ms"));
+      assert.ok(record.detail.includes("100ms"));
       bridge.destroySession("call-test-001");
       done();
     });
 
-    bridge.startHeartbeatMonitor("call-test-001", 50);
+    bridge.startHeartbeatMonitor("call-test-001", 100);
   });
 
   it("heartbeat monitor does not fire if activity is recorded", async () => {
@@ -508,15 +509,15 @@ describe("VoiceBridgeService — disconnection detection and recovery", () => {
       disconnected = true;
     });
 
-    bridge.startHeartbeatMonitor("call-test-001", 100);
+    bridge.startHeartbeatMonitor("call-test-001", 200);
 
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 80));
     bridge.recordActivity("call-test-001");
 
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 80));
     bridge.recordActivity("call-test-001");
 
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 80));
 
     assert.equal(disconnected, false);
     bridge.stopHeartbeatMonitor("call-test-001");

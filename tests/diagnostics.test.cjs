@@ -19,6 +19,7 @@ function validConfig(overrides = {}) {
     notifyTelegram: false,
     notifyDiscord: false,
     notifySlack: false,
+    dailyCallLimit: 50,
     twilioAccountSid: "AC123",
     twilioAuthToken: "auth-token",
     telnyxApiKey: "",

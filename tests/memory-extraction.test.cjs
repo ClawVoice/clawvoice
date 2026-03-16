@@ -13,6 +13,7 @@ function validConfig(overrides = {}) {
     mainMemoryAccess: "read",
     autoExtractMemories: true,
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     restrictTools: true,
     deniedTools: ["exec"],
     disclosureEnabled: false,

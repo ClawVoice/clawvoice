@@ -5,12 +5,12 @@ const {
   classifyInboundEvent,
   decideInboundAction,
   buildInboundRecord,
-  resetIdCounter,
 } = require("../dist/inbound/classifier.js");
 
 function baseConfig(overrides) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
+    dailyCallLimit: 50,
     voiceProvider: "deepgram-agent",
     amdEnabled: true,
     restrictTools: true,
@@ -93,7 +93,6 @@ describe("Inbound Decision Logic (Story 5.1)", () => {
 
 describe("Inbound Record Building (Story 5.1)", () => {
   it("builds record with correct fields", () => {
-    resetIdCounter();
     const event = classifyInboundEvent("CA1", "+1555", "+1999", "twilio", "human");
     const decision = { action: "answer_and_bridge", reason: "test" };
     const record = buildInboundRecord(event, decision);

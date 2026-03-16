@@ -1,6 +1,7 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
+import { MemoryExtractionService } from "./services/memory-extraction";
 import { VoiceCallService } from "./services/voice-call";
 
 export interface SetupPrompter {
@@ -139,7 +140,7 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
 
-export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: VoiceCallService): void {
+export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: VoiceCallService, memoryService?: MemoryExtractionService): void {
   api.cli.register({
     name: "clawvoice setup",
     description: "Set up ClawVoice (configure telephony and voice providers)",
@@ -198,8 +199,37 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
   api.cli.register({
     name: "clawvoice promote",
     description: "Review and promote voice memories to main MEMORY.md",
-    run: async () => {
-      // Implemented in Story 5.2
+    run: async (args) => {
+      if (!memoryService) {
+        api.log.info("Memory extraction service not available.");
+        return;
+      }
+      const memoryId = args.find((a) => !a.startsWith("--"));
+      if (memoryId) {
+        const candidate = memoryService.getCandidate(memoryId);
+        if (!candidate) {
+          api.log.info("Memory candidate not found", { memoryId });
+          return;
+        }
+        if (parseFlag(args, "--yes")) {
+          const result = await memoryService.approveAndPromote(memoryId);
+          api.log.info(result.promoted ? "Promoted" : `Failed: ${result.reason}`, { memoryId });
+        } else {
+          api.log.info(`[${candidate.status}] ${candidate.category}: "${candidate.content}" (confidence: ${candidate.confidence})`);
+          api.log.info("Run again with --yes to promote.");
+        }
+        return;
+      }
+      const pending = memoryService.getPendingCandidates();
+      if (pending.length === 0) {
+        api.log.info("No pending memory candidates.");
+        return;
+      }
+      api.log.info(`${pending.length} pending memory candidate(s):`);
+      for (const c of pending) {
+        api.log.info(`  ${c.id}: [${c.category}] "${c.content}" (confidence: ${c.confidence})`);
+      }
+      api.log.info("Run `clawvoice promote <memoryId> --yes` to promote.");
     },
   });
 

@@ -5,12 +5,13 @@ const plugin = require("../dist/index.js").default;
 
 function validSelfHostedConfig(overrides = {}) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
-    telnyxApiKey: "telnyx-key",
-    telnyxConnectionId: "connection-id",
-    telnyxPhoneNumber: "+15550001111",
+    twilioAccountSid: "AC-test",
+    twilioAuthToken: "auth-test",
+    twilioPhoneNumber: "+15550001111",
     deepgramApiKey: "deepgram-key",
+    dailyCallLimit: 50,
     voiceSystemPrompt: "",
     inboundEnabled: true,
     ...overrides

@@ -19,7 +19,7 @@ const plugin: Plugin = {
     const memoryService = new MemoryExtractionService(config);
 
     registerTools(api, config, callService, memoryService);
-    registerCLI(api, config, callService);
+    registerCLI(api, config, callService, memoryService);
     registerRoutes(api, config, (record) => {
       callService.trackInboundCall(record);
     });

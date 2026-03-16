@@ -23,6 +23,12 @@ const BUFFER_CHUNKS = 20;
 const BUFFER_SIZE = TWILIO_CHUNK_SIZE * BUFFER_CHUNKS;
 const HEARTBEAT_TIMEOUT_MS = 2000;
 
+export interface VoiceWebSocket {
+  send(data: string | Buffer): void;
+  close(): void;
+  readyState: number;
+}
+
 interface ActiveBridge {
   callId: string;
   providerCallId: string;
@@ -40,6 +46,7 @@ interface ActiveBridge {
   pendingFunctionCalls: Map<string, FunctionCallRequest>;
   disconnectionRecord: DisconnectionRecord | null;
   failures: CallFailure[];
+  voiceSocket: VoiceWebSocket | null;
 }
 
 export type DisconnectionHandler = (record: DisconnectionRecord) => void;
@@ -98,6 +105,7 @@ export class VoiceBridgeService {
       pendingFunctionCalls: new Map(),
       disconnectionRecord: null,
       failures: [],
+      voiceSocket: null,
     };
 
     this.bridges.set(sessionConfig.callId, bridge);
@@ -141,6 +149,17 @@ export class VoiceBridgeService {
     };
   }
 
+  public setVoiceSocket(callId: string, socket: VoiceWebSocket): void {
+    const bridge = this.bridges.get(callId);
+    if (bridge) {
+      bridge.voiceSocket = socket;
+    }
+  }
+
+  public getVoiceSocket(callId: string): VoiceWebSocket | null {
+    return this.bridges.get(callId)?.voiceSocket ?? null;
+  }
+
   public startKeepAlive(callId: string, intervalMs: number): void {
     const bridge = this.bridges.get(callId);
     if (!bridge) {
@@ -152,7 +171,11 @@ export class VoiceBridgeService {
       clearInterval(bridge.keepAliveTimer);
     }
 
-    bridge.keepAliveTimer = setInterval(() => undefined, intervalMs);
+    bridge.keepAliveTimer = setInterval(() => {
+      if (bridge.voiceSocket && bridge.voiceSocket.readyState === 1) {
+        bridge.voiceSocket.send(JSON.stringify({ type: "KeepAlive" }));
+      }
+    }, intervalMs);
     bridge.keepAliveTimer.unref?.();
   }
 
@@ -305,6 +328,9 @@ export class VoiceBridgeService {
     }
     if (bridge?.heartbeatTimer) {
       clearTimeout(bridge.heartbeatTimer);
+    }
+    if (bridge?.voiceSocket) {
+      try { bridge.voiceSocket.close(); } catch { /* ignore */ }
     }
     this.bridges.delete(callId);
 

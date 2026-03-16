@@ -19,17 +19,18 @@ function textContext() {
 
 function baseConfig(overrides = {}) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
-    telnyxApiKey: "key",
-    telnyxConnectionId: "conn",
-    telnyxPhoneNumber: "+15551234567",
+    twilioAccountSid: "AC-test",
+    twilioAuthToken: "auth-test",
+    twilioPhoneNumber: "+15551234567",
     deepgramApiKey: "dg-key",
     deepgramVoice: "aura-asteria-en",
     analysisModel: "gpt-4o-mini",
     mainMemoryAccess: "read",
     autoExtractMemories: true,
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     disclosureEnabled: true,
     disclosureStatement: "AI assistant calling.",
     recordCalls: false,

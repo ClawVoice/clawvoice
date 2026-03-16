@@ -41,6 +41,7 @@ export type NotificationSender = (
 export class PostCallService {
   private memoryWriter: MemoryWriter | null = null;
   private notificationSender: NotificationSender | null = null;
+  private static readonly MAX_PROCESSED = 1000;
   private readonly processedCalls = new Set<string>();
 
   public constructor(private readonly config: ClawVoiceConfig) {}
@@ -66,6 +67,13 @@ export class PostCallService {
     }
 
     this.processedCalls.add(summary.callId);
+
+    if (this.processedCalls.size > PostCallService.MAX_PROCESSED) {
+      const oldest = this.processedCalls.values().next().value;
+      if (oldest) {
+        this.processedCalls.delete(oldest);
+      }
+    }
 
     const persisted = await this.persistCallRecord(summary, transcript);
     const notified = await this.deliverSummary(summary, transcript);

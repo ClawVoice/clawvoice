@@ -102,13 +102,14 @@ function createCliApi() {
 
 function validCliConfig() {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
-    telnyxApiKey: "key",
-    telnyxConnectionId: "conn",
-    telnyxPhoneNumber: "+15550001111",
+    twilioAccountSid: "AC-test",
+    twilioAuthToken: "auth-test",
+    twilioPhoneNumber: "+15550001111",
     deepgramApiKey: "dg",
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     restrictTools: true,
     deniedTools: [],
     mainMemoryAccess: "read",

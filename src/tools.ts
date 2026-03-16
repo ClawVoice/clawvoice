@@ -29,6 +29,10 @@ export function registerTools(
           type: "string",
           description: "Brief description of call purpose",
         },
+        greeting: {
+          type: "string",
+          description: "Custom greeting spoken at call start (overrides default)",
+        },
       },
       required: ["phoneNumber"],
     },
@@ -137,6 +141,11 @@ export function registerTools(
           type: "string",
           description: "ID of the voice memory entry to promote",
         },
+        confirm: {
+          type: "boolean",
+          description:
+            "Set to true to confirm promotion. First call without confirm to preview.",
+        },
       },
       required: ["memoryId"],
     },
@@ -151,6 +160,19 @@ export function registerTools(
       const candidate = memoryService.getCandidate(memoryId);
       if (!candidate) {
         return { content: `Memory candidate ${memoryId} not found.` };
+      }
+      const confirmed =
+        input.confirm === true || input.confirm === "true";
+      if (!confirmed) {
+        return {
+          content: `Preview: "${candidate.content}" (${candidate.category}, confidence: ${candidate.confidence}). Call again with confirm: true to promote.`,
+          data: {
+            memoryId,
+            category: candidate.category,
+            content: candidate.content,
+            requiresConfirmation: true,
+          },
+        };
       }
       const result = await memoryService.approveAndPromote(memoryId);
       if (result.promoted) {

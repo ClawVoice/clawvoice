@@ -5,17 +5,18 @@ const { registerTools } = require("../dist/tools.js");
 
 function validConfig(overrides = {}) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
-    telnyxApiKey: "telnyx-key",
-    telnyxConnectionId: "connection-id",
-    telnyxPhoneNumber: "+15550001111",
+    twilioAccountSid: "AC-test",
+    twilioAuthToken: "auth-test",
+    twilioPhoneNumber: "+15550001111",
     deepgramApiKey: "deepgram-key",
     deepgramVoice: "aura-asteria-en",
     analysisModel: "gpt-4o-mini",
     mainMemoryAccess: "read",
     autoExtractMemories: true,
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     disclosureEnabled: true,
     disclosureStatement:
       "Hello, this call is from an AI assistant calling on behalf of a user.",
@@ -46,7 +47,7 @@ function createMockCallService() {
         callId: "call-123",
         to: "+15551234567",
         openingGreeting: input.greeting || "Hello",
-        message: "Outbound call initiated via telnyx.",
+        message: "Outbound call initiated via twilio.",
       };
     },
     async hangup(callId) {
@@ -113,7 +114,7 @@ test("call handler invokes call service and returns structured response", async 
 
   assert.match(result.content, /Outbound call initiated/);
   assert.equal(result.data.callId, "call-123");
-  assert.equal(result.data.provider, "telnyx");
+  assert.equal(result.data.provider, "twilio");
 });
 
 test("call handler rejects empty phone number", async () => {

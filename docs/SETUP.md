@@ -141,32 +141,32 @@ openclaw clawvoice call +15559876543
 | `voiceSystemPrompt` | `CLAWVOICE_VOICE_SYSTEM_PROMPT` | `""` | Instructions for how the agent behaves on calls |
 | `inboundEnabled` | `CLAWVOICE_INBOUND_ENABLED` | `true` | Accept inbound calls (set to `false` for outbound-only) |
 
-### Telnyx Settings
+### Twilio Settings (default provider)
 
 | Setting | Env Variable | Required |
 |---------|-------------|----------|
-| `telnyxApiKey` | `CLAWVOICE_TELNYX_API_KEY` | Yes (if Telnyx) |
-| `telnyxConnectionId` | `CLAWVOICE_TELNYX_CONNECTION_ID` | Yes (if Telnyx) |
-| `telnyxPhoneNumber` | `CLAWVOICE_TELNYX_PHONE_NUMBER` | Yes (if Telnyx) |
-| `telnyxWebhookSecret` | `CLAWVOICE_TELNYX_WEBHOOK_SECRET` | Recommended |
+| `twilioAccountSid` | `TWILIO_ACCOUNT_SID` | Yes (if Twilio) |
+| `twilioAuthToken` | `TWILIO_AUTH_TOKEN` | Yes (if Twilio) |
+| `twilioPhoneNumber` | `TWILIO_PHONE_NUMBER` | Yes (if Twilio) |
 
-### Twilio Settings
+### Telnyx Settings (alternative)
 
 | Setting | Env Variable | Required |
 |---------|-------------|----------|
-| `twilioAccountSid` | `CLAWVOICE_TWILIO_ACCOUNT_SID` | Yes (if Twilio) |
-| `twilioAuthToken` | `CLAWVOICE_TWILIO_AUTH_TOKEN` | Yes (if Twilio) |
-| `twilioPhoneNumber` | `CLAWVOICE_TWILIO_PHONE_NUMBER` | Yes (if Twilio) |
+| `telnyxApiKey` | `TELNYX_API_KEY` | Yes (if Telnyx) |
+| `telnyxConnectionId` | `TELNYX_CONNECTION_ID` | Yes (if Telnyx) |
+| `telnyxPhoneNumber` | `TELNYX_PHONE_NUMBER` | Yes (if Telnyx) |
+| `telnyxWebhookSecret` | `TELNYX_WEBHOOK_SECRET` | Recommended |
 
 ### Voice Settings
 
 | Setting | Env Variable | Default | Description |
 |---------|-------------|---------|-------------|
-| `deepgramApiKey` | `CLAWVOICE_DEEPGRAM_API_KEY` | — | Deepgram API key |
+| `deepgramApiKey` | `DEEPGRAM_API_KEY` | — | Deepgram API key |
 | `deepgramVoice` | `CLAWVOICE_DEEPGRAM_VOICE` | `aura-asteria-en` | Default voice |
-| `elevenlabsApiKey` | `CLAWVOICE_ELEVENLABS_API_KEY` | — | ElevenLabs API key |
-| `elevenlabsAgentId` | `CLAWVOICE_ELEVENLABS_AGENT_ID` | — | Conversational AI agent |
-| `elevenlabsVoiceId` | `CLAWVOICE_ELEVENLABS_VOICE_ID` | — | Voice to use |
+| `elevenlabsApiKey` | `ELEVENLABS_API_KEY` | — | ElevenLabs API key |
+| `elevenlabsAgentId` | `ELEVENLABS_AGENT_ID` | — | Conversational AI agent |
+| `elevenlabsVoiceId` | `ELEVENLABS_VOICE_ID` | — | Voice to use |
 
 ### Safety & Privacy
 

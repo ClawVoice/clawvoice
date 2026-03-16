@@ -13,7 +13,7 @@
       "telephonyProvider": {
         "type": "string",
         "enum": ["telnyx", "twilio"],
-        "default": "telnyx"
+        "default": "twilio"
       },
       "voiceProvider": {
         "type": "string",
@@ -111,6 +111,11 @@
         "type": "boolean",
         "default": true
       },
+      "dailyCallLimit": {
+        "type": "number",
+        "default": 50,
+        "description": "Maximum outbound calls per day. 0 = unlimited."
+      },
       "deniedTools": {
         "type": "array",
         "items": {
@@ -126,6 +131,7 @@
         ]
       }
     },
-    "required": []
+    "required": ["telephonyProvider", "voiceProvider"],
+    "additionalProperties": true
   }
 }

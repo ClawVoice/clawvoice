@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { ClawVoiceConfig } from "../config";
 import {
   AmdResult,
@@ -72,11 +73,8 @@ export function decideInboundAction(
   return { action: "log_only", reason: "Unrecognized event — logging only" };
 }
 
-let idCounter = 0;
-
 function createInboundCallId(): string {
-  idCounter += 1;
-  return `inbound-${Date.now()}-${String(idCounter).padStart(4, "0")}`;
+  return `inbound-${randomUUID()}`;
 }
 
 export function buildInboundRecord(
@@ -97,6 +95,4 @@ export function buildInboundRecord(
   };
 }
 
-export function resetIdCounter(): void {
-  idCounter = 0;
-}
+

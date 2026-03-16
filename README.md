@@ -9,7 +9,7 @@ ClawVoice connects your OpenClaw agent to the phone network. Your agent can rece
 **Key features:**
 - **Two voice pipelines**: Deepgram Voice Agent (single WebSocket, lowest latency) or ElevenLabs Conversational AI (premium voice quality)
 - **Voice memory isolation**: Phone calls write to a sandboxed `voice-memory/` namespace. Voice callers cannot corrupt your agent's main memory. Memory promotion to `MEMORY.md` requires explicit review.
-- **Post-call analysis**: After every call, get a summary, mood analysis, topic extraction, and action items written to voice memory.
+- **Post-call analysis**: After every call, get a transcript, call summary with outcome/failures/retry context, and action items written to voice memory.
 - **Inbound + outbound**: Your agent can take calls and initiate them.
 
 ## Quick Start

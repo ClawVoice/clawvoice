@@ -1,27 +1,37 @@
 const { describe, it } = require("node:test");
 const assert = require("node:assert/strict");
-const { createHmac } = require("node:crypto");
+const { createHmac, generateKeyPairSync, sign } = require("node:crypto");
 
 const { registerRoutes } = require("../dist/routes.js");
 
-function telnyxHmac(secret, timestamp, payload) {
-  return createHmac("sha256", secret)
-    .update(`${timestamp}|${payload}`)
-    .digest("hex");
+// Generate a real Ed25519 keypair for Telnyx route tests
+const { publicKey: ed25519PublicKey, privateKey: ed25519PrivateKey } =
+  generateKeyPairSync("ed25519");
+
+const publicKeyBase64 = ed25519PublicKey
+  .export({ type: "spki", format: "der" })
+  .subarray(12)
+  .toString("base64");
+
+function telnyxEd25519Sign(timestamp, payload) {
+  const data = `${timestamp}|${payload}`;
+  const sig = sign(null, Buffer.from(data), ed25519PrivateKey);
+  return sig.toString("hex");
 }
 
 function baseConfig(overrides) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     amdEnabled: true,
     restrictTools: true,
     deniedTools: ["exec"],
     mainMemoryAccess: "read",
     maxCallDuration: 1800,
+    dailyCallLimit: 50,
     disclosureEnabled: true,
     disclosureStatement: "AI call.",
-    telnyxWebhookSecret: "whsec_test_secret",
+    telnyxWebhookSecret: publicKeyBase64,
     twilioAuthToken: "auth_token_test",
     voiceSystemPrompt: "",
     inboundEnabled: true,
@@ -68,12 +78,10 @@ describe("Route Handlers — inboundEnabled guard (Minor #5)", () => {
     const calls = [];
     registerRoutes(api, config, (record) => calls.push(record));
 
-    // Body must be an object so parseWebhookBody can extract fields
     const bodyObj = { call_control_id: "telnyx-123", from: "+15551234", to: "+15559999" };
     const timestamp = "1678901234";
-    // Signature is computed over the JSON string representation
     const bodyStr = JSON.stringify(bodyObj);
-    const sig = telnyxHmac(config.telnyxWebhookSecret, timestamp, bodyStr);
+    const sig = telnyxEd25519Sign(timestamp, bodyStr);
 
     const req = {
       body: bodyObj,
@@ -100,7 +108,7 @@ describe("Route Handlers — inboundEnabled guard (Minor #5)", () => {
     const bodyObj = { call_control_id: "telnyx-456", from: "+15551234", to: "+15559999" };
     const timestamp = "1678901234";
     const bodyStr = JSON.stringify(bodyObj);
-    const sig = telnyxHmac(config.telnyxWebhookSecret, timestamp, bodyStr);
+    const sig = telnyxEd25519Sign(timestamp, bodyStr);
 
     const req = {
       body: bodyObj,

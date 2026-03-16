@@ -4,7 +4,8 @@ const { PostCallService } = require("../dist/services/post-call.js");
 
 function baseConfig(overrides = {}) {
   return {
-    telephonyProvider: "telnyx",
+    telephonyProvider: "twilio",
+    dailyCallLimit: 50,
     voiceProvider: "deepgram-agent",
     deepgramVoice: "aura-asteria-en",
     analysisModel: "gpt-4o-mini",
