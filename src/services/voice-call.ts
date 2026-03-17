@@ -84,17 +84,49 @@ export class VoiceCallService {
     this.postCall = new PostCallService(config);
   }
 
+  private reaperTimer: NodeJS.Timeout | null = null;
+  private static readonly REAPER_INTERVAL_MS = 30_000; // check every 30s
+  private static readonly STALE_THRESHOLD_MS = 120_000; // 2 min with no activity = stale
+
   public async start(): Promise<void> {
     this.running = true;
+    this.startReaper();
   }
 
   public async stop(): Promise<void> {
+    this.stopReaper();
     for (const timer of this.callTimers.values()) {
       clearTimeout(timer);
     }
     this.callTimers.clear();
     await this.bridge.stopAll();
     this.running = false;
+  }
+
+  private startReaper(): void {
+    this.reaperTimer = setInterval(() => {
+      this.reapStaleCalls();
+    }, VoiceCallService.REAPER_INTERVAL_MS);
+    this.reaperTimer.unref?.();
+  }
+
+  private stopReaper(): void {
+    if (this.reaperTimer) {
+      clearInterval(this.reaperTimer);
+      this.reaperTimer = null;
+    }
+  }
+
+  private reapStaleCalls(): void {
+    const now = Date.now();
+    for (const [callId, record] of this.activeCalls) {
+      const started = new Date(record.startedAt).getTime();
+      const maxDurationMs = Math.floor(this.config.maxCallDuration * 1000);
+      const staleAfter = Math.max(maxDurationMs, VoiceCallService.STALE_THRESHOLD_MS);
+      if (now - started > staleAfter + VoiceCallService.STALE_THRESHOLD_MS) {
+        this.cleanupCall(callId);
+      }
+    }
   }
 
   public isRunning(): boolean {
@@ -220,6 +252,42 @@ export class VoiceCallService {
 
   public getActiveCalls(): CallRecord[] {
     return Array.from(this.activeCalls.values());
+  }
+
+  /**
+   * Force-clear a stuck call record without contacting the provider.
+   * Use when a call slot is held by a dead session (e.g. after 31920 or network drop).
+   */
+  public forceClear(callId?: string): string[] {
+    const cleared: string[] = [];
+    if (callId) {
+      const call = this.activeCalls.get(callId);
+      if (call) {
+        this.cleanupCall(callId);
+        cleared.push(callId);
+      }
+    } else {
+      for (const id of this.activeCalls.keys()) {
+        this.cleanupCall(id);
+        cleared.push(id);
+      }
+    }
+    return cleared;
+  }
+
+  private cleanupCall(callId: string): void {
+    const call = this.activeCalls.get(callId);
+    if (call) {
+      call.status = "completed";
+      call.endedAt = new Date().toISOString();
+    }
+    this.activeCalls.delete(callId);
+    this.bridge.destroySession(callId);
+    const timer = this.callTimers.get(callId);
+    if (timer) {
+      clearTimeout(timer);
+      this.callTimers.delete(callId);
+    }
   }
 
   private scheduleAutoHangup(callId: string): void {

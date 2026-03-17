@@ -113,6 +113,7 @@ test("registerTools registers expected tool names", () => {
 
   assert.deepEqual(names, [
     "voice_assistant.call",
+    "voice_assistant.clear_calls",
     "voice_assistant.hangup",
     "voice_assistant.promote_memory",
     "voice_assistant.send_text",

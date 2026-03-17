@@ -364,4 +364,18 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       }
     },
   });
+
+  api.cli.register({
+    name: "clawvoice clear",
+    description: "Force-clear stuck call slots (fixes 'maximum concurrent calls' with no live call)",
+    run: async (args) => {
+      const callId = args.find((a) => !a.startsWith("--"));
+      const cleared = callService.forceClear(callId || undefined);
+      if (cleared.length === 0) {
+        api.log.info("No active call slots to clear.", {});
+        return;
+      }
+      api.log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+    },
+  });
 }
