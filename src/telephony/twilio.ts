@@ -1,5 +1,7 @@
 import { ClawVoiceConfig } from "../config";
 import {
+  SendSmsInput,
+  SendSmsResult,
   StartCallInput,
   StartCallResult,
   TelephonyProviderAdapter,
@@ -37,7 +39,15 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
 
     const url = `https://api.twilio.com/2010-04-01/Accounts/${this.config.twilioAccountSid}/Calls.json`;
     const from = input.from ?? this.config.twilioPhoneNumber;
-    const twiml = `<Response><Say>${input.greeting ?? "Hello"}</Say></Response>`;
+    const baseWebhookUrl = this.config.twilioStreamUrl?.trim();
+    if (!baseWebhookUrl) {
+      throw new Error(
+        "Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint",
+      );
+    }
+
+    const callSidPlaceholder = "{CallSid}";
+    const twiml = `<Response><Connect><Stream url="${baseWebhookUrl}" name="clawvoice" track="both_tracks"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
 
     const body = new URLSearchParams({
       To: normalizedTo,
@@ -66,6 +76,53 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
     const data = (await response.json()) as { sid: string };
     return {
       providerCallId: data.sid,
+      normalizedTo,
+    };
+  }
+
+  public async sendSms(input: SendSmsInput): Promise<SendSmsResult> {
+    const normalizedTo = normalizeE164(input.to);
+
+    if (
+      !this.config.twilioAccountSid ||
+      !this.config.twilioAuthToken ||
+      !this.config.twilioPhoneNumber
+    ) {
+      throw new Error(
+        "Twilio credentials missing: twilioAccountSid, twilioAuthToken, and twilioPhoneNumber are required",
+      );
+    }
+
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${this.config.twilioAccountSid}/Messages.json`;
+    const from = input.from ?? this.config.twilioPhoneNumber;
+
+    const body = new URLSearchParams({
+      To: normalizedTo,
+      From: from ?? "",
+      Body: input.body,
+    });
+
+    const auth = Buffer.from(
+      `${this.config.twilioAccountSid}:${this.config.twilioAuthToken}`,
+    ).toString("base64");
+
+    const response = await this.fetchFn(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "Unknown error");
+      throw new Error(`Twilio API error (${response.status}): ${errorText}`);
+    }
+
+    const data = (await response.json()) as { sid: string };
+    return {
+      providerMessageId: data.sid,
       normalizedTo,
     };
   }

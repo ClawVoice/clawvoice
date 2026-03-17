@@ -247,3 +247,35 @@ test("validateConfig requires disclosure statement when disclosure is enabled", 
     ),
   );
 });
+
+test("validateConfig rejects twilioStreamUrl when not wss", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "https://voice.example.test/media-stream",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("wss://")),
+  );
+});
+
+test("validateConfig rejects twilioStreamUrl that points to webhook path", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "wss://public.example.com/clawvoice/webhooks/twilio/voice",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("WebSocket media endpoint")),
+  );
+});

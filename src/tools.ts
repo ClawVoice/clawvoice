@@ -88,6 +88,69 @@ export function registerTools(
   });
 
   api.tools.register({
+    name: "voice_assistant.send_text",
+    description: "Send an SMS text message",
+    parameters: {
+      type: "object",
+      properties: {
+        phoneNumber: {
+          type: "string",
+          description: "Destination phone number in E.164 format",
+        },
+        message: {
+          type: "string",
+          description: "Text message body",
+        },
+      },
+      required: ["phoneNumber", "message"],
+    },
+    handler: async (input) => {
+      const phoneNumber = readString(input.phoneNumber);
+      const message = readString(input.message);
+      if (!phoneNumber) {
+        throw new Error(
+          "phoneNumber is required and must be a non-empty string.",
+        );
+      }
+      if (!message) {
+        throw new Error("message is required and must be non-empty.");
+      }
+
+      const result = await callService.sendText({ phoneNumber, message });
+      return {
+        content: result.message,
+        data: {
+          messageId: result.messageId,
+          to: result.to,
+          provider: config.telephonyProvider,
+        },
+      };
+    },
+  });
+
+  api.tools.register({
+    name: "voice_assistant.text_status",
+    description: "Show recent inbound and outbound text messages",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
+    handler: async () => {
+      const texts = callService.getRecentTexts();
+      if (texts.length === 0) {
+        return {
+          content: "No recent text messages.",
+          data: { texts: [] },
+        };
+      }
+      return {
+        content: `There are ${texts.length} recent text message(s).`,
+        data: { texts },
+      };
+    },
+  });
+
+  api.tools.register({
     name: "voice_assistant.status",
     description: "Get active call status or post-call summary with retry context",
     parameters: {

@@ -24,6 +24,7 @@ export function runDiagnostics(config: ClawVoiceConfig): DiagnosticReport {
   checks.push(checkTelephonyCredentials(config));
   checks.push(checkVoiceCredentials(config));
   checks.push(checkWebhookConfig(config));
+  checks.push(checkTwilioStreamConfig(config));
   checks.push(checkDisclosure(config));
   checks.push(checkCallDuration(config));
 
@@ -158,6 +159,76 @@ function checkWebhookConfig(config: ClawVoiceConfig): HealthCheck {
     name: "webhook-config",
     status: "pass",
     detail: "Webhook verification keys present.",
+  };
+}
+
+function checkTwilioStreamConfig(config: ClawVoiceConfig): HealthCheck {
+  if (config.telephonyProvider !== "twilio") {
+    return {
+      name: "twilio-stream-config",
+      status: "pass",
+      detail: "Twilio stream URL check skipped (provider is not Twilio).",
+    };
+  }
+
+  if (!config.twilioStreamUrl) {
+    return {
+      name: "twilio-stream-config",
+      status: "warn",
+      detail: "CLAWVOICE_TWILIO_STREAM_URL is not set.",
+      remediation:
+        "Set CLAWVOICE_TWILIO_STREAM_URL to a public WSS media endpoint (example: wss://your-host.example.com/media-stream).",
+    };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(config.twilioStreamUrl);
+  } catch {
+    return {
+      name: "twilio-stream-config",
+      status: "fail",
+      detail: "twilioStreamUrl is not a valid absolute URL.",
+      remediation:
+        "Set CLAWVOICE_TWILIO_STREAM_URL to a valid WSS URL (example: wss://your-host.example.com/media-stream).",
+    };
+  }
+
+  if (parsed.protocol !== "wss:") {
+    return {
+      name: "twilio-stream-config",
+      status: "fail",
+      detail: `twilioStreamUrl uses ${parsed.protocol} (must be wss:).`,
+      remediation:
+        "Use a WSS endpoint. Twilio Media Streams require WebSocket TLS (wss://...).",
+    };
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    return {
+      name: "twilio-stream-config",
+      status: "fail",
+      detail: "twilioStreamUrl points to localhost/loopback.",
+      remediation:
+        "Use a public tunnel/hostname reachable by Twilio (Cloudflare Tunnel or Tailscale Funnel).",
+    };
+  }
+
+  if (parsed.pathname.toLowerCase().includes("/webhook")) {
+    return {
+      name: "twilio-stream-config",
+      status: "fail",
+      detail: "twilioStreamUrl appears to point to a webhook path.",
+      remediation:
+        "Point twilioStreamUrl to your WebSocket media endpoint (not /clawvoice/webhooks/*).",
+    };
+  }
+
+  return {
+    name: "twilio-stream-config",
+    status: "pass",
+    detail: "Twilio stream URL looks valid (public WSS endpoint).",
   };
 }
 
