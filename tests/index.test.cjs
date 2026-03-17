@@ -83,8 +83,8 @@ test("plugin init registers core extension points", async () => {
 
   await plugin.init(api);
 
-  assert.equal(state.tools.length, 6, "expected 6 tools: call, hangup, send_text, text_status, status, promote_memory");
-  assert.equal(state.cli.length, 8, "expected 8 CLI commands: setup, call, sms, inbox, status, promote, history, test");
+  assert.equal(state.tools.length, 7, "expected 7 tools: call, clear_calls, hangup, send_text, text_status, status, promote_memory");
+  assert.equal(state.cli.length, 9, "expected 9 CLI commands: setup, call, clear, sms, inbox, status, promote, history, test");
   assert.equal(state.routes.length, 4);
   assert.equal(state.hooks.length, 4);
   assert.equal(state.services.length, 1);
@@ -100,11 +100,12 @@ test("plugin init registers expected tool names", async () => {
   const toolNames = state.tools.map((t) => t.name).sort();
   assert.deepEqual(toolNames, [
     "voice_assistant.call",
+    "voice_assistant.clear_calls",
     "voice_assistant.hangup",
     "voice_assistant.promote_memory",
     "voice_assistant.send_text",
-    "voice_assistant.status"
-    ,"voice_assistant.text_status"
+    "voice_assistant.status",
+    "voice_assistant.text_status"
   ]);
 });
 
@@ -116,6 +117,7 @@ test("plugin init registers expected CLI command names", async () => {
   const cliNames = state.cli.map((c) => c.name).sort();
   assert.deepEqual(cliNames, [
     "clawvoice call",
+    "clawvoice clear",
     "clawvoice history",
     "clawvoice inbox",
     "clawvoice promote",

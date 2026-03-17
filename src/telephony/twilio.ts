@@ -1,4 +1,5 @@
 import { ClawVoiceConfig } from "../config";
+import { CompanionModeError } from "../errors";
 import {
   SendSmsInput,
   SendSmsResult,
@@ -25,6 +26,12 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
   }
 
   public async startCall(input: StartCallInput): Promise<StartCallResult> {
+    if (this.config.callMode === "companion") {
+      throw new CompanionModeError(
+        "Companion mode is enabled. Use the OpenClaw voice-call plugin for live calls instead of ClawVoice Twilio streaming.",
+      );
+    }
+
     const normalizedTo = normalizeE164(input.to);
 
     if (

@@ -41,7 +41,7 @@ function checkMode(config: ClawVoiceConfig): HealthCheck {
   return {
     name: "mode",
     status: "pass",
-    detail: `Inbound: ${config.inboundEnabled ? "enabled" : "disabled"}`,
+    detail: `Call mode: ${config.callMode}. Inbound: ${config.inboundEnabled ? "enabled" : "disabled"}`,
   };
 }
 
@@ -168,6 +168,14 @@ function checkTwilioStreamConfig(config: ClawVoiceConfig): HealthCheck {
       name: "twilio-stream-config",
       status: "pass",
       detail: "Twilio stream URL check skipped (provider is not Twilio).",
+    };
+  }
+
+  if (config.callMode === "companion") {
+    return {
+      name: "twilio-stream-config",
+      status: "pass",
+      detail: "Twilio stream URL check skipped in companion mode (OpenClaw voice-call handles media streaming).",
     };
   }
 

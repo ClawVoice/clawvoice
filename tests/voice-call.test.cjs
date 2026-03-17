@@ -5,6 +5,7 @@ const { VoiceCallService } = require("../dist/services/voice-call.js");
 
 function validTelnyxConfig(overrides = {}) {
   return {
+    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     twilioAccountSid: "AC-test",
@@ -37,6 +38,18 @@ function validTelnyxConfig(overrides = {}) {
     ...overrides,
   };
 }
+
+test("startCall rejects in companion mode with actionable guidance", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({ callMode: "companion" }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Companion mode is enabled.*voice-call/i,
+  );
+});
 
 function mockFetch() {
   return async () => ({
@@ -102,6 +115,34 @@ test("startCall auto-terminates call at configured max duration", async () => {
 
   await new Promise((resolve) => setTimeout(resolve, 120));
   assert.equal(service.getActiveCalls().length, 0);
+});
+
+test("start is idempotent and does not create duplicate reaper timers", async () => {
+  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const originalSetInterval = global.setInterval;
+  let intervalCount = 0;
+
+  global.setInterval = ((handler, timeout) => {
+    intervalCount += 1;
+    return {
+      unref() {},
+      hasRef() { return true; },
+      ref() { return this; },
+      refresh() { return this; },
+      [Symbol.toPrimitive]() { return 1; },
+      _onTimeout: handler,
+      _idleTimeout: timeout,
+    };
+  });
+
+  try {
+    await service.start();
+    await service.start();
+    assert.equal(intervalCount, 1);
+  } finally {
+    global.setInterval = originalSetInterval;
+    await service.stop();
+  }
 });
 
 test("hangup ends selected active call", async () => {
