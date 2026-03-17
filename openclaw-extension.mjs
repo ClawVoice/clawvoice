@@ -3,24 +3,37 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const cjs = require("./dist/index.js");
 
-export async function activate(api) {
+function invokeLifecycle(fn, api, name) {
+  const result = fn(api);
+  if (result && typeof result.then === "function") {
+    result.catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`[clawvoice] ${name} failed: ${message}`);
+    });
+  }
+}
+
+export function activate(api) {
   if (typeof cjs.activate === "function") {
-    return cjs.activate(api);
+    invokeLifecycle(cjs.activate, api, "activate");
+    return;
   }
 
   if (typeof cjs.default?.init === "function") {
-    return cjs.default.init(api);
+    invokeLifecycle(cjs.default.init, api, "activate");
+    return;
   }
 
   throw new Error("plugin export missing activate/init");
 }
 
-export async function register(api) {
+export function register(api) {
   if (typeof cjs.register === "function") {
-    return cjs.register(api);
+    invokeLifecycle(cjs.register, api, "register");
+    return;
   }
 
-  return activate(api);
+  activate(api);
 }
 
 export default {
