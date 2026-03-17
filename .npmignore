@@ -1,0 +1,31 @@
+# Internal development artifacts
+_bmad-output/
+_bmad/
+.bmad/
+.beads/
+.claude/
+.sisyphus/
+reference-code/
+
+# Internal docs
+docs/ARCHITECTURE.md
+docs/BUSINESS_MODEL.md
+docs/PROJECT_CONTEXT.md
+
+# Source (already compiled to dist/)
+src/
+tests/
+tsconfig.json
+
+# Dev tooling
+*.test.cjs
+*.test.ts
+*.spec.ts
+*.spec.js
+
+# Misc
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
