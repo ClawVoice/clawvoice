@@ -154,6 +154,27 @@ test("clawvoice call passes --greeting flag", async () => {
   assert.equal(callService.calls[0].greeting, "Hi there!");
 });
 
+test("clawvoice call prints companion-mode handoff guidance", async () => {
+  const { api, registered, logs } = createCliApi();
+  const callService = createMockCallService();
+  callService.startCall = async () => {
+    throw new Error(
+      "Companion mode is enabled. Live voice transport is handled by the OpenClaw voice-call plugin. Use voicecall.initiate for calls.",
+    );
+  };
+  registerCLI(api, validCliConfig(), callService);
+
+  const callCmd = registered.find((c) => c.name === "clawvoice call");
+  await callCmd.run(["+15559998888"]);
+
+  assert.ok(logs.some((l) => l.message === "Companion mode active"));
+  assert.ok(
+    logs.some((l) =>
+      l.message.includes("openclaw voicecall initiate +15559998888"),
+    ),
+  );
+});
+
 test("clawvoice sms rejects non-E.164 phone numbers", async () => {
   const { api, registered, logs } = createCliApi();
   const callService = createMockCallService();

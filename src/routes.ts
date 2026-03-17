@@ -209,6 +209,10 @@ function sendTwiml(response: unknown, twiml: string): void {
 }
 
 function buildTwilioVoiceTwiml(config: ClawVoiceConfig): string {
+  if (config.callMode === "companion") {
+    return "<Response><Say>ClawVoice is in companion mode. Enable the OpenClaw voice-call plugin for live voice calls.</Say><Reject/></Response>";
+  }
+
   const streamUrl = config.twilioStreamUrl?.trim();
   if (!streamUrl) {
     return "<Response><Say>Voice stream URL is not configured.</Say><Hangup/></Response>";

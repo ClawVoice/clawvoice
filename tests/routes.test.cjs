@@ -21,6 +21,7 @@ function telnyxEd25519Sign(timestamp, payload) {
 
 function baseConfig(overrides) {
   return {
+    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     amdEnabled: true,
@@ -322,5 +323,39 @@ describe("Route Handlers — Twilio voice webhook", () => {
     assert.match(res.getSentBody(), /<Response>/);
     assert.match(res.getSentBody(), /<Connect>/);
     assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="both_tracks"\s*\/>/);
+  });
+
+  it("returns companion-mode guidance TwiML when callMode=companion", async () => {
+    const config = baseConfig({
+      callMode: "companion",
+      twilioStreamUrl: undefined,
+    });
+    const { api, handlers } = createMockApi();
+    registerRoutes(api, config, () => {});
+
+    const params = {
+      CallSid: "CA789",
+      From: "+15551234567",
+      To: "+15550001111",
+    };
+    const url = "https://example.test/clawvoice/webhooks/twilio/voice";
+    const signature = twilioSignature(url, params, config.twilioAuthToken);
+    const req = {
+      protocol: "https",
+      url: "/clawvoice/webhooks/twilio/voice",
+      headers: {
+        host: "example.test",
+        "x-twilio-signature": signature,
+      },
+      body: params,
+    };
+    const res = createMockResponse();
+
+    await handlers["/webhooks/twilio/voice"](req, res);
+
+    assert.equal(res.getStatus(), 200);
+    assert.equal(res.getContentType(), "text/xml");
+    assert.match(res.getSentBody(), /OpenClaw voice-call plugin/i);
+    assert.match(res.getSentBody(), /<Reject\/>/);
   });
 });

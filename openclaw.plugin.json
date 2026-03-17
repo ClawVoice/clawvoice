@@ -10,6 +10,12 @@
   "configSchema": {
     "type": "object",
     "properties": {
+      "callMode": {
+        "type": "string",
+        "enum": ["companion", "standalone"],
+        "default": "companion",
+        "description": "Companion mode delegates live call audio transport to OpenClaw voice-call. Standalone keeps ClawVoice-managed Twilio media streams."
+      },
       "telephonyProvider": {
         "type": "string",
         "enum": ["telnyx", "twilio"],

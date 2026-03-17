@@ -5,6 +5,7 @@ const { VoiceCallService } = require("../dist/services/voice-call.js");
 
 function validTelnyxConfig(overrides = {}) {
   return {
+    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     twilioAccountSid: "AC-test",
@@ -37,6 +38,18 @@ function validTelnyxConfig(overrides = {}) {
     ...overrides,
   };
 }
+
+test("startCall rejects in companion mode with actionable guidance", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({ callMode: "companion" }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Companion mode is enabled.*voice-call/i,
+  );
+});
 
 function mockFetch() {
   return async () => ({

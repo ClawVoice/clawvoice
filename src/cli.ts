@@ -175,7 +175,19 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
           status: result.message,
         });
       } catch (err) {
-        api.log.info("Call failed", { error: err instanceof Error ? err.message : String(err) });
+        const message = err instanceof Error ? err.message : String(err);
+        if (message.toLowerCase().includes("companion mode")) {
+          api.log.info("Companion mode active", {
+            detail:
+              "Live voice transport is handled by OpenClaw voice-call in companion mode.",
+          });
+          api.log.info(
+            `Use: openclaw voicecall initiate ${phoneNumber}`,
+            {},
+          );
+          return;
+        }
+        api.log.info("Call failed", { error: message });
       }
     },
   });

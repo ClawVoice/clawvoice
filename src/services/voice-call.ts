@@ -159,6 +159,12 @@ export class VoiceCallService {
   public async startCall(
     request: StartCallRequest,
   ): Promise<StartCallResponse> {
+    if (this.config.callMode === "companion") {
+      throw new Error(
+        "Companion mode is enabled. Live voice transport is handled by the OpenClaw voice-call plugin. Use voicecall.initiate for calls, and keep ClawVoice for SMS/memory/safety workflows.",
+      );
+    }
+
     this.checkDailyLimit();
     const baseGreeting =
       request.greeting?.trim() ||
