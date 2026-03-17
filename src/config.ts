@@ -26,6 +26,9 @@ export interface ClawVoiceConfig {
   twilioAuthToken?: string;
   twilioPhoneNumber?: string;
   twilioStreamUrl?: string;
+  mediaStreamBind: string;
+  mediaStreamPort: number;
+  mediaStreamPath: string;
   deepgramApiKey?: string;
   deepgramVoice: string;
   elevenlabsApiKey?: string;
@@ -70,6 +73,9 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   dailyCallLimit: 50,
   recordCalls: false,
   amdEnabled: true,
+  mediaStreamBind: "0.0.0.0",
+  mediaStreamPort: 3101,
+  mediaStreamPath: "/media-stream",
   restrictTools: true,
   deniedTools: [
     "exec",
@@ -202,6 +208,8 @@ export function resolveConfig(
   const envTwilioPhoneNumber = envString(env, "TWILIO_PHONE_NUMBER");
   const envTwilioStreamUrl = envString(env, "CLAWVOICE_TWILIO_STREAM_URL");
   const envDeepgramApiKey = envString(env, "DEEPGRAM_API_KEY");
+  const envMediaStreamBind = envString(env, "CLAWVOICE_MEDIA_STREAM_BIND");
+  const envMediaStreamPath = envString(env, "CLAWVOICE_MEDIA_STREAM_PATH");
   const envDeepgramVoice = envString(env, "CLAWVOICE_DEEPGRAM_VOICE");
   const envElevenlabsApiKey = envString(env, "ELEVENLABS_API_KEY");
   const envElevenlabsAgentId = envString(env, "ELEVENLABS_AGENT_ID");
@@ -211,6 +219,7 @@ export function resolveConfig(
   const envMainMemoryAccess = parseMainMemoryAccess(envString(env, "CLAWVOICE_MAIN_MEMORY_ACCESS"));
   const envAutoExtractMemories = envString(env, "CLAWVOICE_AUTO_EXTRACT_MEMORIES");
   const envMaxCallDuration = envString(env, "CLAWVOICE_MAX_CALL_DURATION");
+  const envMediaStreamPort = envString(env, "CLAWVOICE_MEDIA_STREAM_PORT");
   const envRecordCalls = envString(env, "CLAWVOICE_RECORD_CALLS");
   const envDisclosureEnabled = envString(env, "CLAWVOICE_DISCLOSURE_ENABLED");
   const envDisclosureStatement = envString(
@@ -242,6 +251,24 @@ export function resolveConfig(
     twilioPhoneNumber: getValue(envTwilioPhoneNumber, typeof pluginConfig.twilioPhoneNumber === "string" ? pluginConfig.twilioPhoneNumber : undefined, undefined),
     twilioStreamUrl: getValue(envTwilioStreamUrl, typeof pluginConfig.twilioStreamUrl === "string" ? pluginConfig.twilioStreamUrl : undefined, undefined),
     deepgramApiKey: getValue(envDeepgramApiKey, typeof pluginConfig.deepgramApiKey === "string" ? pluginConfig.deepgramApiKey : undefined, undefined),
+    mediaStreamBind: getValue(
+      envMediaStreamBind,
+      typeof pluginConfig.mediaStreamBind === "string" ? pluginConfig.mediaStreamBind : undefined,
+      DEFAULT_CONFIG.mediaStreamBind,
+    ),
+    mediaStreamPort: parseNumber(
+      getValue(
+        envMediaStreamPort,
+        typeof pluginConfig.mediaStreamPort === "undefined" ? undefined : String(pluginConfig.mediaStreamPort),
+        String(DEFAULT_CONFIG.mediaStreamPort),
+      ),
+      DEFAULT_CONFIG.mediaStreamPort,
+    ),
+    mediaStreamPath: getValue(
+      envMediaStreamPath,
+      typeof pluginConfig.mediaStreamPath === "string" ? pluginConfig.mediaStreamPath : undefined,
+      DEFAULT_CONFIG.mediaStreamPath,
+    ),
     deepgramVoice: getValue(envDeepgramVoice, typeof pluginConfig.deepgramVoice === "string" ? pluginConfig.deepgramVoice : undefined, DEFAULT_CONFIG.deepgramVoice),
     elevenlabsApiKey: getValue(envElevenlabsApiKey, typeof pluginConfig.elevenlabsApiKey === "string" ? pluginConfig.elevenlabsApiKey : undefined, undefined),
     elevenlabsAgentId: getValue(envElevenlabsAgentId, typeof pluginConfig.elevenlabsAgentId === "string" ? pluginConfig.elevenlabsAgentId : undefined, undefined),
@@ -321,6 +348,14 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     validationErrors.push(
       "maxCallDuration must be a positive number of seconds",
     );
+  }
+
+  if (!Number.isFinite(config.mediaStreamPort) || config.mediaStreamPort <= 0) {
+    validationErrors.push("mediaStreamPort must be a positive number");
+  }
+
+  if (!config.mediaStreamPath.startsWith("/")) {
+    validationErrors.push("mediaStreamPath must start with '/'");
   }
 
   if (

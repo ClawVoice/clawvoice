@@ -4,6 +4,9 @@ import { InboundCallRecord } from "../inbound/types";
 import { TelnyxTelephonyAdapter } from "../telephony/telnyx";
 import { TelephonyProviderAdapter } from "../telephony/types";
 import { TwilioTelephonyAdapter } from "../telephony/twilio";
+import { DeepgramBridgeClient } from "../transport/deepgram-bridge";
+import { TwilioMediaSessionHandler } from "../transport/media-session-handler";
+import { MediaStreamServer } from "../transport/media-stream-server";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
@@ -72,6 +75,9 @@ export class VoiceCallService {
   private dailyResetDate = new Date().toISOString().slice(0, 10);
   public readonly bridge: VoiceBridgeService;
   public readonly postCall: PostCallService;
+  private readonly deepgramClient: DeepgramBridgeClient | null;
+  private readonly mediaSessionHandler: TwilioMediaSessionHandler | null;
+  private mediaStreamServer: MediaStreamServer | null = null;
 
   public constructor(
     private readonly config: ClawVoiceConfig,
@@ -83,6 +89,17 @@ export class VoiceCallService {
         : new TelnyxTelephonyAdapter(config, fetchFn);
     this.bridge = new VoiceBridgeService(config);
     this.postCall = new PostCallService(config);
+    this.deepgramClient = config.deepgramApiKey
+      ? new DeepgramBridgeClient({ apiKey: config.deepgramApiKey })
+      : null;
+    this.mediaSessionHandler = this.deepgramClient
+      ? new TwilioMediaSessionHandler({
+        bridge: this.bridge,
+        deepgramClient: this.deepgramClient,
+        resolveCallIdByProviderCallId: (providerCallId: string) =>
+          this.findInternalCallIdByProviderCallId(providerCallId),
+      })
+      : null;
   }
 
   private reaperTimer: NodeJS.Timeout | null = null;
@@ -90,11 +107,13 @@ export class VoiceCallService {
   private static readonly REAPER_GRACE_MS = 120_000;
 
   public async start(): Promise<void> {
-    this.running = true;
+    await this.startStandaloneTransport();
     this.startReaper();
+    this.running = true;
   }
 
   public async stop(): Promise<void> {
+    await this.stopStandaloneTransport();
     this.stopReaper();
     for (const timer of this.callTimers.values()) {
       clearTimeout(timer);
@@ -102,6 +121,56 @@ export class VoiceCallService {
     this.callTimers.clear();
     await this.bridge.stopAll();
     this.running = false;
+  }
+
+  private async startStandaloneTransport(): Promise<void> {
+    if (this.config.callMode !== "standalone") {
+      return;
+    }
+    if (this.config.telephonyProvider !== "twilio") {
+      return;
+    }
+    if (!this.config.twilioStreamUrl) {
+      return;
+    }
+    if (!this.mediaSessionHandler) {
+      return;
+    }
+    if (this.mediaStreamServer) {
+      return;
+    }
+
+    let streamPath = this.config.mediaStreamPath;
+    const streamHost = this.config.mediaStreamBind || "0.0.0.0";
+    const streamPort =
+      Number.isFinite(this.config.mediaStreamPort) && this.config.mediaStreamPort > 0
+        ? this.config.mediaStreamPort
+        : 3101;
+    try {
+      const parsed = new URL(this.config.twilioStreamUrl);
+      if (parsed.pathname && parsed.pathname !== "/") {
+        streamPath = parsed.pathname;
+      }
+    } catch {
+      streamPath = this.config.mediaStreamPath;
+    }
+
+    this.mediaStreamServer = new MediaStreamServer({
+      host: streamHost,
+      port: streamPort,
+      path: streamPath,
+      sessionHandler: this.mediaSessionHandler,
+    });
+    await this.mediaStreamServer.start();
+  }
+
+  private async stopStandaloneTransport(): Promise<void> {
+    if (!this.mediaStreamServer) {
+      return;
+    }
+    const server = this.mediaStreamServer;
+    this.mediaStreamServer = null;
+    await server.stop();
   }
 
   private startReaper(): void {
@@ -147,6 +216,15 @@ export class VoiceCallService {
       .toString()
       .padStart(6, "0");
     return `call-${now}-${random}`;
+  }
+
+  private findInternalCallIdByProviderCallId(providerCallId: string): string | null {
+    for (const [callId, call] of this.activeCalls.entries()) {
+      if (call.providerCallId === providerCallId) {
+        return callId;
+      }
+    }
+    return null;
   }
 
   private checkDailyLimit(): void {

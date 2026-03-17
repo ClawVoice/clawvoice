@@ -53,6 +53,7 @@ export type DisconnectionHandler = (record: DisconnectionRecord) => void;
 
 export class VoiceBridgeService {
   private readonly bridges = new Map<string, ActiveBridge>();
+  private readonly sessionConfigs = new Map<string, BridgeSessionConfig>();
   private disconnectionHandler: DisconnectionHandler | null = null;
 
   public constructor(private readonly config: ClawVoiceConfig) {}
@@ -109,6 +110,7 @@ export class VoiceBridgeService {
     };
 
     this.bridges.set(sessionConfig.callId, bridge);
+    this.sessionConfigs.set(sessionConfig.callId, sessionConfig);
 
     return {
       type: "connected",
@@ -154,6 +156,10 @@ export class VoiceBridgeService {
     if (bridge) {
       bridge.voiceSocket = socket;
     }
+  }
+
+  public getSessionConfig(callId: string): BridgeSessionConfig | null {
+    return this.sessionConfigs.get(callId) ?? null;
   }
 
   public getVoiceSocket(callId: string): VoiceWebSocket | null {
@@ -333,6 +339,7 @@ export class VoiceBridgeService {
       try { bridge.voiceSocket.close(); } catch { /* ignore */ }
     }
     this.bridges.delete(callId);
+    this.sessionConfigs.delete(callId);
 
     return {
       type: "disconnected",
@@ -382,6 +389,22 @@ export class VoiceBridgeService {
           return { action: "transcript", entry };
         }
         return { action: "none" };
+      }
+
+      case "Audio": {
+        const payload = message.data;
+        if (typeof payload !== "string") {
+          return { action: "none" };
+        }
+        return { action: "audio", data: Buffer.from(payload, "base64") };
+      }
+
+      case "AgentAudio": {
+        const payload = message.data;
+        if (typeof payload !== "string") {
+          return { action: "none" };
+        }
+        return { action: "audio", data: Buffer.from(payload, "base64") };
       }
 
       case "FunctionCallRequest": {
