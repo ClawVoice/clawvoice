@@ -23,7 +23,7 @@ Every plugin needs an `openclaw.plugin.json` at the package root.
 
 ```json
 {
-  "id": "clawvoice/voice-assistant",
+  "id": "voice-assistant",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents. Inbound and outbound phone calls with Deepgram Voice Agent or ElevenLabs Conversational AI.",
   "version": "0.1.0",
@@ -47,7 +47,7 @@ Every plugin needs an `openclaw.plugin.json` at the package root.
       "telephonyProvider": {
         "type": "string",
         "enum": ["telnyx", "twilio"],
-        "default": "telnyx",
+        "default": "twilio",
         "description": "PSTN telephony provider."
       },
       "voiceProvider": {

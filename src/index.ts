@@ -1,6 +1,7 @@
 import { Plugin, PluginAPI } from "@openclaw/plugin-sdk";
 import { registerCLI } from "./cli";
 import { resolveConfig, validateConfig } from "./config";
+import { runDiagnostics } from "./diagnostics/health";
 import { registerHooks } from "./hooks";
 import { registerRoutes } from "./routes";
 import { MemoryExtractionService } from "./services/memory-extraction";
@@ -15,6 +16,17 @@ const plugin: Plugin = {
     if (!validation.ok) {
       throw new Error(validation.errors.join("; "));
     }
+
+    const diagnostics = runDiagnostics(config);
+    for (const check of diagnostics.checks) {
+      if (check.status === "fail" || check.status === "warn") {
+        api.log.warn(`ClawVoice config ${check.status}: ${check.name}`, {
+          detail: check.detail,
+          remediation: check.remediation,
+        });
+      }
+    }
+
     const callService = new VoiceCallService(config);
     const memoryService = new MemoryExtractionService(config);
 

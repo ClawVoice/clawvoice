@@ -185,3 +185,35 @@ test("twilio provider path is used when configured", async () => {
   assert.match(result.message, /Outbound call initiated via twilio/);
   assert.equal(result.to, "+15554445555");
 });
+
+test("startCall fails fast when twilio credentials are missing", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      telephonyProvider: "twilio",
+      twilioAccountSid: "",
+      twilioAuthToken: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5554446666" }),
+    /Twilio credentials missing/,
+  );
+});
+
+test("startCall fails fast when telnyx credentials are missing", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      telephonyProvider: "telnyx",
+      telnyxApiKey: "",
+      telnyxConnectionId: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5554447777" }),
+    /Telnyx credentials missing/,
+  );
+});
