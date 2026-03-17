@@ -367,6 +367,15 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     );
   }
 
+  if (config.callMode === "standalone" && config.telephonyProvider === "twilio") {
+    if (!config.twilioStreamUrl) {
+      validationErrors.push("twilioStreamUrl is required in standalone mode with Twilio.");
+    }
+    if (!config.deepgramApiKey) {
+      validationErrors.push("deepgramApiKey is required in standalone mode with Twilio.");
+    }
+  }
+
   if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
     const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);
     if (streamUrlError) {

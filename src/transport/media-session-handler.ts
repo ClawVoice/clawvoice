@@ -1,7 +1,7 @@
 import { DeepgramBridgeClient, DeepgramBridgeSession } from "./deepgram-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
 
-type TwilioWebSocket = VoiceWebSocket & {
+export type TwilioWebSocket = VoiceWebSocket & {
   close(code?: number, reason?: string): void;
 };
 
@@ -75,6 +75,11 @@ export class TwilioMediaSessionHandler {
   }
 
   private async handleStart(socket: TwilioWebSocket, message: TwilioStartMessage): Promise<void> {
+    const existingSession = this.sessionsBySocket.get(socket);
+    if (existingSession) {
+      this.handleClose(socket);
+    }
+
     const providerCallId = message.start?.callSid;
     if (!providerCallId) {
       socket.close(1008, "Missing callSid");
@@ -93,30 +98,48 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
-    const deepgramSession = await this.options.deepgramClient.connect({
-      callId,
-      settings: this.options.bridge.buildSettingsMessage(sessionConfig),
-      onMessage: (deepgramMessage) => {
-        const action = this.options.bridge.handleVoiceAgentMessage(callId, deepgramMessage);
-        if (action.action !== "audio") {
-          return;
-        }
+    let teardownTriggered = false;
+    const teardownFromDeepgram = (detail: string): void => {
+      if (teardownTriggered) {
+        return;
+      }
+      teardownTriggered = true;
+      this.options.bridge.reportDisconnection(callId, "voice_provider_error", detail);
+      this.handleClose(socket);
+      socket.close(1011, detail);
+    };
 
-        socket.send(
-          JSON.stringify({
-            event: "media",
-            streamSid: message.streamSid ?? "",
-            media: { payload: action.data.toString("base64") },
-          }),
-        );
-      },
-      onClose: () => {
-        this.options.bridge.reportDisconnection(callId, "voice_provider_error", "Deepgram stream closed");
-      },
-      onError: () => {
-        this.options.bridge.reportDisconnection(callId, "voice_provider_error", "Deepgram stream error");
-      },
-    });
+    let deepgramSession: DeepgramBridgeSession;
+    try {
+      deepgramSession = await this.options.deepgramClient.connect({
+        callId,
+        settings: this.options.bridge.buildSettingsMessage(sessionConfig),
+        onMessage: (deepgramMessage) => {
+          const action = this.options.bridge.handleVoiceAgentMessage(callId, deepgramMessage);
+          if (action.action !== "audio") {
+            return;
+          }
+
+          socket.send(
+            JSON.stringify({
+              event: "media",
+              streamSid: message.streamSid ?? "",
+              media: { payload: action.data.toString("base64") },
+            }),
+          );
+        },
+        onClose: () => {
+          teardownFromDeepgram("Deepgram stream closed");
+        },
+        onError: () => {
+          teardownFromDeepgram("Deepgram stream error");
+        },
+      });
+    } catch {
+      this.options.bridge.reportDisconnection(callId, "voice_provider_error", "Deepgram connect failed");
+      socket.close(1011, "Deepgram connect failed");
+      return;
+    }
 
     this.options.bridge.setVoiceSocket(callId, {
       send: (data) => {
@@ -135,7 +158,7 @@ export class TwilioMediaSessionHandler {
         }
       },
       close: () => deepgramSession.close(),
-      readyState: socket.readyState,
+      readyState: 1,
     });
 
     this.sessionsBySocket.set(socket, {

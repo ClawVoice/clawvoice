@@ -66,6 +66,7 @@ export interface TextMessageRecord {
 export class VoiceCallService {
   private running = false;
   private readonly activeCalls = new Map<string, CallRecord>();
+  private readonly callIdByProviderCallId = new Map<string, string>();
   private readonly recentCalls: CallRecord[] = [];
   private readonly inboundRecords: InboundCallRecord[] = [];
   private readonly textMessages: TextMessageRecord[] = [];
@@ -108,8 +109,13 @@ export class VoiceCallService {
 
   public async start(): Promise<void> {
     await this.startStandaloneTransport();
-    this.startReaper();
-    this.running = true;
+    try {
+      this.startReaper();
+      this.running = true;
+    } catch (error) {
+      await this.stopStandaloneTransport().catch(() => undefined);
+      throw error;
+    }
   }
 
   public async stop(): Promise<void> {
@@ -131,29 +137,21 @@ export class VoiceCallService {
       return;
     }
     if (!this.config.twilioStreamUrl) {
-      return;
+      throw new Error("twilioStreamUrl is required in standalone mode.");
     }
     if (!this.mediaSessionHandler) {
-      return;
+      throw new Error("deepgramApiKey is required in standalone mode.");
     }
     if (this.mediaStreamServer) {
       return;
     }
 
-    let streamPath = this.config.mediaStreamPath;
+    const streamPath = this.config.mediaStreamPath;
     const streamHost = this.config.mediaStreamBind || "0.0.0.0";
     const streamPort =
       Number.isFinite(this.config.mediaStreamPort) && this.config.mediaStreamPort > 0
         ? this.config.mediaStreamPort
         : 3101;
-    try {
-      const parsed = new URL(this.config.twilioStreamUrl);
-      if (parsed.pathname && parsed.pathname !== "/") {
-        streamPath = parsed.pathname;
-      }
-    } catch {
-      streamPath = this.config.mediaStreamPath;
-    }
 
     this.mediaStreamServer = new MediaStreamServer({
       host: streamHost,
@@ -219,12 +217,7 @@ export class VoiceCallService {
   }
 
   private findInternalCallIdByProviderCallId(providerCallId: string): string | null {
-    for (const [callId, call] of this.activeCalls.entries()) {
-      if (call.providerCallId === providerCallId) {
-        return callId;
-      }
-    }
-    return null;
+    return this.callIdByProviderCallId.get(providerCallId) ?? null;
   }
 
   private checkDailyLimit(): void {
@@ -281,6 +274,7 @@ export class VoiceCallService {
     };
 
     this.activeCalls.set(callId, record);
+    this.callIdByProviderCallId.set(record.providerCallId, callId);
     this.recentCalls.unshift(record);
     this.recentCalls.splice(20);
     this.dailyCallCount++;
@@ -365,11 +359,15 @@ export class VoiceCallService {
 
   private cleanupCall(callId: string): void {
     const call = this.activeCalls.get(callId);
+    const providerCallId = call?.providerCallId;
     if (call) {
       call.status = "completed";
       call.endedAt = new Date().toISOString();
     }
     this.activeCalls.delete(callId);
+    if (providerCallId) {
+      this.callIdByProviderCallId.delete(providerCallId);
+    }
     this.bridge.destroySession(callId);
     const timer = this.callTimers.get(callId);
     if (timer) {
@@ -483,6 +481,7 @@ export class VoiceCallService {
     call.status = "completed";
     call.endedAt = new Date().toISOString();
     this.activeCalls.delete(callId);
+    this.callIdByProviderCallId.delete(call.providerCallId);
 
     if (summary) {
       await this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);

@@ -1,5 +1,5 @@
 import { WebSocketServer } from "ws";
-import { TwilioMediaSessionHandler } from "./media-session-handler";
+import { TwilioMediaSessionHandler, TwilioWebSocket } from "./media-session-handler";
 
 interface MediaStreamServerOptions {
   host: string;
@@ -25,13 +25,16 @@ export class MediaStreamServer {
     });
 
     this.wss.on("connection", (socket) => {
+      const twilioSocket = socket as unknown as TwilioWebSocket;
       socket.on("message", (payload) => {
         const text = typeof payload === "string" ? payload : payload.toString("utf8");
-        void this.options.sessionHandler.handleMessage(socket as never, text);
+        void this.options.sessionHandler.handleMessage(twilioSocket, text).catch(() => {
+          twilioSocket.close(1011, "Invalid media stream message");
+        });
       });
 
       socket.on("close", () => {
-        this.options.sessionHandler.handleClose(socket as never);
+        this.options.sessionHandler.handleClose(twilioSocket);
       });
     });
 

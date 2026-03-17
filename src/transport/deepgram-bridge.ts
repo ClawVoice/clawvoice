@@ -23,19 +23,26 @@ export interface DeepgramConnectOptions {
 interface DeepgramBridgeClientOptions {
   apiKey: string;
   url?: string;
+  connectTimeoutMs?: number;
   webSocketFactory?: (url: string, protocols: string[]) => DeepgramSocket;
 }
 
 const OPEN_SOCKET = 1;
+const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
 export class DeepgramBridgeClient {
   private readonly apiKey: string;
   private readonly url: string;
+  private readonly connectTimeoutMs: number;
   private readonly webSocketFactory: (url: string, protocols: string[]) => DeepgramSocket;
 
   public constructor(options: DeepgramBridgeClientOptions) {
     this.apiKey = options.apiKey;
     this.url = options.url ?? "wss://agent.deepgram.com/v1/agent/converse";
+    this.connectTimeoutMs =
+      typeof options.connectTimeoutMs === "number" && options.connectTimeoutMs > 0
+        ? options.connectTimeoutMs
+        : DEFAULT_CONNECT_TIMEOUT_MS;
     this.webSocketFactory =
       options.webSocketFactory ??
       ((url: string, protocols: string[]) => new WebSocket(url, protocols) as unknown as DeepgramSocket);
@@ -46,11 +53,43 @@ export class DeepgramBridgeClient {
 
     return new Promise<DeepgramBridgeSession>((resolve, reject) => {
       let opened = false;
+      let settled = false;
+      let parseErrorReported = false;
+
+      const fail = (error: unknown): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(connectTimeout);
+        reject(error);
+      };
+
+      const succeed = (session: DeepgramBridgeSession): void => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(connectTimeout);
+        resolve(session);
+      };
+
+      const connectTimeout = setTimeout(() => {
+        const timeoutError = new Error(
+          `Deepgram WS connect timeout for callId=${options.callId}`,
+        );
+        options.onError?.(timeoutError);
+        try {
+          ws.close();
+        } catch {
+        }
+        fail(timeoutError);
+      }, this.connectTimeoutMs);
 
       ws.on("open", () => {
         opened = true;
         ws.send(JSON.stringify(options.settings));
-        resolve({
+        succeed({
           sendAudio(chunk: Buffer) {
             if (ws.readyState === OPEN_SOCKET) {
               ws.send(chunk);
@@ -80,14 +119,19 @@ export class DeepgramBridgeClient {
           const message = JSON.parse(text) as Record<string, unknown>;
           options.onMessage(message);
         } catch {
-          return;
+          if (!parseErrorReported) {
+            parseErrorReported = true;
+            options.onError?.(
+              new Error(`Invalid Deepgram message JSON for callId=${options.callId}`),
+            );
+          }
         }
       });
 
       ws.on("error", (error: unknown) => {
         options.onError?.(error);
         if (!opened) {
-          reject(error);
+          fail(error);
         }
       });
 
@@ -100,6 +144,9 @@ export class DeepgramBridgeClient {
               ? reason.toString("utf8")
               : "";
         options.onClose?.(closeCode, closeReason);
+        if (!opened) {
+          fail(new Error(`Deepgram stream closed before open for callId=${options.callId}`));
+        }
       });
     });
   }
