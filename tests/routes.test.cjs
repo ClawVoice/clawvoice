@@ -355,7 +355,8 @@ describe("Route Handlers — Twilio voice webhook", () => {
 
     assert.equal(res.getStatus(), 200);
     assert.equal(res.getContentType(), "text/xml");
-    assert.match(res.getSentBody(), /OpenClaw voice-call plugin/i);
-    assert.match(res.getSentBody(), /<Reject\/>/);
+    assert.match(res.getSentBody(), /COMPANION_MODE/i);
+    assert.match(res.getSentBody(), /OpenClaw voice-call inbound webhook/i);
+    assert.match(res.getSentBody(), /<Hangup\/>/);
   });
 });

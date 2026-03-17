@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 
 const { runSetupWizard, registerCLI } = require("../dist/cli.js");
+const { CompanionModeError } = require("../dist/errors.js");
 
 function createPrompter(answers) {
   const queue = [...answers];
@@ -158,7 +159,7 @@ test("clawvoice call prints companion-mode handoff guidance", async () => {
   const { api, registered, logs } = createCliApi();
   const callService = createMockCallService();
   callService.startCall = async () => {
-    throw new Error(
+    throw new CompanionModeError(
       "Companion mode is enabled. Live voice transport is handled by the OpenClaw voice-call plugin. Use voicecall.initiate for calls.",
     );
   };

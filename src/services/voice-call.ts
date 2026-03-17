@@ -1,4 +1,5 @@
 import { ClawVoiceConfig } from "../config";
+import { CompanionModeError } from "../errors";
 import { InboundCallRecord } from "../inbound/types";
 import { TelnyxTelephonyAdapter } from "../telephony/telnyx";
 import { TelephonyProviderAdapter } from "../telephony/types";
@@ -86,7 +87,7 @@ export class VoiceCallService {
 
   private reaperTimer: NodeJS.Timeout | null = null;
   private static readonly REAPER_INTERVAL_MS = 30_000; // check every 30s
-  private static readonly STALE_THRESHOLD_MS = 120_000; // 2 min with no activity = stale
+  private static readonly REAPER_GRACE_MS = 120_000;
 
   public async start(): Promise<void> {
     this.running = true;
@@ -104,6 +105,9 @@ export class VoiceCallService {
   }
 
   private startReaper(): void {
+    if (this.reaperTimer) {
+      return;
+    }
     this.reaperTimer = setInterval(() => {
       this.reapStaleCalls();
     }, VoiceCallService.REAPER_INTERVAL_MS);
@@ -122,8 +126,8 @@ export class VoiceCallService {
     for (const [callId, record] of this.activeCalls) {
       const started = new Date(record.startedAt).getTime();
       const maxDurationMs = Math.floor(this.config.maxCallDuration * 1000);
-      const staleAfter = Math.max(maxDurationMs, VoiceCallService.STALE_THRESHOLD_MS);
-      if (now - started > staleAfter + VoiceCallService.STALE_THRESHOLD_MS) {
+      const staleAfter = Math.max(maxDurationMs, VoiceCallService.REAPER_GRACE_MS);
+      if (now - started > staleAfter + VoiceCallService.REAPER_GRACE_MS) {
         this.cleanupCall(callId);
       }
     }
@@ -160,7 +164,7 @@ export class VoiceCallService {
     request: StartCallRequest,
   ): Promise<StartCallResponse> {
     if (this.config.callMode === "companion") {
-      throw new Error(
+      throw new CompanionModeError(
         "Companion mode is enabled. Live voice transport is handled by the OpenClaw voice-call plugin. Use voicecall.initiate for calls, and keep ClawVoice for SMS/memory/safety workflows.",
       );
     }

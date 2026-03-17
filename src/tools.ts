@@ -257,18 +257,29 @@ export function registerTools(
       properties: {
         callId: {
           type: "string",
-          description: "Specific call ID to clear, or omit to clear all stuck calls",
+          description: "Specific call ID to clear",
+        },
+        confirmAll: {
+          type: "boolean",
+          description: "Set true to clear all stuck calls when callId is omitted",
         },
       },
       required: [],
     },
     handler: async (input) => {
-      const cleared = callService.forceClear(readString(input.callId) || undefined);
+      const callId = readString(input.callId);
+      const confirmAll = input.confirmAll === true || input.confirmAll === "true";
+      if (!callId && !confirmAll) {
+        throw new Error("callId is required unless confirmAll is true.");
+      }
+      const cleared = callService.forceClear(callId || undefined);
       if (cleared.length === 0) {
         return { content: "No active call slots to clear." };
       }
       return {
-        content: `Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`,
+        content:
+          `Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}. ` +
+          "This does not terminate provider-side calls.",
       };
     },
   });
