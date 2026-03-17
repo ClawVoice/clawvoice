@@ -287,3 +287,43 @@ test("validateConfig rejects twilioStreamUrl that points to webhook path", () =>
     result.errors.some((message) => message.includes("WebSocket media endpoint")),
   );
 });
+
+test("validateConfig requires twilioStreamUrl in standalone twilio mode", () => {
+  const config = resolveConfig(
+    {
+      callMode: "standalone",
+      telephonyProvider: "twilio",
+      deepgramApiKey: "dg",
+      twilioStreamUrl: "",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) =>
+      message.includes("twilioStreamUrl is required in standalone mode"),
+    ),
+  );
+});
+
+test("validateConfig requires deepgramApiKey in standalone twilio mode", () => {
+  const config = resolveConfig(
+    {
+      callMode: "standalone",
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "wss://voice.example.test/media-stream",
+      deepgramApiKey: "",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) =>
+      message.includes("deepgramApiKey is required in standalone mode"),
+    ),
+  );
+});
