@@ -118,7 +118,10 @@ test("startCall auto-terminates call at configured max duration", async () => {
 });
 
 test("start is idempotent and does not create duplicate reaper timers", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new VoiceCallService(
+    validTelnyxConfig({ callMode: "companion" }),
+    mockFetch(),
+  );
   const originalSetInterval = global.setInterval;
   let intervalCount = 0;
 
