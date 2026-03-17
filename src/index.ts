@@ -40,9 +40,16 @@ function initPlugin(api: PluginAPI): void {
 
   const httpRouter = (api as unknown as { http?: { router?: unknown } }).http?.router;
   if (typeof httpRouter === "function") {
-    registerRoutes(api, config, (record) => {
-      callService.trackInboundCall(record);
-    });
+    registerRoutes(
+      api,
+      config,
+      (record) => {
+        callService.trackInboundCall(record);
+      },
+      (from, to, body, messageId) => {
+        callService.trackInboundText(from, to, body, messageId);
+      },
+    );
   }
 
   const hooksOn = (api as unknown as { hooks?: { on?: unknown } }).hooks?.on;

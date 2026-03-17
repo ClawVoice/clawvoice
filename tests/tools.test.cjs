@@ -58,6 +58,29 @@ function createMockCallService() {
           "Call ended with a polite closing and clean connection termination.",
       };
     },
+    texts: [],
+    async sendText(input) {
+      this.texts.push(input);
+      return {
+        messageId: "sms-123",
+        to: "+15551234567",
+        message: "Outbound text sent via twilio.",
+      };
+    },
+    getRecentTexts() {
+      return this.texts.map((entry, index) => ({
+        id: `sms-${index + 1}`,
+        direction: "outbound",
+        provider: "twilio",
+        from: "+15550001111",
+        to: entry.phoneNumber,
+        body: entry.message,
+        createdAt: new Date().toISOString(),
+      }));
+    },
+    getCallSummary() {
+      return undefined;
+    },
     getActiveCalls() {
       return this.calls.length > 0
         ? [{ callId: "call-123", status: "in-progress" }]
@@ -92,8 +115,27 @@ test("registerTools registers expected tool names", () => {
     "voice_assistant.call",
     "voice_assistant.hangup",
     "voice_assistant.promote_memory",
+    "voice_assistant.send_text",
     "voice_assistant.status",
+    "voice_assistant.text_status",
   ]);
+});
+
+test("send_text handler sends message and returns structured response", async () => {
+  const callService = createMockCallService();
+  const tools = registerAndGetTools(validConfig(), callService);
+  const smsTool = getTool(tools, "voice_assistant.send_text");
+
+  const result = await smsTool.handler({
+    phoneNumber: "+15559876543",
+    message: "Hello from ClawVoice",
+  });
+
+  assert.equal(callService.texts.length, 1);
+  assert.equal(callService.texts[0].phoneNumber, "+15559876543");
+  assert.equal(callService.texts[0].message, "Hello from ClawVoice");
+  assert.equal(result.data.messageId, "sms-123");
+  assert.match(result.content, /Outbound text sent/);
 });
 
 test("call handler invokes call service and returns structured response", async () => {

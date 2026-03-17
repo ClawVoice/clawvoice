@@ -10,6 +10,7 @@ function validTelnyxConfig(overrides = {}) {
     twilioAccountSid: "AC-test",
     twilioAuthToken: "auth-test",
     twilioPhoneNumber: "+15550001111",
+    twilioStreamUrl: "wss://voice.example.test/media-stream",
     deepgramApiKey: "deepgram-key",
     deepgramVoice: "aura-asteria-en",
     analysisModel: "gpt-4o-mini",
@@ -216,4 +217,30 @@ test("startCall fails fast when telnyx credentials are missing", async () => {
     () => service.startCall({ phoneNumber: "5554447777" }),
     /Telnyx credentials missing/,
   );
+});
+
+test("sendText rejects oversized SMS payloads", async () => {
+  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const oversized = "a".repeat(1601);
+
+  await assert.rejects(
+    () => service.sendText({ phoneNumber: "+15551234567", message: oversized }),
+    /Maximum is 1600 characters/,
+  );
+});
+
+test("sendText records outbound message and exposes it in recent text status", async () => {
+  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+
+  const result = await service.sendText({
+    phoneNumber: "+15551234567",
+    message: "Hello from test",
+  });
+
+  assert.equal(result.to, "+15551234567");
+  assert.match(result.message, /Outbound text sent via twilio/);
+  const recent = service.getRecentTexts();
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].direction, "outbound");
+  assert.equal(recent[0].body, "Hello from test");
 });

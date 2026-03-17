@@ -133,6 +133,10 @@ function parseFlag(args: string[], flag: string): string | undefined {
   return undefined;
 }
 
+function isLikelyE164(value: string): boolean {
+  return /^\+[1-9]\d{7,14}$/.test(value.trim());
+}
+
 function formatDuration(ms: number): string {
   const seconds = Math.floor(ms / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -177,6 +181,57 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
   });
 
   api.cli.register({
+    name: "clawvoice sms",
+    description: "Send an outbound SMS message",
+    run: async (args) => {
+      const phoneNumber = args.find((a) => !a.startsWith("--"));
+      const message = parseFlag(args, "message") ?? parseFlag(args, "body");
+      if (!phoneNumber || !message) {
+        api.log.info("Usage: clawvoice sms <phone-number> --message \"...\"");
+        return;
+      }
+      if (!isLikelyE164(phoneNumber)) {
+        api.log.info("Phone number must be in E.164 format (example: +15551234567).");
+        return;
+      }
+      try {
+        const result = await callService.sendText({ phoneNumber, message });
+        api.log.info("Text sent", {
+          messageId: result.messageId,
+          to: result.to,
+          status: result.message,
+        });
+      } catch (err) {
+        api.log.info("Text send failed", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  });
+
+  api.cli.register({
+    name: "clawvoice inbox",
+    description: "Show recent inbound and outbound SMS messages",
+    run: async () => {
+      const texts = callService.getRecentTexts();
+      if (texts.length === 0) {
+        api.log.info("No recent text messages.");
+        return;
+      }
+      for (const sms of texts) {
+        api.log.info("Text", {
+          id: sms.id,
+          direction: sms.direction,
+          from: sms.from,
+          to: sms.to,
+          body: sms.body,
+          createdAt: sms.createdAt,
+        });
+      }
+    },
+  });
+
+  api.cli.register({
     name: "clawvoice status",
     description: "Show active calls and configuration health diagnostics",
     run: async () => {
@@ -211,7 +266,7 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
           api.log.info("Memory candidate not found", { memoryId });
           return;
         }
-        if (parseFlag(args, "--yes")) {
+        if (parseFlag(args, "yes")) {
           const result = await memoryService.approveAndPromote(memoryId);
           api.log.info(result.promoted ? "Promoted" : `Failed: ${result.reason}`, { memoryId });
         } else {
