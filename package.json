@@ -16,6 +16,14 @@
     "telephony"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ClawVoice/clawvoice.git"
+  },
+  "homepage": "https://github.com/ClawVoice/clawvoice#readme",
+  "bugs": {
+    "url": "https://github.com/ClawVoice/clawvoice/issues"
+  },
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^24.0.0",
