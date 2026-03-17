@@ -27,6 +27,11 @@ function initPlugin(api: PluginAPI): void {
 
   const callService = new VoiceCallService(config);
   const memoryService = new MemoryExtractionService(config);
+  void callService.start().catch((error) => {
+    api.log?.error?.("ClawVoice call service failed to start", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 
   const toolsRegister = (api as unknown as { tools?: { register?: unknown } }).tools?.register;
   if (typeof toolsRegister === "function") {

@@ -57,6 +57,25 @@
       "twilioPhoneNumber": {
         "type": "string"
       },
+      "twilioStreamUrl": {
+        "type": "string",
+        "description": "Public wss:// endpoint Twilio will stream call audio to in standalone mode."
+      },
+      "mediaStreamBind": {
+        "type": "string",
+        "default": "0.0.0.0",
+        "description": "Bind address for ClawVoice standalone WebSocket media transport server."
+      },
+      "mediaStreamPort": {
+        "type": "number",
+        "default": 3101,
+        "description": "Port for ClawVoice standalone WebSocket media transport server."
+      },
+      "mediaStreamPath": {
+        "type": "string",
+        "default": "/media-stream",
+        "description": "Path for ClawVoice standalone WebSocket media transport server."
+      },
       "deepgramApiKey": {
         "type": "string"
       },

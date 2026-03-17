@@ -355,10 +355,15 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 - For outbound calls on trial accounts, you can only call verified numbers — upgrade to a paid account for unrestricted outbound
 
 **Do you need to configure a webhook in Twilio?**
-Yes, for inbound calls. ClawVoice registers a webhook endpoint that Twilio must call when a call arrives. Set your Twilio number's Voice webhook URL to:
+Yes, for inbound calls.
+
+- In `callMode=companion` (default): set Twilio Voice webhook URL to the OpenClaw `voice-call` inbound endpoint (not a ClawVoice route).
+- In `callMode=standalone`: set Twilio Voice webhook URL to:
+
 ```
 https://your-openclaw-host/clawvoice/webhooks/twilio/voice
 ```
+
 For outbound calls only, no inbound webhook configuration is needed.
 
 **Twilio stream endpoint requirements (for `callMode=standalone` two-way live audio):**
@@ -368,7 +373,7 @@ For outbound calls only, no inbound webhook configuration is needed.
 - If misconfigured, Twilio shows `Error 31920` (WebSocket handshake non-101)
 
 **Do you configure any webhook URL in ElevenLabs?**
-No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony webhook events go to your ClawVoice endpoint (Twilio/Telnyx -> ClawVoice), not to ElevenLabs.
+No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony webhooks are handled by OpenClaw `voice-call` in companion mode, or by ClawVoice routes in standalone mode.
 
 ### Telnyx Settings (alternative)
 
