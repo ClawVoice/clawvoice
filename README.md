@@ -1,46 +1,60 @@
 # ClawVoice
 
-Companion voice operations plugin for OpenClaw. Add SMS, memory isolation, and safety controls around voice calls.
+Voice operations plugin for OpenClaw with standalone transport and optional companion mode. Add SMS, memory isolation, and safety controls around voice calls.
 
 ## What It Does
 
 ClawVoice adds operational layers around OpenClaw voice workflows: SMS handling, memory isolation, tool restrictions, prompt-guarding, and post-call context.
 
-By default, ClawVoice runs in **companion mode** and expects OpenClaw's built-in `voice-call` plugin to handle live telephony audio transport.
+ClawVoice supports two live-call modes:
+- **standalone**: ClawVoice owns Twilio media transport internally (no `voice-call` plugin required)
+- **companion**: OpenClaw `voice-call` owns transport, ClawVoice adds operations/safety layers
 
 **Key features:**
-- **Companion mode by default**: delegates live call media transport to OpenClaw `voice-call`
+- **Standalone transport available**: internal Twilio media stream receiver + Deepgram bridge
+- **Companion mode available**: delegates live call media transport to OpenClaw `voice-call`
 - **Voice memory isolation**: Phone calls write to a sandboxed `voice-memory/` namespace. Voice callers cannot corrupt your agent's main memory. Memory promotion to `MEMORY.md` requires explicit review.
 - **Post-call analysis**: After every call, get a transcript, call summary with outcome/failures/retry context, and action items written to voice memory.
 - **SMS send/receive**: Keep telephony text workflows in ClawVoice.
 
 ## Live Call Mode
 
+- `callMode=standalone`: ClawVoice handles Twilio media transport directly.
 - `callMode=companion` (default): OpenClaw `voice-call` handles live call audio.
-- `callMode=standalone`: legacy ClawVoice-managed Twilio media stream flow.
 
-If your goal is reliable live calls today, use companion mode and enable both plugins.
+Use standalone when you want a self-contained ClawVoice install. Use companion when you want OpenClaw `voice-call` to own transport.
+
+Companion remains the default for backward compatibility; the quick start below shows standalone for new self-contained installs.
 
 ## Is This Worth It?
 
-Yes, if you use ClawVoice as the companion layer rather than duplicating transport.
+Yes. ClawVoice now supports both standalone transport and companion orchestration.
 
-| Capability | OpenClaw `voice-call` | ClawVoice (companion) |
+| Capability | OpenClaw `voice-call` | ClawVoice (standalone/companion) |
 |---|---|---|
-| Telephony/media transport | Primary owner | Delegates by default |
-| Real-time call audio path | Primary owner | Not reimplemented |
+| Telephony/media transport | Primary owner in companion mode | Primary owner in standalone mode |
+| Real-time call audio path | Primary owner in companion mode | Reimplemented in standalone mode |
 | SMS workflows | Basic/adjacent | Primary owner |
 | Memory isolation + promotion workflow | Limited | Primary owner |
 | Prompt/tool safety guardrails for voice sessions | Limited | Primary owner |
 | Post-call retry context + operational diagnostics | Basic | Primary owner |
 
-Positioning: **OpenClaw `voice-call` handles reliable call transport; ClawVoice adds governance and operations for production use.**
+Positioning: **ClawVoice can run standalone for end-to-end Twilio + voice transport, or as a companion layer when you prefer OpenClaw `voice-call` for transport ownership.**
 
-## Live Call Readiness (Current)
+## Migration Notes
 
-- `main` is not yet fully aligned with the companion architecture for live calls.
-- The working companion pivot is currently in this branch and includes `callMode` defaults, companion guardrails, and updated docs.
-- For production live calls now: run OpenClaw `voice-call` for transport and use this branch's companion behavior for ClawVoice features.
+If you are already on companion mode, your setup keeps working. To move to standalone mode:
+
+1. Set mode and stream URL:
+
+```bash
+openclaw config set clawvoice.callMode standalone
+openclaw config set clawvoice.twilioStreamUrl wss://your-host.example.com/media-stream
+```
+
+2. Update Twilio Voice webhook to `https://your-host.example.com/clawvoice/webhooks/twilio/voice`.
+3. Keep Twilio SMS webhook on `https://your-host.example.com/clawvoice/webhooks/twilio/sms`.
+4. Validate with `openclaw clawvoice test`.
 
 ## Quick Start
 
@@ -56,8 +70,13 @@ Configure your providers in `.env` or via `openclaw config set`:
 
 
 ```bash
-openclaw plugins install @openclaw/voice-call
 openclaw plugins install @clawvoice/voice-assistant
+```
+
+Optional (only for companion mode):
+
+```bash
+openclaw plugins install @openclaw/voice-call
 ```
 
 ### 2. Get API Keys
@@ -74,7 +93,7 @@ openclaw plugins install @clawvoice/voice-assistant
 
 ```bash
 # Telephony
-openclaw config set clawvoice.callMode companion
+openclaw config set clawvoice.callMode standalone
 openclaw config set clawvoice.telephonyProvider twilio
 openclaw config set clawvoice.twilioAccountSid YOUR_SID
 openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
@@ -93,14 +112,16 @@ openclaw config set clawvoice.deepgramApiKey YOUR_KEY
 openclaw start
 ```
 
-Your OpenClaw `voice-call` plugin handles live audio calls.
-ClawVoice adds SMS/memory/safety features on top.
+In standalone mode, ClawVoice handles live audio calls directly.
+In companion mode, OpenClaw `voice-call` handles transport and ClawVoice adds SMS/memory/safety features on top.
 
 ### 5. Make a test call
 
 ```bash
-openclaw voicecall initiate +15559876543
+openclaw clawvoice call +15559876543
 ```
+
+In standalone mode, this places the call directly. In companion mode, this command returns guidance to use `openclaw voicecall initiate`.
 
 Or ask your agent: *"Call +15559876543"*
 
@@ -162,7 +183,7 @@ openclaw clawvoice history                 # Show recent call history
 openclaw clawvoice test                    # Test voice pipeline connectivity
 ```
 
-In companion mode, use `openclaw voicecall initiate <number>` for live outbound calls.
+If you prefer companion mode transport ownership, use `openclaw voicecall initiate <number>` for live outbound calls.
 
 ## Agent Tools
 
@@ -177,16 +198,26 @@ The plugin registers these tools for your OpenClaw agent:
 
 ## Architecture
 
+Standalone mode:
+
+```
+Phone ──PSTN──> Twilio
+                 │
+                 └──> ClawVoice transport + operations
+                        ├──> Deepgram/ElevenLabs voice
+                        └──> OpenClaw Agent runtime
+```
+
+Companion mode:
+
 ```
 Phone ──PSTN──> OpenClaw voice-call (transport/media)
-                               │
-                               ├──> OpenClaw Agent runtime
-                               │
-                               └──> ClawVoice companion layer
-                                     - SMS workflows
-                                     - memory isolation/promotion
-                                     - safety guardrails
-                                     - post-call summaries/retry context
+                 │
+                 └──> ClawVoice operations layer
+                        - SMS workflows
+                        - memory isolation/promotion
+                        - safety guardrails
+                        - post-call summaries/retry context
 ```
 
 ## Configuration Reference
@@ -197,7 +228,7 @@ Key settings in `openclaw.plugin.json` `configSchema`:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `callMode` | `"companion" \| "standalone"` | `"companion"` | Companion delegates live call transport to OpenClaw `voice-call` |
+| `callMode` | `"companion" \| "standalone"` | `"companion"` | Standalone uses ClawVoice transport; companion delegates to OpenClaw `voice-call` |
 | `telephonyProvider` | `"telnyx" \| "twilio"` | `"twilio"` | PSTN provider |
 | `voiceProvider` | `"deepgram-agent" \| "elevenlabs-conversational"` | `"deepgram-agent"` | Voice pipeline |
 | `voiceSystemPrompt` | `string` | `""` | Instructions for how the agent behaves on calls |
