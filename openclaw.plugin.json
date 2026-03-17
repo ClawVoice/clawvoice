@@ -1,5 +1,5 @@
 {
-  "id": "clawvoice/voice-assistant",
+  "id": "voice-assistant",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents.",
   "version": "1.0.0",
@@ -131,7 +131,7 @@
         ]
       }
     },
-    "required": ["telephonyProvider", "voiceProvider"],
+    "required": [],
     "additionalProperties": true
   }
 }

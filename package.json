@@ -20,5 +20,10 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.9.2"
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ]
   }
 }

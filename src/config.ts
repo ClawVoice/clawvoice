@@ -267,14 +267,7 @@ export function resolveConfig(
   };
 }
 
-function pushMissing(errors: string[], fieldName: keyof ClawVoiceConfig, value: unknown): void {
-  if (typeof value === "undefined" || value === null || value === "") {
-    errors.push(String(fieldName));
-  }
-}
-
 export function validateConfig(config: ClawVoiceConfig): ValidationResult {
-  const missingFields: string[] = [];
   const validationErrors: string[] = [];
 
   if (!Number.isFinite(config.maxCallDuration) || config.maxCallDuration <= 0) {
@@ -292,32 +285,12 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     );
   }
 
-  if (config.telephonyProvider === "telnyx") {
-    pushMissing(missingFields, "telnyxApiKey", config.telnyxApiKey);
-    pushMissing(missingFields, "telnyxConnectionId", config.telnyxConnectionId);
-    pushMissing(missingFields, "telnyxPhoneNumber", config.telnyxPhoneNumber);
-  } else {
-    pushMissing(missingFields, "twilioAccountSid", config.twilioAccountSid);
-    pushMissing(missingFields, "twilioAuthToken", config.twilioAuthToken);
-    pushMissing(missingFields, "twilioPhoneNumber", config.twilioPhoneNumber);
-  }
-
-  pushMissing(missingFields, "deepgramApiKey", config.deepgramApiKey);
-
-  if (config.voiceProvider === "elevenlabs-conversational") {
-    pushMissing(missingFields, "elevenlabsApiKey", config.elevenlabsApiKey);
-    pushMissing(missingFields, "elevenlabsAgentId", config.elevenlabsAgentId);
-  }
-
-  if (missingFields.length === 0 && validationErrors.length === 0) {
+  if (validationErrors.length === 0) {
     return { ok: true, errors: [] };
   }
 
   return {
     ok: false,
-    errors: [
-      ...missingFields.map((field) => `Missing required config field: ${field}`),
-      ...validationErrors,
-    ],
+    errors: validationErrors,
   };
 }

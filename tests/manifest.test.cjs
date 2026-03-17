@@ -8,7 +8,7 @@ test("openclaw.plugin.json is valid JSON with required fields", () => {
   const raw = fs.readFileSync(manifestPath, "utf-8");
   const manifest = JSON.parse(raw);
 
-  assert.equal(manifest.id, "clawvoice/voice-assistant");
+  assert.equal(manifest.id, "voice-assistant");
   assert.equal(manifest.name, "ClawVoice");
   assert.equal(manifest.kind, "channel");
   assert.equal(manifest.entryPoint, "dist/index.js");

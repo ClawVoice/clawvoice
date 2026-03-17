@@ -175,58 +175,28 @@ test("resolveConfig resolves full provider field set from env and plugin config"
   assert.equal(config.amdEnabled, true);
 });
 
-test("validateConfig passes for telnyx + deepgram", () => {
-  const config = resolveConfig(
-    {
-      telephonyProvider: "telnyx",
-      voiceProvider: "deepgram-agent",
-      telnyxApiKey: "a",
-      telnyxConnectionId: "b",
-      telnyxPhoneNumber: "+15550001111",
-      deepgramApiKey: "c"
-    },
-    {}
-  );
-
+test("validateConfig passes with defaults so plugin enable flow does not hard-fail", () => {
+  const config = resolveConfig({}, {});
   const result = validateConfig(config);
+
   assert.equal(result.ok, true);
-  assert.equal(result.errors.length, 0);
+  assert.deepEqual(result.errors, []);
 });
 
-test("validateConfig passes for twilio + deepgram", () => {
-  const config = resolveConfig(
-    {
-      telephonyProvider: "twilio",
-      voiceProvider: "deepgram-agent",
-      twilioAccountSid: "sid",
-      twilioAuthToken: "token",
-      twilioPhoneNumber: "+15550002222",
-      deepgramApiKey: "dg"
-    },
-    {}
-  );
-
-  const result = validateConfig(config);
-  assert.equal(result.ok, true);
-});
-
-test("validateConfig fails for telnyx + elevenlabs when elevenlabs requirements missing", () => {
+test("validateConfig only enforces structural guardrails, not credential presence", () => {
   const config = resolveConfig(
     {
       telephonyProvider: "telnyx",
       voiceProvider: "elevenlabs-conversational",
-      telnyxApiKey: "a",
-      telnyxConnectionId: "b",
-      telnyxPhoneNumber: "+15550001111",
-      deepgramApiKey: "dg"
+      telnyxApiKey: "",
+      elevenlabsApiKey: "",
     },
     {}
   );
 
   const result = validateConfig(config);
-  assert.equal(result.ok, false);
-  assert.ok(result.errors.some((message) => message.includes("elevenlabsApiKey")));
-  assert.ok(result.errors.some((message) => message.includes("elevenlabsAgentId")));
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
 });
 
 test("validateConfig requires positive maxCallDuration", () => {
