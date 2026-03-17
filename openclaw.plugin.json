@@ -66,7 +66,8 @@
         "type": "string"
       },
       "elevenlabsVoiceId": {
-        "type": "string"
+        "type": "string",
+        "description": "Override the agent's configured voice. Known voices: Eryn=DXFkLCBUTmvXpp2QwZjA (female, conversational), Mark=UgBBYS2sOqTuMpoF3BR0 (male, professional), Joseph=8fcyCHOzlKDlxh1InJSf (male, warm). Browse more at elevenlabs.io/voice-library."
       },
       "openaiApiKey": {
         "type": "string",

@@ -2,6 +2,15 @@ export type TelephonyProvider = "telnyx" | "twilio";
 export type VoiceProvider = "deepgram-agent" | "elevenlabs-conversational";
 export type MainMemoryAccess = "read" | "none";
 
+/** Well-known ElevenLabs voice IDs for Conversational AI use. Set via `elevenlabsVoiceId`. */
+export const ELEVENLABS_VOICES = {
+  Eryn:   "DXFkLCBUTmvXpp2QwZjA", // female, natural/conversational
+  Mark:   "UgBBYS2sOqTuMpoF3BR0", // male, professional/clear
+  Joseph: "8fcyCHOzlKDlxh1InJSf", // male, warm/measured
+} as const;
+
+export type ElevenLabsVoiceName = keyof typeof ELEVENLABS_VOICES;
+
 export interface ClawVoiceConfig {
   telephonyProvider: TelephonyProvider;
   voiceProvider: VoiceProvider;
