@@ -1,16 +1,46 @@
 # ClawVoice
 
-Voice calling plugin for OpenClaw. Give your AI agent a phone number.
+Companion voice operations plugin for OpenClaw. Add SMS, memory isolation, and safety controls around voice calls.
 
 ## What It Does
 
-ClawVoice connects your OpenClaw agent to the phone network. Your agent can receive and make phone calls, with real-time voice conversation powered by Deepgram Voice Agent or ElevenLabs Conversational AI.
+ClawVoice adds operational layers around OpenClaw voice workflows: SMS handling, memory isolation, tool restrictions, prompt-guarding, and post-call context.
+
+By default, ClawVoice runs in **companion mode** and expects OpenClaw's built-in `voice-call` plugin to handle live telephony audio transport.
 
 **Key features:**
-- **Two voice pipelines**: Deepgram Voice Agent (single WebSocket, lowest latency) or ElevenLabs Conversational AI (premium voice quality)
+- **Companion mode by default**: delegates live call media transport to OpenClaw `voice-call`
 - **Voice memory isolation**: Phone calls write to a sandboxed `voice-memory/` namespace. Voice callers cannot corrupt your agent's main memory. Memory promotion to `MEMORY.md` requires explicit review.
 - **Post-call analysis**: After every call, get a transcript, call summary with outcome/failures/retry context, and action items written to voice memory.
-- **Inbound + outbound**: Your agent can take calls and initiate them.
+- **SMS send/receive**: Keep telephony text workflows in ClawVoice.
+
+## Live Call Mode
+
+- `callMode=companion` (default): OpenClaw `voice-call` handles live call audio.
+- `callMode=standalone`: legacy ClawVoice-managed Twilio media stream flow.
+
+If your goal is reliable live calls today, use companion mode and enable both plugins.
+
+## Is This Worth It?
+
+Yes, if you use ClawVoice as the companion layer rather than duplicating transport.
+
+| Capability | OpenClaw `voice-call` | ClawVoice (companion) |
+|---|---|---|
+| Telephony/media transport | Primary owner | Delegates by default |
+| Real-time call audio path | Primary owner | Not reimplemented |
+| SMS workflows | Basic/adjacent | Primary owner |
+| Memory isolation + promotion workflow | Limited | Primary owner |
+| Prompt/tool safety guardrails for voice sessions | Limited | Primary owner |
+| Post-call retry context + operational diagnostics | Basic | Primary owner |
+
+Positioning: **OpenClaw `voice-call` handles reliable call transport; ClawVoice adds governance and operations for production use.**
+
+## Live Call Readiness (Current)
+
+- `main` is not yet fully aligned with the companion architecture for live calls.
+- The working companion pivot is currently in this branch and includes `callMode` defaults, companion guardrails, and updated docs.
+- For production live calls now: run OpenClaw `voice-call` for transport and use this branch's companion behavior for ClawVoice features.
 
 ## Quick Start
 
@@ -26,6 +56,7 @@ Configure your providers in `.env` or via `openclaw config set`:
 
 
 ```bash
+openclaw plugins install @openclaw/voice-call
 openclaw plugins install @clawvoice/voice-assistant
 ```
 
@@ -43,10 +74,11 @@ openclaw plugins install @clawvoice/voice-assistant
 
 ```bash
 # Telephony
-openclaw config set clawvoice.telephonyProvider telnyx
-openclaw config set clawvoice.telnyxApiKey YOUR_KEY
-openclaw config set clawvoice.telnyxConnectionId YOUR_CONNECTION_ID
-openclaw config set clawvoice.telnyxPhoneNumber +15551234567
+openclaw config set clawvoice.callMode companion
+openclaw config set clawvoice.telephonyProvider twilio
+openclaw config set clawvoice.twilioAccountSid YOUR_SID
+openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
+openclaw config set clawvoice.twilioPhoneNumber +15551234567
 
 # Voice (Deepgram Voice Agent)
 openclaw config set clawvoice.voiceProvider deepgram-agent
@@ -61,12 +93,13 @@ openclaw config set clawvoice.deepgramApiKey YOUR_KEY
 openclaw start
 ```
 
-Your agent now answers calls to the configured phone number.
+Your OpenClaw `voice-call` plugin handles live audio calls.
+ClawVoice adds SMS/memory/safety features on top.
 
 ### 5. Make a test call
 
 ```bash
-openclaw clawvoice call +15559876543
+openclaw voicecall initiate +15559876543
 ```
 
 Or ask your agent: *"Call +15559876543"*
@@ -129,13 +162,15 @@ openclaw clawvoice history                 # Show recent call history
 openclaw clawvoice test                    # Test voice pipeline connectivity
 ```
 
+In companion mode, use `openclaw voicecall initiate <number>` for live outbound calls.
+
 ## Agent Tools
 
 The plugin registers these tools for your OpenClaw agent:
 
 | Tool | Description |
 |------|-------------|
-| `voice_assistant.call` | Initiate an outbound phone call |
+| `voice_assistant.call` | Initiate outbound call in standalone mode (companion mode returns guidance to use `voicecall.initiate`) |
 | `voice_assistant.hangup` | End an active call |
 | `voice_assistant.status` | Get status of active/recent calls |
 | `voice_assistant.promote_memory` | Promote a voice memory to main memory |
@@ -143,15 +178,15 @@ The plugin registers these tools for your OpenClaw agent:
 ## Architecture
 
 ```
-Phone ──PSTN──> Telnyx ──WebSocket──> ClawVoice Plugin ──> OpenClaw Agent
-                                           │
-                                    ┌──────┴──────┐
-                              Deepgram        ElevenLabs
-                            Voice Agent      Conversational AI
-                           (STT+LLM+TTS)    (STT+TTS, OpenClaw=LLM)
-                                           │
-                                    voice-memory/
-                                   (sandboxed writes)
+Phone ──PSTN──> OpenClaw voice-call (transport/media)
+                               │
+                               ├──> OpenClaw Agent runtime
+                               │
+                               └──> ClawVoice companion layer
+                                     - SMS workflows
+                                     - memory isolation/promotion
+                                     - safety guardrails
+                                     - post-call summaries/retry context
 ```
 
 ## Configuration Reference
@@ -162,7 +197,8 @@ Key settings in `openclaw.plugin.json` `configSchema`:
 
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
-| `telephonyProvider` | `"telnyx" \| "twilio"` | `"telnyx"` | PSTN provider |
+| `callMode` | `"companion" \| "standalone"` | `"companion"` | Companion delegates live call transport to OpenClaw `voice-call` |
+| `telephonyProvider` | `"telnyx" \| "twilio"` | `"twilio"` | PSTN provider |
 | `voiceProvider` | `"deepgram-agent" \| "elevenlabs-conversational"` | `"deepgram-agent"` | Voice pipeline |
 | `voiceSystemPrompt` | `string` | `""` | Instructions for how the agent behaves on calls |
 | `inboundEnabled` | `boolean` | `true` | Accept inbound calls (disable to only allow outbound) |
@@ -187,6 +223,7 @@ This prompt is injected into the voice agent's system instructions alongside Ope
 
 - [`docs/SETUP.md`](docs/SETUP.md) - Full setup guide with step-by-step instructions and configuration reference
 - [`docs/FEATURES.md`](docs/FEATURES.md) - Complete feature list
+- [`docs/COMPANION_POSITIONING.md`](docs/COMPANION_POSITIONING.md) - Built-in vs companion differentiation and rollout checklist
 
 - [`docs/OPENCLAW_PLUGIN_GUIDE.md`](docs/OPENCLAW_PLUGIN_GUIDE.md) - Technical guide for building the OpenClaw plugin
 

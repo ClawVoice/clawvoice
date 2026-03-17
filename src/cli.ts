@@ -1,6 +1,7 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
+import { isCompanionModeError } from "./errors";
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { VoiceCallService } from "./services/voice-call";
 
@@ -175,7 +176,19 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
           status: result.message,
         });
       } catch (err) {
-        api.log.info("Call failed", { error: err instanceof Error ? err.message : String(err) });
+        const message = err instanceof Error ? err.message : String(err);
+        if (isCompanionModeError(err)) {
+          api.log.info("Companion mode active", {
+            detail:
+              "Live voice transport is handled by OpenClaw voice-call in companion mode.",
+          });
+          api.log.info(
+            `Use: openclaw voicecall initiate ${phoneNumber}`,
+            {},
+          );
+          return;
+        }
+        api.log.info("Call failed", { error: message });
       }
     },
   });
@@ -362,6 +375,20 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
           api.log.info(`  ⚠ ${w.name}: ${w.detail}`, {});
         }
       }
+    },
+  });
+
+  api.cli.register({
+    name: "clawvoice clear",
+    description: "Force-clear stuck call slots (fixes 'maximum concurrent calls' with no live call)",
+    run: async (args) => {
+      const callId = args.find((a) => !a.startsWith("--"));
+      const cleared = callService.forceClear(callId || undefined);
+      if (cleared.length === 0) {
+        api.log.info("No active call slots to clear.", {});
+        return;
+      }
+      api.log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
     },
   });
 }

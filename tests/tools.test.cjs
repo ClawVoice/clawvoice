@@ -86,6 +86,12 @@ function createMockCallService() {
         ? [{ callId: "call-123", status: "in-progress" }]
         : [];
     },
+    forceClear(callId) {
+      if (!callId) {
+        return ["call-123", "call-456"];
+      }
+      return [callId];
+    },
   };
 }
 
@@ -113,6 +119,7 @@ test("registerTools registers expected tool names", () => {
 
   assert.deepEqual(names, [
     "voice_assistant.call",
+    "voice_assistant.clear_calls",
     "voice_assistant.hangup",
     "voice_assistant.promote_memory",
     "voice_assistant.send_text",
@@ -240,4 +247,23 @@ test("status handler falls through to active calls when callId has no summary", 
 
   const result = await statusTool.handler({ callId: "call-missing" });
   assert.match(result.content, /No active calls/);
+});
+
+test("clear_calls requires callId unless confirmAll=true", async () => {
+  const tools = registerAndGetTools(validConfig(), createMockCallService());
+  const clearTool = getTool(tools, "voice_assistant.clear_calls");
+
+  await assert.rejects(
+    () => clearTool.handler({}),
+    /callId is required unless confirmAll is true/i,
+  );
+});
+
+test("clear_calls allows full clear with explicit confirmAll", async () => {
+  const tools = registerAndGetTools(validConfig(), createMockCallService());
+  const clearTool = getTool(tools, "voice_assistant.clear_calls");
+
+  const result = await clearTool.handler({ confirmAll: true });
+  assert.match(result.content, /Cleared 2 stuck call slot\(s\)/);
+  assert.match(result.content, /does not terminate provider-side calls/i);
 });

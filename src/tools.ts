@@ -247,4 +247,40 @@ export function registerTools(
       return { content: `Promotion failed: ${result.reason}` };
     },
   });
+
+  api.tools.register({
+    name: "voice_assistant.clear_calls",
+    description:
+      "Force-clear stuck call slots. Use when 'maximum concurrent calls' error appears with no live call.",
+    parameters: {
+      type: "object",
+      properties: {
+        callId: {
+          type: "string",
+          description: "Specific call ID to clear",
+        },
+        confirmAll: {
+          type: "boolean",
+          description: "Set true to clear all stuck calls when callId is omitted",
+        },
+      },
+      required: [],
+    },
+    handler: async (input) => {
+      const callId = readString(input.callId);
+      const confirmAll = input.confirmAll === true || input.confirmAll === "true";
+      if (!callId && !confirmAll) {
+        throw new Error("callId is required unless confirmAll is true.");
+      }
+      const cleared = callService.forceClear(callId || undefined);
+      if (cleared.length === 0) {
+        return { content: "No active call slots to clear." };
+      }
+      return {
+        content:
+          `Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}. ` +
+          "This does not terminate provider-side calls.",
+      };
+    },
+  });
 }
