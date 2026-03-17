@@ -60,15 +60,23 @@ openclaw plugins install --link .
 
 ### Step 4: Get Voice Credentials
 
-**Deepgram:**
+**Deepgram (recommended for most users):**
 1. Create account at [deepgram.com](https://deepgram.com)
 2. Get API Key from Dashboard > API Keys
+3. The key needs **Speech** and **Voice Agent** permissions (or use the default full-access key)
 
-**ElevenLabs:**
+**ElevenLabs (premium voice quality):**
 1. Create account at [elevenlabs.io](https://elevenlabs.io)
-2. Get API Key from Profile Settings
-3. Create a Conversational AI agent in their dashboard
-4. Note the Agent ID
+2. Go to **Developers > API Keys** and create a new key
+3. Set permissions to include **Conversational AI** (agents + conversations). A full-access key also works.
+4. Go to **Agents** in the dashboard and create an agent:
+   - Choose a template (Personal Assistant, Business Agent, etc.) or start from blank
+   - Configure the agent's system prompt, voice, and behavior
+   - Save and copy the **Agent ID** (format: `J3Pbu5gP6NNKBscdCdwB` — ~20 character alphanumeric string found in the agent's URL and settings)
+
+> **Agent IDs are account-specific.** There are no shared public demo agents — you must create your own in the ElevenLabs dashboard.
+
+> **Does your Twilio number need to be configured in ElevenLabs?** No. ClawVoice acts as the audio bridge: Twilio sends audio to ClawVoice, which forwards it to ElevenLabs and back. You do not need to import your Twilio credentials into ElevenLabs or link your phone number there. Your ElevenLabs API key and Agent ID are all ClawVoice needs.
 
 ### Step 5: Configure
 
@@ -217,11 +225,28 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 
 ### Twilio Settings (default provider)
 
-| Setting | Env Variable | Required |
-|---------|-------------|----------|
-| `twilioAccountSid` | `TWILIO_ACCOUNT_SID` | Yes (if Twilio) |
-| `twilioAuthToken` | `TWILIO_AUTH_TOKEN` | Yes (if Twilio) |
-| `twilioPhoneNumber` | `TWILIO_PHONE_NUMBER` | Yes (if Twilio) |
+| Setting | Env Variable | Required | Description |
+|---------|-------------|----------|-------------|
+| `twilioAccountSid` | `TWILIO_ACCOUNT_SID` | Yes | Account SID from Twilio Console (starts with `AC`) |
+| `twilioAuthToken` | `TWILIO_AUTH_TOKEN` | Yes | Auth Token from Twilio Console |
+| `twilioPhoneNumber` | `TWILIO_PHONE_NUMBER` | Yes | Your Twilio number in E.164 format, e.g. `+15551234567` |
+
+**Where to find Twilio credentials:**
+1. Log into [console.twilio.com](https://console.twilio.com)
+2. **Account SID** and **Auth Token** are on the main Console dashboard under "Account Info"
+3. **Phone Number**: Go to Phone Numbers > Manage > Active Numbers
+
+**Twilio account requirements:**
+- A verified Twilio account (trial or paid)
+- A purchased phone number with Voice capability enabled
+- For outbound calls on trial accounts, you can only call verified numbers — upgrade to a paid account for unrestricted outbound
+
+**Do you need to configure a webhook in Twilio?**
+Yes, for inbound calls. ClawVoice registers a webhook endpoint that Twilio must call when a call arrives. Set your Twilio number's Voice webhook URL to:
+```
+https://your-openclaw-host/clawvoice/webhooks/twilio
+```
+For outbound calls only, no inbound webhook configuration is needed.
 
 ### Telnyx Settings (alternative)
 
@@ -232,15 +257,69 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 | `telnyxPhoneNumber` | `TELNYX_PHONE_NUMBER` | Yes (if Telnyx) |
 | `telnyxWebhookSecret` | `TELNYX_WEBHOOK_SECRET` | Recommended |
 
-### Voice Settings
+### Voice Settings — Deepgram
 
 | Setting | Env Variable | Default | Description |
 |---------|-------------|---------|-------------|
-| `deepgramApiKey` | `DEEPGRAM_API_KEY` | — | Deepgram API key |
-| `deepgramVoice` | `CLAWVOICE_DEEPGRAM_VOICE` | `aura-asteria-en` | Default voice |
-| `elevenlabsApiKey` | `ELEVENLABS_API_KEY` | — | ElevenLabs API key |
-| `elevenlabsAgentId` | `ELEVENLABS_AGENT_ID` | — | Conversational AI agent |
-| `elevenlabsVoiceId` | `ELEVENLABS_VOICE_ID` | — | Voice to use |
+| `deepgramApiKey` | `DEEPGRAM_API_KEY` | — | Deepgram API key (Speech + Voice Agent permissions) |
+| `deepgramVoice` | `CLAWVOICE_DEEPGRAM_VOICE` | `aura-asteria-en` | Default Deepgram Aura voice |
+
+**Available Deepgram voices** (Aura series, optimized for telephony):
+| Voice ID | Description |
+|----------|-------------|
+| `aura-asteria-en` | Female, American English (default) |
+| `aura-luna-en` | Female, soft and warm |
+| `aura-stella-en` | Female, conversational |
+| `aura-athena-en` | Female, British English |
+| `aura-hera-en` | Female, mature |
+| `aura-orion-en` | Male, American English |
+| `aura-arcas-en` | Male, confident |
+| `aura-perseus-en` | Male, neutral |
+| `aura-angus-en` | Male, Irish English |
+| `aura-orpheus-en` | Male, deep |
+| `aura-helios-en` | Male, British English |
+| `aura-zeus-en` | Male, authoritative |
+
+### Voice Settings — ElevenLabs
+
+| Setting | Env Variable | Required | Description |
+|---------|-------------|----------|-------------|
+| `elevenlabsApiKey` | `ELEVENLABS_API_KEY` | Yes | ElevenLabs API key (Conversational AI permission) |
+| `elevenlabsAgentId` | `ELEVENLABS_AGENT_ID` | Yes | Agent ID from ElevenLabs dashboard |
+| `elevenlabsVoiceId` | `ELEVENLABS_VOICE_ID` | No | Override the agent's configured voice |
+
+**How to get your Agent ID:**
+1. Go to [elevenlabs.io/app/agents](https://elevenlabs.io/app/agents)
+2. Create or open an agent
+3. The Agent ID appears in the URL: `elevenlabs.io/app/agents/{agent-id}`
+4. It also appears in **Agent Settings** at the top of the agent configuration page
+
+**Agent ID format:** ~20 character alphanumeric string, e.g. `J3Pbu5gP6NNKBscdCdwB`
+
+**Recommended ElevenLabs API key permissions:**
+- Conversational AI (required: agents, conversations)
+- Text to Speech (optional: only if using `elevenlabsVoiceId` override)
+
+**TTS vs Conversational AI:**
+ElevenLabs has two distinct products:
+- **Text to Speech (TTS)** — converts text to audio (one-way). Requires a Voice ID.
+- **Conversational AI** — real-time bidirectional voice agent. Requires an Agent ID. This is what ClawVoice uses.
+
+When you set `voiceProvider` to `elevenlabs-conversational`, ClawVoice uses the Conversational AI agent, not TTS. Your agent's voice is configured in the ElevenLabs dashboard as part of the agent setup.
+
+**ElevenLabs Voice IDs** (for `elevenlabsVoiceId` override):
+
+Use `elevenlabsVoiceId` to override the voice your agent uses without editing the agent in the dashboard. Some commonly-used voices:
+
+| Voice ID | Name | Characteristics |
+|----------|------|-----------------|
+| `DXFkLCBUTmvXpp2QwZjA` | Eryn | Female, natural and conversational |
+| `UgBBYS2sOqTuMpoF3BR0` | Mark | Male, professional and clear |
+| `8fcyCHOzlKDlxh1InJSf` | Joseph | Male, warm and measured |
+
+Browse the full voice library at [elevenlabs.io/voice-library](https://elevenlabs.io/voice-library). Any Voice ID from your ElevenLabs library works here.
+
+> **Note:** `elevenlabsVoiceId` overrides the voice at the API level. The voice your agent is configured to use in the ElevenLabs dashboard is the default when this field is not set.
 
 ### Safety & Privacy
 
