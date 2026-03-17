@@ -24,9 +24,12 @@
   "bugs": {
     "url": "https://github.com/ClawVoice/clawvoice/issues"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ws": "^8.19.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/ws": "^8.18.1",
     "typescript": "^5.9.2"
   },
   "openclaw": {
