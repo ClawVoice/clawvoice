@@ -22,6 +22,7 @@ function validConfig(overrides = {}) {
     dailyCallLimit: 50,
     twilioAccountSid: "AC123",
     twilioAuthToken: "auth-token",
+    twilioStreamUrl: "wss://voice.example.test/media-stream",
     telnyxApiKey: "",
     telnyxWebhookSecret: "",
     elevenlabsApiKey: "",
@@ -61,6 +62,20 @@ describe("Diagnostics (Story 5.3)", () => {
     }));
     const webhook = report.checks.find((c) => c.name === "webhook-config");
     assert.equal(webhook.status, "warn");
+  });
+
+  it("fails when twilioStreamUrl is missing wss protocol", () => {
+    const report = runDiagnostics(validConfig({ twilioStreamUrl: "https://voice.example.test/media-stream" }));
+    const check = report.checks.find((c) => c.name === "twilio-stream-config");
+    assert.equal(check.status, "fail");
+    assert.ok(check.remediation.includes("wss"));
+  });
+
+  it("fails when twilioStreamUrl points to localhost", () => {
+    const report = runDiagnostics(validConfig({ twilioStreamUrl: "wss://127.0.0.1/media-stream" }));
+    const check = report.checks.find((c) => c.name === "twilio-stream-config");
+    assert.equal(check.status, "fail");
+    assert.ok(check.remediation.includes("public"));
   });
 
   it("warns when maxCallDuration exceeds 2 hours", () => {
