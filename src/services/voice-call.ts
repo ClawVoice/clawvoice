@@ -38,11 +38,33 @@ export interface HangupResponse {
   message: string;
 }
 
+export interface SendTextRequest {
+  phoneNumber: string;
+  message: string;
+}
+
+export interface SendTextResponse {
+  messageId: string;
+  to: string;
+  message: string;
+}
+
+export interface TextMessageRecord {
+  id: string;
+  direction: "outbound" | "inbound";
+  provider: "telnyx" | "twilio";
+  from: string;
+  to: string;
+  body: string;
+  createdAt: string;
+}
+
 export class VoiceCallService {
   private running = false;
   private readonly activeCalls = new Map<string, CallRecord>();
   private readonly recentCalls: CallRecord[] = [];
   private readonly inboundRecords: InboundCallRecord[] = [];
+  private readonly textMessages: TextMessageRecord[] = [];
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
   private readonly telephonyAdapter: TelephonyProviderAdapter;
   private dailyCallCount = 0;
@@ -230,6 +252,64 @@ export class VoiceCallService {
   public getCallSummary(callId: string): CallSummary | null {
     const call = this.recentCalls.find((c) => c.callId === callId);
     return call?.summary ?? null;
+  }
+
+  public async sendText(request: SendTextRequest): Promise<SendTextResponse> {
+    const body = request.message.trim();
+    if (body.length === 0) {
+      throw new Error("Text message body must not be empty.");
+    }
+    if (body.length > 1600) {
+      throw new Error(
+        `Text message too long (${body.length} chars). Maximum is 1600 characters.`,
+      );
+    }
+
+    const result = await this.telephonyAdapter.sendSms({
+      to: request.phoneNumber,
+      from:
+        this.config.telephonyProvider === "twilio"
+          ? this.config.twilioPhoneNumber
+          : this.config.telnyxPhoneNumber,
+      body,
+    });
+
+    this.textMessages.unshift({
+      id: result.providerMessageId,
+      direction: "outbound",
+      provider: this.config.telephonyProvider,
+      from:
+        this.config.telephonyProvider === "twilio"
+          ? (this.config.twilioPhoneNumber ?? "")
+          : (this.config.telnyxPhoneNumber ?? ""),
+      to: result.normalizedTo,
+      body,
+      createdAt: new Date().toISOString(),
+    });
+    this.textMessages.splice(100);
+
+    return {
+      messageId: result.providerMessageId,
+      to: result.normalizedTo,
+      message: `Outbound text sent via ${this.config.telephonyProvider}.`,
+    };
+  }
+
+  public trackInboundText(from: string, to: string, body: string, providerMessageId?: string): void {
+    this.textMessages.unshift({
+      id: providerMessageId ?? `sms-${Date.now()}`,
+      direction: "inbound",
+      provider: this.config.telephonyProvider,
+      from,
+      to,
+      body,
+      createdAt: new Date().toISOString(),
+    });
+    this.textMessages.splice(100);
+  }
+
+  public getRecentTexts(): TextMessageRecord[] {
+    return [...this.textMessages];
   }
 
   private async completeCall(callId: string, providerCallId: string): Promise<void> {

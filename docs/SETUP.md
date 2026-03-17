@@ -51,12 +51,88 @@ openclaw plugins install --link .
 2. Get Account SID and Auth Token from Console
 3. Buy a phone number (Phone Numbers > Manage > Buy a Number)
 
+### Step 2.5: Secure Local Webhook Access (required)
+
+If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **public HTTPS webhook URL**.
+`127.0.0.1` or private LAN IPs will fail (Twilio cannot reach them).
+
+Use this secure pattern:
+
+1. Keep OpenClaw bound to localhost (example: `127.0.0.1:3334`).
+2. Expose only webhook paths through a tunnel hostname.
+3. Keep provider signature verification enabled (ClawVoice already verifies Twilio/Telnyx signatures).
+4. Point provider webhooks to:
+   - `https://<your-host>/clawvoice/webhooks/twilio/voice`
+   - `https://<your-host>/clawvoice/webhooks/twilio/amd`
+   - `https://<your-host>/clawvoice/webhooks/telnyx`
+
+#### Recommended tunnel options
+
+- **Cloudflare Tunnel (recommended for most users)**
+  - Stable hostname (IP changes do not matter).
+  - No inbound port-forwarding on your router.
+  - Can restrict to webhook path and return 404 for everything else.
+
+- **Tailscale Funnel (good if you already use Tailscale)**
+  - Stable `*.ts.net` address.
+  - Still public at the Funnel URL, so treat it like internet-facing.
+  - Best practice: funnel to a tiny local proxy that only forwards `/clawvoice/webhooks/*` and rejects everything else.
+
+#### Why this is still secure
+
+- You are not opening your full local app directly to the internet.
+- Only webhook routes are exposed.
+- ClawVoice cryptographically verifies provider signatures before accepting webhook data.
+- Keep your tunnel hostname private and rotate keys/tokens if you suspect exposure.
+
+### Step 2.6: Configure Inbound Webhooks (Twilio and Telnyx)
+
+Use this section as the fast path when inbound calls are not arriving.
+
+#### Twilio inbound setup
+
+1. In Twilio Console, open **Phone Numbers > Manage > Active Numbers**.
+2. Select the Twilio phone number you want ClawVoice to answer.
+3. Under **Voice Configuration**, set:
+   - **A call comes in** -> **Webhook**
+   - URL: `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
+   - Method: `HTTP POST`
+4. Save.
+5. Optional but recommended for AMD callbacks on outbound flow:
+   - URL: `https://<your-public-host>/clawvoice/webhooks/twilio/amd`
+
+#### Twilio inbound SMS setup
+
+1. In Twilio Console, open **Phone Numbers > Manage > Active Numbers**.
+2. Select the same Twilio number used by ClawVoice.
+3. Under **Messaging Configuration**, set:
+   - **A message comes in** -> **Webhook**
+   - URL: `https://<your-public-host>/clawvoice/webhooks/twilio/sms`
+   - Method: `HTTP POST`
+4. Save.
+
+#### Telnyx inbound setup
+
+1. In Telnyx Mission Control, open your **Call Control Application**.
+2. Set the inbound webhook URL to:
+   - `https://<your-public-host>/clawvoice/webhooks/telnyx`
+3. Make sure your purchased Telnyx number is assigned to the same connection/application.
+4. Save and deploy.
+
+#### Quick validation checklist
+
+- `openclaw clawvoice status` shows telephony credentials as pass.
+- Your public URL is HTTPS and reachable from the internet (not localhost/private IP).
+- Provider webhook inspector shows `200` responses from ClawVoice endpoints.
+- Inbound test call reaches your agent without provider webhook errors.
+- Inbound test SMS reaches `clawvoice inbox` without Twilio signature errors.
+
 ### Step 3: Choose a Voice Provider
 
-| Provider | Latency | Quality | Cost |
-|----------|---------|---------|------|
-| **Deepgram Voice Agent** (recommended) | ~200ms | Good | Lower |
-| **ElevenLabs Conversational AI** | ~400ms | Premium | Higher |
+| Provider | Latency Profile | Quality | Cost |
+|----------|-----------------|---------|------|
+| **Deepgram Voice Agent** (recommended) | Lowest of supported options in most setups | Good | Lower |
+| **ElevenLabs Conversational AI** | Usually higher than Deepgram in equivalent setups | Premium | Higher |
 
 ### Step 4: Get Voice Credentials
 
@@ -78,24 +154,16 @@ openclaw plugins install --link .
 
 > **Does your Twilio number need to be configured in ElevenLabs?** No. ClawVoice acts as the audio bridge: Twilio sends audio to ClawVoice, which forwards it to ElevenLabs and back. You do not need to import your Twilio credentials into ElevenLabs or link your phone number there. Your ElevenLabs API key and Agent ID are all ClawVoice needs.
 
-### ElevenLabs Mode Choice (Option A vs Option B)
+### ElevenLabs Agent Setup (supported path)
 
-You can run ElevenLabs in two ways:
-
-#### Option A (recommended): ElevenLabs Conversational AI Agent
-- Create an ElevenLabs agent and set its system prompt in ElevenLabs.
-- Configure ClawVoice with `elevenlabsAgentId` + `elevenlabsApiKey`.
-- Lowest implementation complexity and usually better real-time behavior because conversation orchestration stays inside ElevenLabs.
-
-#### Option B: OpenClaw "brain" + ElevenLabs voice output only
-- Keep the conversation logic/prompting in OpenClaw, and use ElevenLabs for voice rendering only.
-- This adds an extra hop (OpenClaw reasoning -> voice synthesis -> telephony bridge), so it is typically higher latency than Option A.
-- Use this only when you explicitly need OpenClaw to control reasoning/tool flow directly.
-
-For Option A, use this prompt template as your starting point:
+ClawVoice supports ElevenLabs through the **ElevenLabs Conversational AI Agent** path.
+Use this prompt template as your starting point:
 - `docs/templates/ELEVENLABS_AGENT_PROMPT_TEMPLATE.md`
 
-### ElevenLabs Dashboard Checklist (Option A)
+For reusable role-based prompts (customer support, personal assistant, concierge):
+- `docs/templates/VOICE_SYSTEM_PROMPT_TEMPLATES.md`
+
+### ElevenLabs Dashboard Checklist
 
 When creating your agent in ElevenLabs, configure these tabs:
 
@@ -235,6 +303,13 @@ Tip: Combine each template with `restrictTools=true`, an explicit `deniedTools` 
 - Default voice provider is `deepgram-agent` with default voice `aura-asteria-en`.
 - Start with Deepgram first for baseline setup, then switch to ElevenLabs if you want a different voice quality profile.
 
+### Latency Expectations
+
+- Do not plan around guaranteed sub-200 ms end-to-end phone latency.
+- ClawVoice runs in a real-time bridge path (telephony network + OpenClaw host + voice provider), so real latency depends on network and provider response time.
+- In most deployments, Deepgram is the lower-latency option versus ElevenLabs.
+- For Twilio Media Streams, `CLAWVOICE_TWILIO_STREAM_URL` must be a **public WSS endpoint** (for example `wss://voice.example.com/media-stream`) and **must not** point at `/clawvoice/webhooks/*`.
+
 ```bash
 # Default path
 openclaw config set clawvoice.voiceProvider deepgram-agent
@@ -261,6 +336,7 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 | `twilioAccountSid` | `TWILIO_ACCOUNT_SID` | Yes | Account SID from Twilio Console (starts with `AC`) |
 | `twilioAuthToken` | `TWILIO_AUTH_TOKEN` | Yes | Auth Token from Twilio Console |
 | `twilioPhoneNumber` | `TWILIO_PHONE_NUMBER` | Yes | Your Twilio number in E.164 format, e.g. `+15551234567` |
+| `twilioStreamUrl` | `CLAWVOICE_TWILIO_STREAM_URL` | Yes for live media | Public WebSocket endpoint for Twilio Media Streams (must start with `wss://`) |
 
 **Where to find Twilio credentials:**
 1. Log into [console.twilio.com](https://console.twilio.com)
@@ -275,9 +351,18 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 **Do you need to configure a webhook in Twilio?**
 Yes, for inbound calls. ClawVoice registers a webhook endpoint that Twilio must call when a call arrives. Set your Twilio number's Voice webhook URL to:
 ```
-https://your-openclaw-host/clawvoice/webhooks/twilio
+https://your-openclaw-host/clawvoice/webhooks/twilio/voice
 ```
 For outbound calls only, no inbound webhook configuration is needed.
+
+**Twilio stream endpoint requirements (for two-way live audio):**
+- Must be `wss://...` (not `https://...`)
+- Must be publicly reachable from Twilio (no localhost/private IP)
+- Must be a WebSocket media endpoint (not `/clawvoice/webhooks/*` HTTP routes)
+- If misconfigured, Twilio shows `Error 31920` (WebSocket handshake non-101)
+
+**Do you configure any webhook URL in ElevenLabs?**
+No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony webhook events go to your ClawVoice endpoint (Twilio/Telnyx -> ClawVoice), not to ElevenLabs.
 
 ### Telnyx Settings (alternative)
 
@@ -385,7 +470,7 @@ Your voice provider API key is missing. Set the appropriate `deepgramApiKey` or 
 
 ### "webhook-config: WARN"
 
-No webhook secret configured. Webhook signature verification will reject all incoming events. Set `telnyxWebhookSecret` or `twilioAuthToken`.
+No webhook verification key configured. Webhook signature verification will reject incoming events. Set `telnyxWebhookSecret` (env: `TELNYX_WEBHOOK_SECRET`) or `twilioAuthToken`.
 
 ### Calls connect but no audio
 

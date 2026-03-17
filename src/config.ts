@@ -23,6 +23,7 @@ export interface ClawVoiceConfig {
   twilioAccountSid?: string;
   twilioAuthToken?: string;
   twilioPhoneNumber?: string;
+  twilioStreamUrl?: string;
   deepgramApiKey?: string;
   deepgramVoice: string;
   elevenlabsApiKey?: string;
@@ -153,6 +154,31 @@ function parseVoiceProvider(value: unknown): VoiceProvider | undefined {
   return value === "deepgram-agent" || value === "elevenlabs-conversational" ? value : undefined;
 }
 
+function validateTwilioStreamUrl(url: string): string | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return "twilioStreamUrl must be a valid absolute URL (for example: wss://your-host.example.com/media-stream)";
+  }
+
+  if (parsed.protocol !== "wss:") {
+    return "twilioStreamUrl must use wss:// (Twilio Media Streams require WebSocket TLS)";
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+    return "twilioStreamUrl cannot point to localhost/loopback; use a publicly reachable HTTPS/WSS hostname";
+  }
+
+  const path = parsed.pathname.toLowerCase();
+  if (path.includes("/webhook") || path.includes("/webhooks")) {
+    return "twilioStreamUrl must point to a WebSocket media endpoint, not an HTTP webhook path";
+  }
+
+  return undefined;
+}
+
 export function resolveConfig(
   pluginConfig: Record<string, unknown> = {},
   env: NodeJS.ProcessEnv = process.env
@@ -166,6 +192,7 @@ export function resolveConfig(
   const envTwilioAccountSid = envString(env, "TWILIO_ACCOUNT_SID");
   const envTwilioAuthToken = envString(env, "TWILIO_AUTH_TOKEN");
   const envTwilioPhoneNumber = envString(env, "TWILIO_PHONE_NUMBER");
+  const envTwilioStreamUrl = envString(env, "CLAWVOICE_TWILIO_STREAM_URL");
   const envDeepgramApiKey = envString(env, "DEEPGRAM_API_KEY");
   const envDeepgramVoice = envString(env, "CLAWVOICE_DEEPGRAM_VOICE");
   const envElevenlabsApiKey = envString(env, "ELEVENLABS_API_KEY");
@@ -203,6 +230,7 @@ export function resolveConfig(
     twilioAccountSid: getValue(envTwilioAccountSid, typeof pluginConfig.twilioAccountSid === "string" ? pluginConfig.twilioAccountSid : undefined, undefined),
     twilioAuthToken: getValue(envTwilioAuthToken, typeof pluginConfig.twilioAuthToken === "string" ? pluginConfig.twilioAuthToken : undefined, undefined),
     twilioPhoneNumber: getValue(envTwilioPhoneNumber, typeof pluginConfig.twilioPhoneNumber === "string" ? pluginConfig.twilioPhoneNumber : undefined, undefined),
+    twilioStreamUrl: getValue(envTwilioStreamUrl, typeof pluginConfig.twilioStreamUrl === "string" ? pluginConfig.twilioStreamUrl : undefined, undefined),
     deepgramApiKey: getValue(envDeepgramApiKey, typeof pluginConfig.deepgramApiKey === "string" ? pluginConfig.deepgramApiKey : undefined, undefined),
     deepgramVoice: getValue(envDeepgramVoice, typeof pluginConfig.deepgramVoice === "string" ? pluginConfig.deepgramVoice : undefined, DEFAULT_CONFIG.deepgramVoice),
     elevenlabsApiKey: getValue(envElevenlabsApiKey, typeof pluginConfig.elevenlabsApiKey === "string" ? pluginConfig.elevenlabsApiKey : undefined, undefined),
@@ -292,6 +320,13 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     validationErrors.push(
       "disclosureStatement must be non-empty when disclosureEnabled is true",
     );
+  }
+
+  if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
+    const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);
+    if (streamUrlError) {
+      validationErrors.push(streamUrlError);
+    }
   }
 
   if (validationErrors.length === 0) {

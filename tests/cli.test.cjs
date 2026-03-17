@@ -154,6 +154,18 @@ test("clawvoice call passes --greeting flag", async () => {
   assert.equal(callService.calls[0].greeting, "Hi there!");
 });
 
+test("clawvoice sms rejects non-E.164 phone numbers", async () => {
+  const { api, registered, logs } = createCliApi();
+  const callService = createMockCallService();
+  registerCLI(api, validCliConfig(), callService);
+
+  const smsCmd = registered.find((c) => c.name === "clawvoice sms");
+  assert.ok(smsCmd);
+  await smsCmd.run(["5559998888", "--message", "hello"]);
+
+  assert.ok(logs.some((l) => l.message.includes("E.164")));
+});
+
 // --- Story 4.2: CLI Call History ---
 
 test("clawvoice history shows no calls when empty", async () => {
