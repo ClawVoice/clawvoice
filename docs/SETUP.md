@@ -78,6 +78,37 @@ openclaw plugins install --link .
 
 > **Does your Twilio number need to be configured in ElevenLabs?** No. ClawVoice acts as the audio bridge: Twilio sends audio to ClawVoice, which forwards it to ElevenLabs and back. You do not need to import your Twilio credentials into ElevenLabs or link your phone number there. Your ElevenLabs API key and Agent ID are all ClawVoice needs.
 
+### ElevenLabs Mode Choice (Option A vs Option B)
+
+You can run ElevenLabs in two ways:
+
+#### Option A (recommended): ElevenLabs Conversational AI Agent
+- Create an ElevenLabs agent and set its system prompt in ElevenLabs.
+- Configure ClawVoice with `elevenlabsAgentId` + `elevenlabsApiKey`.
+- Lowest implementation complexity and usually better real-time behavior because conversation orchestration stays inside ElevenLabs.
+
+#### Option B: OpenClaw "brain" + ElevenLabs voice output only
+- Keep the conversation logic/prompting in OpenClaw, and use ElevenLabs for voice rendering only.
+- This adds an extra hop (OpenClaw reasoning -> voice synthesis -> telephony bridge), so it is typically higher latency than Option A.
+- Use this only when you explicitly need OpenClaw to control reasoning/tool flow directly.
+
+For Option A, use this prompt template as your starting point:
+- `docs/templates/ELEVENLABS_AGENT_PROMPT_TEMPLATE.md`
+
+### ElevenLabs Dashboard Checklist (Option A)
+
+When creating your agent in ElevenLabs, configure these tabs:
+
+- **Agent:** Set `First Message`, `System Prompt`, language, and voice.
+- **Workflow:** Optional. Keep default unless you need multi-stage routing/escalation.
+- **Knowledge Base:** Add product/policy docs if the agent must answer factual questions.
+- **Analysis:** Define success criteria + structured fields to extract after calls.
+- **Tools:** Enable at least `End Call`; add transfer/integrations as needed.
+- **Tests:** Run scripted test conversations before live calls.
+- **Widget:** Not needed for ClawVoice telephony bridge.
+- **Security:** Use signed URLs/private access; do not expose public agent access unnecessarily.
+- **Advanced:** Tune interruption/timeout behavior for phone-call pacing.
+
 ### Step 5: Configure
 
 Via CLI:
