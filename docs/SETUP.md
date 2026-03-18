@@ -62,7 +62,7 @@ openclaw plugins install --link .
 Webhook routing depends on mode:
 
 - `callMode=standalone`: route Twilio voice webhooks to ClawVoice (`/clawvoice/webhooks/twilio/voice`)
-- `callMode=companion`: route Twilio voice webhooks to your OpenClaw `voice-call` inbound endpoint
+- `callMode=companion`: route Twilio voice webhooks to your OpenClaw `voice-call` inbound endpoint (commonly `https://<your-public-host>/voice-call/webhooks/twilio/inbound`; verify in your `voice-call` plugin docs/version)
 - Twilio SMS and Telnyx webhooks continue routing to ClawVoice endpoints
 
 If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **public HTTPS webhook URL**.
@@ -76,7 +76,7 @@ Use this secure pattern:
 4. Point provider webhooks to:
    - Twilio voice/AMD:
      - standalone mode: `https://<your-host>/clawvoice/webhooks/twilio/voice`
-     - companion mode: your OpenClaw `voice-call` inbound endpoint
+     - companion mode: your OpenClaw `voice-call` inbound endpoint (commonly `https://<your-host>/voice-call/webhooks/twilio/inbound`)
    - Twilio SMS: `https://<your-host>/clawvoice/webhooks/twilio/sms`
    - `https://<your-host>/clawvoice/webhooks/telnyx`
 
@@ -111,12 +111,12 @@ Use this section as the fast path when inbound calls are not arriving.
    - **A call comes in** -> **Webhook**
    - URL by mode:
      - standalone: `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
-     - companion: OpenClaw `voice-call` inbound voice webhook URL
+      - companion: `https://<your-public-host>/voice-call/webhooks/twilio/inbound` (confirm for your OpenClaw `voice-call` version)
    - Method: `HTTP POST`
 4. Save.
 5. Optional but recommended for AMD callbacks on outbound flow:
    - standalone: set to `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
-   - companion: use OpenClaw `voice-call` AMD callback URL
+    - companion: use your OpenClaw `voice-call` AMD callback URL (or leave managed by `voice-call` defaults)
 
 #### Twilio inbound SMS setup
 
@@ -373,7 +373,13 @@ Yes, for inbound calls.
 - In `callMode=standalone`: set Twilio Voice webhook URL to:
 
 ```
-https://your-openclaw-host/clawvoice/webhooks/twilio/voice
+https://<your-public-host>/clawvoice/webhooks/twilio/voice
+```
+
+- In `callMode=companion`: set Twilio Voice webhook URL to your OpenClaw `voice-call` inbound endpoint, typically:
+
+```
+https://<your-public-host>/voice-call/webhooks/twilio/inbound
 ```
 
 For outbound calls only, no inbound webhook configuration is needed.

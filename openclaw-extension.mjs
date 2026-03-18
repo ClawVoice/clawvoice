@@ -4,12 +4,15 @@ const require = createRequire(import.meta.url);
 const cjs = require("./dist/index.js");
 
 function invokeLifecycle(fn, api, name) {
-  const result = fn(api);
-  if (result && typeof result.then === "function") {
-    result.catch((error) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`[clawvoice] ${name} failed: ${message}`);
-    });
+  try {
+    const result = fn(api);
+    if (result && typeof result.then === "function") {
+      result.catch((error) => {
+        console.error(`[clawvoice] ${name} failed`, error);
+      });
+    }
+  } catch (error) {
+    console.error(`[clawvoice] ${name} failed`, error);
   }
 }
 
