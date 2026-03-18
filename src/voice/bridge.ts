@@ -21,7 +21,7 @@ import { ClawVoiceConfig } from "../config";
 const TWILIO_CHUNK_SIZE = 160;
 const BUFFER_CHUNKS = 20;
 const BUFFER_SIZE = TWILIO_CHUNK_SIZE * BUFFER_CHUNKS;
-const HEARTBEAT_TIMEOUT_MS = 2000;
+const HEARTBEAT_TIMEOUT_MS = 15000;
 
 export interface VoiceWebSocket {
   send(data: string | Buffer): void;
