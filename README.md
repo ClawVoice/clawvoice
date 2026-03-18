@@ -11,7 +11,7 @@ ClawVoice supports two live-call modes:
 - **companion**: OpenClaw `voice-call` owns transport, ClawVoice adds operations/safety layers
 
 **Key features:**
-- **Standalone transport available**: internal Twilio media stream receiver + Deepgram bridge
+- **Standalone transport available**: internal Twilio media stream receiver + voice provider bridge (Deepgram/ElevenLabs)
 - **Companion mode available**: delegates live call media transport to OpenClaw `voice-call`
 - **Voice memory isolation**: Phone calls write to a sandboxed `voice-memory/` namespace. Voice callers cannot corrupt your agent's main memory. Memory promotion to `MEMORY.md` requires explicit review.
 - **Post-call analysis**: After every call, get a transcript, call summary with outcome/failures/retry context, and action items written to voice memory.
@@ -98,6 +98,7 @@ openclaw config set clawvoice.telephonyProvider twilio
 openclaw config set clawvoice.twilioAccountSid YOUR_SID
 openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
 openclaw config set clawvoice.twilioPhoneNumber +15551234567
+openclaw config set clawvoice.twilioStreamUrl wss://your-host.example.com/media-stream
 
 # Voice (Deepgram Voice Agent)
 openclaw config set clawvoice.voiceProvider deepgram-agent
@@ -121,7 +122,7 @@ In companion mode, OpenClaw `voice-call` handles transport and ClawVoice adds SM
 openclaw clawvoice call +15559876543
 ```
 
-In standalone mode, this places the call directly. In companion mode, this command returns guidance to use `openclaw voicecall initiate`.
+In standalone mode, this places the call directly. In companion mode, initiate outbound calls with `openclaw voicecall initiate <number>`; `openclaw clawvoice call` may prompt you to use that command.
 
 Or ask your agent: *"Call +15559876543"*
 
@@ -191,7 +192,7 @@ The plugin registers these tools for your OpenClaw agent:
 
 | Tool | Description |
 |------|-------------|
-| `voice_assistant.call` | Initiate outbound call in standalone mode (companion mode returns guidance to use `voicecall.initiate`) |
+| `voice_assistant.call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall.initiate` |
 | `voice_assistant.hangup` | End an active call |
 | `voice_assistant.status` | Get status of active/recent calls |
 | `voice_assistant.promote_memory` | Promote a voice memory to main memory |
