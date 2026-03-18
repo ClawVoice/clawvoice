@@ -141,6 +141,16 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
+    if (socket.readyState !== 1) {
+      deepgramSession.close();
+      this.options.bridge.reportDisconnection(
+        callId,
+        "telephony_provider_error",
+        "Twilio media socket closed before Deepgram session was attached",
+      );
+      return;
+    }
+
     this.options.bridge.setVoiceSocket(callId, {
       send: (data) => {
         if (Buffer.isBuffer(data)) {
@@ -151,6 +161,7 @@ export class TwilioMediaSessionHandler {
         try {
           const parsed = JSON.parse(data) as Record<string, unknown>;
           if (parsed.type === "KeepAlive") {
+            deepgramSession.sendControl?.(parsed);
             return;
           }
         } catch {
