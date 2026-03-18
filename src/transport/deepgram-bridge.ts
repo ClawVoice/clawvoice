@@ -9,6 +9,7 @@ type DeepgramSocket = {
 
 export interface DeepgramBridgeSession {
   sendAudio(chunk: Buffer): void;
+  sendControl?(message: Record<string, unknown>): void;
   close(): void;
 }
 
@@ -93,6 +94,11 @@ export class DeepgramBridgeClient {
           sendAudio(chunk: Buffer) {
             if (ws.readyState === OPEN_SOCKET) {
               ws.send(chunk);
+            }
+          },
+          sendControl(message: Record<string, unknown>) {
+            if (ws.readyState === OPEN_SOCKET) {
+              ws.send(JSON.stringify(message));
             }
           },
           close() {
