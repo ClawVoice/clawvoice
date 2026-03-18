@@ -217,7 +217,7 @@ function buildTwilioVoiceTwiml(config: ClawVoiceConfig): string {
   if (!streamUrl) {
     return "<Response><Say>Voice stream URL is not configured.</Say><Hangup/></Response>";
   }
-  return `<Response><Connect><Stream url="${streamUrl}" track="both_tracks" /></Connect></Response>`;
+  return `<Response><Connect><Stream url="${streamUrl}" track="inbound_track" /></Connect></Response>`;
 }
 
 interface ParsedWebhookBody {
