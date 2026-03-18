@@ -6,11 +6,14 @@ _bmad/
 .claude/
 .sisyphus/
 reference-code/
+LOCAL_MEMORY.md
+*.tgz
 
 # Internal docs
 docs/ARCHITECTURE.md
 docs/BUSINESS_MODEL.md
 docs/PROJECT_CONTEXT.md
+docs/OPENCLAW_PLUGIN_GUIDE.md
 
 # Source (already compiled to dist/)
 src/
