@@ -322,7 +322,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
     assert.equal(res.getContentType(), "text/xml");
     assert.match(res.getSentBody(), /<Response>/);
     assert.match(res.getSentBody(), /<Connect>/);
-    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="both_tracks"\s*\/>/);
+    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="inbound_track"\s*\/>/);
   });
 
   it("returns companion-mode guidance TwiML when callMode=companion", async () => {

@@ -23,6 +23,7 @@ function createMockSocket() {
     closeCalled: false,
     close() {
       this.closeCalled = true;
+      this.readyState = 3;
       const cb = handlers.get("close");
       if (cb) cb();
     },
@@ -35,6 +36,83 @@ function createMockSocket() {
     },
   };
 }
+
+test("TwilioMediaSessionHandler closes deepgram session if socket closes before connect resolves", async () => {
+  let resolveConnect;
+  const sentAudio = [];
+  let deepgramCloseCount = 0;
+
+  const deepgramClient = {
+    connect() {
+      return new Promise((resolve) => {
+        resolveConnect = () =>
+          resolve({
+            sendAudio(chunk) {
+              sentAudio.push(chunk);
+            },
+            close() {
+              deepgramCloseCount += 1;
+            },
+          });
+      });
+    },
+  };
+
+  const bridge = {
+    getSessionConfig() {
+      return {
+        callId: "call-1",
+        providerCallId: "provider-1",
+        voiceProviderUrl: "wss://agent.deepgram.com/v1/agent/converse",
+        voiceProviderAuth: "dg-key",
+        telephonyCodec: "mulaw",
+        voiceProviderCodec: "mulaw",
+        sampleRate: 8000,
+        greeting: "hello",
+        voiceModel: "aura-2-thalia-en",
+        keepAliveIntervalMs: 5000,
+        greetingGracePeriodMs: 3000,
+      };
+    },
+    buildSettingsMessage(config) {
+      return { type: "Settings", greeting: config.greeting };
+    },
+    setVoiceSocket() {},
+    startHeartbeatMonitor() {},
+    handleVoiceAgentMessage() {
+      return { action: "none" };
+    },
+    recordActivity() {},
+    reportDisconnection() {},
+  };
+
+  const handler = new TwilioMediaSessionHandler({
+    bridge,
+    deepgramClient,
+    resolveCallIdByProviderCallId() {
+      return "call-1";
+    },
+  });
+
+  const socket = createMockSocket();
+  const startPromise = handler.handleMessage(
+    socket,
+    JSON.stringify({ event: "start", streamSid: "stream-1", start: { callSid: "provider-1" } }),
+  );
+
+  handler.handleClose(socket);
+  socket.close();
+  resolveConnect();
+  await startPromise;
+
+  await handler.handleMessage(
+    socket,
+    JSON.stringify({ event: "media", streamSid: "stream-1", media: { payload: Buffer.from("x").toString("base64") } }),
+  );
+
+  assert.equal(deepgramCloseCount, 1);
+  assert.equal(sentAudio.length, 0);
+});
 
 test("DeepgramBridgeClient sends settings after open", async () => {
   const created = [];
@@ -207,6 +285,71 @@ test("TwilioMediaSessionHandler forwards media payload to deepgram session", asy
 
   assert.equal(sentAudio.length, 1);
   assert.equal(sentAudio[0].toString(), "audio-bytes");
+});
+
+test("TwilioMediaSessionHandler forwards KeepAlive control messages to deepgram", async () => {
+  const controlMessages = [];
+  let attachedVoiceSocket = null;
+
+  const deepgramClient = {
+    async connect() {
+      return {
+        sendAudio() {},
+        sendControl(message) {
+          controlMessages.push(message);
+        },
+        close() {},
+      };
+    },
+  };
+
+  const bridge = {
+    getSessionConfig() {
+      return {
+        callId: "call-1",
+        providerCallId: "provider-1",
+        voiceProviderUrl: "wss://agent.deepgram.com/v1/agent/converse",
+        voiceProviderAuth: "dg-key",
+        telephonyCodec: "mulaw",
+        voiceProviderCodec: "mulaw",
+        sampleRate: 8000,
+        greeting: "hello",
+        voiceModel: "aura-2-thalia-en",
+        keepAliveIntervalMs: 5000,
+        greetingGracePeriodMs: 3000,
+      };
+    },
+    buildSettingsMessage(config) {
+      return { type: "Settings", greeting: config.greeting };
+    },
+    setVoiceSocket(_callId, socket) {
+      attachedVoiceSocket = socket;
+    },
+    startHeartbeatMonitor() {},
+    handleVoiceAgentMessage() {
+      return { action: "none" };
+    },
+    recordActivity() {},
+  };
+
+  const handler = new TwilioMediaSessionHandler({
+    bridge,
+    deepgramClient,
+    resolveCallIdByProviderCallId(providerCallId) {
+      return providerCallId === "provider-1" ? "call-1" : null;
+    },
+  });
+
+  const socket = createMockSocket();
+  await handler.handleMessage(
+    socket,
+    JSON.stringify({ event: "start", streamSid: "stream-1", start: { callSid: "provider-1" } }),
+  );
+
+  assert.ok(attachedVoiceSocket);
+  attachedVoiceSocket.send(JSON.stringify({ type: "KeepAlive" }));
+  assert.equal(controlMessages.length, 1);
+  assert.deepEqual(controlMessages[0], { type: "KeepAlive" });
 });
 
 test("TwilioMediaSessionHandler cleans previous deepgram session on duplicate start", async () => {

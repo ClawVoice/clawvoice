@@ -54,7 +54,7 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
     }
 
     const callSidPlaceholder = "{CallSid}";
-    const twiml = `<Response><Connect><Stream url="${baseWebhookUrl}" name="clawvoice" track="both_tracks"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
+    const twiml = `<Response><Connect><Stream url="${baseWebhookUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
 
     const body = new URLSearchParams({
       To: normalizedTo,
