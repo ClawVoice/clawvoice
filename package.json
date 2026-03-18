@@ -27,6 +27,9 @@
   "dependencies": {
     "ws": "^8.19.0"
   },
+  "bundledDependencies": [
+    "ws"
+  ],
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/ws": "^8.18.1",
