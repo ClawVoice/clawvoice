@@ -14,7 +14,7 @@ Step-by-step instructions for installing and configuring ClawVoice with your Ope
 ### From npm (recommended)
 
 ```bash
-openclaw plugins install @clawvoice/voice-assistant
+openclaw plugins install @clawvoice/clawvoice
 ```
 
 Optional (companion mode only):
@@ -343,7 +343,7 @@ openclaw config set clawvoice.elevenlabsAgentId <agent-id>
 
 - Voice sessions write to `voice-memory/*`.
 - Main memory reads are controlled by `mainMemoryAccess` (`read` or `none`).
-- Promotion to main memory is explicit and confirmation-based via `clawvoice promote` or `voice_assistant.promote_memory`.
+- Promotion to main memory is explicit and confirmation-based via `clawvoice promote` or `clawvoice.promote_memory`.
 
 This lets your primary OpenClaw/Telegram agent keep stable long-term memory while voice calls stay isolated until you deliberately promote entries.
 

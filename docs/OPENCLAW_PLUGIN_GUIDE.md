@@ -23,13 +23,13 @@ Every plugin needs an `openclaw.plugin.json` at the package root.
 
 ```json
 {
-  "id": "voice-assistant",
+"id": "clawvoice",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents. Inbound and outbound phone calls with Deepgram Voice Agent or ElevenLabs Conversational AI.",
   "version": "0.1.0",
   "kind": "channel",
   "channels": ["voice"],
-  "skills": ["voice-assistant"],
+"skills": ["clawvoice"],
   "entryPoint": "dist/index.js",
   "configSchema": {
     "type": "object",
@@ -130,7 +130,7 @@ Every plugin needs an `openclaw.plugin.json` at the package root.
 | `id` | Unique plugin identifier. Convention: `org/name`. |
 | `kind` | Plugin category. `"channel"` for communication plugins. |
 | `channels` | Array of channel types this plugin provides. `["voice"]` |
-| `skills` | Agent skills this plugin ships. References `skills/voice-assistant/SKILL.md` |
+| `skills` | Agent skills this plugin ships. References `skills/clawvoice/SKILL.md` |
 | `entryPoint` | Compiled JS entry point (TypeScript compiled to dist/) |
 | `configSchema` | JSON Schema for plugin configuration. Users set values via `openclaw config set clawvoice.*` or environment variables. |
 
@@ -200,9 +200,9 @@ import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 
 export function registerTools(api: PluginAPI, config: ClawVoiceConfig) {
-  // voice_assistant.call - Initiate outbound phone call
+// clawvoice.call - Initiate outbound phone call
   api.tools.register({
-    name: "voice_assistant.call",
+name: "clawvoice.call",
     description: "Call a phone number. The agent will have a voice conversation with the person who answers.",
     parameters: {
       type: "object",
@@ -233,9 +233,9 @@ export function registerTools(api: PluginAPI, config: ClawVoiceConfig) {
     },
   });
 
-  // voice_assistant.hangup - End an active call
+// clawvoice.hangup - End an active call
   api.tools.register({
-    name: "voice_assistant.hangup",
+name: "clawvoice.hangup",
     description: "End an active phone call.",
     parameters: {
       type: "object",
@@ -252,9 +252,9 @@ export function registerTools(api: PluginAPI, config: ClawVoiceConfig) {
     },
   });
 
-  // voice_assistant.status - Get call status
+// clawvoice.status - Get call status
   api.tools.register({
-    name: "voice_assistant.status",
+name: "clawvoice.status",
     description: "Get the status of active and recent phone calls.",
     parameters: {
       type: "object",
@@ -266,9 +266,9 @@ export function registerTools(api: PluginAPI, config: ClawVoiceConfig) {
     },
   });
 
-  // voice_assistant.promote_memory - Promote voice memory to main
+// clawvoice.promote_memory - Promote voice memory to main
   api.tools.register({
-    name: "voice_assistant.promote_memory",
+name: "clawvoice.promote_memory",
     description: "Review and promote a voice memory to main MEMORY.md. Requires operator confirmation.",
     parameters: {
       type: "object",
@@ -933,7 +933,7 @@ function parseArray(envVal: string | undefined): string[] | null {
 The plugin ships a skill that teaches the OpenClaw agent how to use voice calling.
 
 ```markdown
-<!-- skills/voice-assistant/SKILL.md -->
+<!-- skills/clawvoice/SKILL.md -->
 
 # Voice Assistant
 
@@ -941,7 +941,7 @@ You can make and receive phone calls using ClawVoice.
 
 ## Making a Call
 
-Use the `voice_assistant.call` tool to call someone:
+Use the `clawvoice.call` tool to call someone:
 - Provide the phone number in E.164 format (+15551234567)
 - Optionally describe the purpose of the call
 
@@ -954,7 +954,7 @@ When you're in a voice call session:
 - Keep responses SHORT (1-3 sentences). Long responses feel unnatural in voice.
 - Be conversational. Use contractions, casual language.
 - If you need to convey complex information, break it into small chunks.
-- You can use the `voice_assistant.hangup` tool to end the call.
+- You can use the `clawvoice.hangup` tool to end the call.
 
 ## Voice Memory
 
@@ -1087,7 +1087,7 @@ npm run build
 # 3. Link to local OpenClaw
 npm link
 cd /path/to/your/openclaw/workspace
-openclaw plugins install --link @clawvoice/voice-assistant
+openclaw plugins install --link @clawvoice/clawvoice
 
 # 4. Configure (minimal for testing)
 openclaw config set clawvoice.telephonyProvider telnyx
@@ -1152,7 +1152,7 @@ clawvoice/
       tool-policy.ts          # Voice session tool restrictions
       prompt-guards.ts        # Voice-specific injection guards
   skills/
-    voice-assistant/
+clawvoice/
       SKILL.md                # Agent skill document
   dist/                       # Compiled output
   tests/
@@ -1189,7 +1189,7 @@ When implementing, work in this order:
 14. `src/security/tool-policy.ts` - Tool restrictions
 15. `src/security/prompt-guards.ts` - Voice injection guards
 16. `src/memory/promotion.ts` - Memory promotion
-17. `skills/voice-assistant/SKILL.md` - Agent skill doc
+17. `skills/clawvoice/SKILL.md` - Agent skill doc
 
 ### Phase 5: Managed Service
 18. `src/services/relay.ts` - Outbound WebSocket relay

@@ -9,10 +9,10 @@ ClawVoice is a voice calling plugin for OpenClaw that adds PSTN voice channels f
 - Telephony provider support for Telnyx and Twilio.
 - Voice provider configuration for Deepgram Agent and ElevenLabs Conversational modes.
 - Agent tools for call workflows:
-  - `voice_assistant.call`
-  - `voice_assistant.hangup`
-  - `voice_assistant.status`
-  - `voice_assistant.promote_memory`
+- `clawvoice.call`
+- `clawvoice.hangup`
+- `clawvoice.status`
+- `clawvoice.promote_memory`
 - Interactive setup wizard via CLI (`clawvoice setup`).
 - Configurable voice persona via `voiceSystemPrompt` to define agent behavior on calls.
 - Enable/disable inbound call answering via `inboundEnabled` config flag.
@@ -30,7 +30,7 @@ ClawVoice is a voice calling plugin for OpenClaw that adds PSTN voice channels f
 
 ## Interfaces Exposed
 
-- Agent tool interface (`voice_assistant.*`).
+- Agent tool interface (`clawvoice.*`).
 - CLI interface (`openclaw clawvoice ...`).
 - HTTP webhook routes (`/clawvoice/webhooks/...`).
 - Hook integration for tool gating and memory write isolation.

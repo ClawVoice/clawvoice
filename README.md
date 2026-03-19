@@ -70,7 +70,7 @@ Configure your providers in `.env` or via `openclaw config set`:
 
 
 ```bash
-openclaw plugins install @clawvoice/voice-assistant
+openclaw plugins install @clawvoice/clawvoice
 ```
 
 Optional (only for companion mode):
@@ -192,10 +192,10 @@ The plugin registers these tools for your OpenClaw agent:
 
 | Tool | Description |
 |------|-------------|
-| `voice_assistant.call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall.initiate` |
-| `voice_assistant.hangup` | End an active call |
-| `voice_assistant.status` | Get status of active/recent calls |
-| `voice_assistant.promote_memory` | Promote a voice memory to main memory |
+| `clawvoice.call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall.initiate` |
+| `clawvoice.hangup` | End an active call |
+| `clawvoice.status` | Get status of active/recent calls |
+| `clawvoice.promote_memory` | Promote a voice memory to main memory |
 
 ## Architecture
 
@@ -276,7 +276,7 @@ npm run dev
 
 # Link for local OpenClaw testing
 npm link
-openclaw plugins install --link @clawvoice/voice-assistant
+openclaw plugins install --link @clawvoice/clawvoice
 ```
 
 ## License
