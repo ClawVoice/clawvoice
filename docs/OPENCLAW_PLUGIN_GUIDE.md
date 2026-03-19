@@ -200,9 +200,9 @@ import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 
 export function registerTools(api: PluginAPI, config: ClawVoiceConfig) {
-// clawvoice.call - Initiate outbound phone call
+// clawvoice_call - Initiate outbound phone call
   api.tools.register({
-name: "clawvoice.call",
+name: "clawvoice_call",
     description: "Call a phone number. The agent will have a voice conversation with the person who answers.",
     parameters: {
       type: "object",
@@ -233,9 +233,9 @@ name: "clawvoice.call",
     },
   });
 
-// clawvoice.hangup - End an active call
+// clawvoice_hangup - End an active call
   api.tools.register({
-name: "clawvoice.hangup",
+name: "clawvoice_hangup",
     description: "End an active phone call.",
     parameters: {
       type: "object",
@@ -252,9 +252,9 @@ name: "clawvoice.hangup",
     },
   });
 
-// clawvoice.status - Get call status
+// clawvoice_status - Get call status
   api.tools.register({
-name: "clawvoice.status",
+name: "clawvoice_status",
     description: "Get the status of active and recent phone calls.",
     parameters: {
       type: "object",
@@ -266,9 +266,9 @@ name: "clawvoice.status",
     },
   });
 
-// clawvoice.promote_memory - Promote voice memory to main
+// clawvoice_promote_memory - Promote voice memory to main
   api.tools.register({
-name: "clawvoice.promote_memory",
+name: "clawvoice_promote_memory",
     description: "Review and promote a voice memory to main MEMORY.md. Requires operator confirmation.",
     parameters: {
       type: "object",
@@ -941,7 +941,7 @@ You can make and receive phone calls using ClawVoice.
 
 ## Making a Call
 
-Use the `clawvoice.call` tool to call someone:
+Use the `clawvoice_call` tool to call someone:
 - Provide the phone number in E.164 format (+15551234567)
 - Optionally describe the purpose of the call
 
@@ -954,7 +954,7 @@ When you're in a voice call session:
 - Keep responses SHORT (1-3 sentences). Long responses feel unnatural in voice.
 - Be conversational. Use contractions, casual language.
 - If you need to convey complex information, break it into small chunks.
-- You can use the `clawvoice.hangup` tool to end the call.
+- You can use the `clawvoice_hangup` tool to end the call.
 
 ## Voice Memory
 

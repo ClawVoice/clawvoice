@@ -192,10 +192,10 @@ The plugin registers these tools for your OpenClaw agent:
 
 | Tool | Description |
 |------|-------------|
-| `clawvoice.call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall.initiate` |
-| `clawvoice.hangup` | End an active call |
-| `clawvoice.status` | Get status of active/recent calls |
-| `clawvoice.promote_memory` | Promote a voice memory to main memory |
+| `clawvoice_call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall_initiate` |
+| `clawvoice_hangup` | End an active call |
+| `clawvoice_status` | Get status of active/recent calls |
+| `clawvoice_promote_memory` | Promote a voice memory to main memory |
 
 ## Architecture
 

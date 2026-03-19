@@ -16,7 +16,7 @@ export function registerTools(
   memoryService?: MemoryExtractionService,
 ): void {
   api.tools.register({
-    name: "clawvoice.call",
+    name: "clawvoice_call",
     description: "Initiate an outbound voice call",
     parameters: {
       type: "object",
@@ -65,7 +65,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.hangup",
+    name: "clawvoice_hangup",
     description: "End an active voice call",
     parameters: {
       type: "object",
@@ -88,7 +88,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.send_text",
+    name: "clawvoice_send_text",
     description: "Send an SMS text message",
     parameters: {
       type: "object",
@@ -129,7 +129,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.text_status",
+    name: "clawvoice_text_status",
     description: "Show recent inbound and outbound text messages",
     parameters: {
       type: "object",
@@ -151,7 +151,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.status",
+    name: "clawvoice_status",
     description: "Get active call status or post-call summary with retry context",
     parameters: {
       type: "object",
@@ -194,7 +194,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.promote_memory",
+    name: "clawvoice_promote_memory",
     description:
       "Review and promote a voice memory to main MEMORY.md. Requires operator confirmation.",
     parameters: {
@@ -249,7 +249,7 @@ export function registerTools(
   });
 
   api.tools.register({
-    name: "clawvoice.clear_calls",
+    name: "clawvoice_clear_calls",
     description:
       "Force-clear stuck call slots. Use when 'maximum concurrent calls' error appears with no live call.",
     parameters: {
