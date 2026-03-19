@@ -78,6 +78,33 @@ function createMockApi(config = {}) {
   return { api, state };
 }
 
+function createModernCliApi(config = {}) {
+  const state = {
+    modernCli: [],
+    logs: []
+  };
+
+  const api = {
+    config,
+    registerCli(registrar, opts) {
+      state.modernCli.push({ registrar, opts });
+    },
+    log: {
+      info(message, metadata) {
+        state.logs.push({ message, metadata });
+      },
+      warn(message, metadata) {
+        state.logs.push({ level: "warn", message, metadata });
+      },
+      error(message, metadata) {
+        state.logs.push({ level: "error", message, metadata });
+      }
+    }
+  };
+
+  return { api, state };
+}
+
 test("plugin init registers core extension points", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
@@ -154,4 +181,18 @@ test("plugin init registers expected hooks", async () => {
 
   assert.ok(state.hooks.includes("before_tool_execute"));
   assert.ok(state.hooks.includes("before_memory_write"));
+});
+
+test("plugin init registers modern registerCli bridge when legacy cli is absent", async () => {
+  const { api, state } = createModernCliApi(
+    validSelfHostedConfig({
+      callMode: "companion"
+    })
+  );
+
+  await plugin.init(api);
+
+  assert.equal(state.modernCli.length, 1);
+  assert.deepEqual(state.modernCli[0].opts, { commands: ["clawvoice"] });
+  assert.equal(typeof state.modernCli[0].registrar, "function");
 });
