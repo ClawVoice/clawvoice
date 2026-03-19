@@ -1,5 +1,5 @@
 {
-  "name": "@clawvoice/voice-assistant",
+  "name": "@clawvoice/clawvoice",
   "version": "1.0.0",
   "description": "Voice calling plugin for OpenClaw — give your AI agent a phone number",
   "main": "dist/index.js",
