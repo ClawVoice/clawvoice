@@ -78,9 +78,11 @@ function createMockApi(config = {}) {
   return { api, state };
 }
 
-function createModernCliApi(config = {}) {
+function createModernApi(config = {}) {
   const state = {
     modernCli: [],
+    modernTools: [],
+    modernRoutes: [],
     logs: []
   };
 
@@ -88,6 +90,12 @@ function createModernCliApi(config = {}) {
     config,
     registerCli(registrar, opts) {
       state.modernCli.push({ registrar, opts });
+    },
+    registerTool(tool, opts) {
+      state.modernTools.push({ tool, opts });
+    },
+    registerHttpRoute(route) {
+      state.modernRoutes.push(route);
     },
     log: {
       info(message, metadata) {
@@ -184,7 +192,7 @@ test("plugin init registers expected hooks", async () => {
 });
 
 test("plugin init registers modern registerCli bridge when legacy cli is absent", async () => {
-  const { api, state } = createModernCliApi(
+  const { api, state } = createModernApi(
     validSelfHostedConfig({
       callMode: "companion"
     })
@@ -195,4 +203,38 @@ test("plugin init registers modern registerCli bridge when legacy cli is absent"
   assert.equal(state.modernCli.length, 1);
   assert.deepEqual(state.modernCli[0].opts, { commands: ["clawvoice"] });
   assert.equal(typeof state.modernCli[0].registrar, "function");
+});
+
+test("plugin init registers tools via modern registerTool when legacy tools is absent", async () => {
+  const { api, state } = createModernApi(
+    validSelfHostedConfig({
+      callMode: "companion"
+    })
+  );
+
+  await plugin.init(api);
+
+  assert.equal(state.modernTools.length, 7, "expected 7 tools via modern registerTool");
+  const toolNames = state.modernTools.map((t) => t.tool.name).sort();
+  assert.deepEqual(toolNames, [
+    "clawvoice.call",
+    "clawvoice.clear_calls",
+    "clawvoice.hangup",
+    "clawvoice.promote_memory",
+    "clawvoice.send_text",
+    "clawvoice.status",
+    "clawvoice.text_status"
+  ]);
+});
+
+test("plugin init registers routes via modern registerHttpRoute when legacy http is absent", async () => {
+  const { api, state } = createModernApi(
+    validSelfHostedConfig({
+      callMode: "companion"
+    })
+  );
+
+  await plugin.init(api);
+
+  assert.ok(state.modernRoutes.length > 0, "expected routes via modern registerHttpRoute");
 });

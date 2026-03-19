@@ -20,11 +20,23 @@ type CommanderLike = {
   action(handler: (...args: unknown[]) => unknown): CommanderLike;
 };
 
-type ModernCliApi = {
+type ToolDefinition = {
+  name: string;
+  description: string;
+  parameters?: unknown;
+  handler?: (input: Record<string, unknown>) => Promise<unknown>;
+};
+
+type ModernPluginApi = {
   registerCli?: (
     registrar: (ctx: { program: CommanderLike }) => void,
     opts?: { commands?: string[] },
   ) => void;
+  registerTool?: (
+    tool: Record<string, unknown>,
+    opts?: { name?: string },
+  ) => void;
+  registerHttpRoute?: (route: Record<string, unknown>) => void;
 };
 
 function normalizeCliArgs(input: unknown): string[] {
@@ -43,7 +55,7 @@ function registerModernCliBridge(
   callService: VoiceCallService,
   memoryService: MemoryExtractionService,
 ): void {
-  const modernApi = api as unknown as ModernCliApi;
+  const modernApi = api as unknown as ModernPluginApi;
   if (typeof modernApi.registerCli !== "function") {
     return;
   }
@@ -87,6 +99,95 @@ function registerModernCliBridge(
   );
 }
 
+function registerModernToolsBridge(
+  api: PluginAPI,
+  config: ReturnType<typeof resolveConfig>,
+  callService: VoiceCallService,
+  memoryService: MemoryExtractionService,
+): void {
+  const modernApi = api as unknown as ModernPluginApi;
+  if (typeof modernApi.registerTool !== "function") {
+    return;
+  }
+
+  const capturedTools: ToolDefinition[] = [];
+  const shimApi = {
+    ...api,
+    tools: {
+      register(definition: ToolDefinition): void {
+        capturedTools.push(definition);
+      },
+    },
+  } as PluginAPI;
+
+  registerTools(shimApi, config, callService, memoryService);
+
+  for (const tool of capturedTools) {
+    modernApi.registerTool(
+      {
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+        execute: tool.handler,
+      },
+      { name: tool.name },
+    );
+  }
+}
+
+function registerModernRoutesBridge(
+  api: PluginAPI,
+  config: ReturnType<typeof resolveConfig>,
+  callService: VoiceCallService,
+): void {
+  const modernApi = api as unknown as ModernPluginApi;
+  if (typeof modernApi.registerHttpRoute !== "function") {
+    return;
+  }
+
+  type CapturedRoute = {
+    method: string;
+    path: string;
+    handler: (req: unknown, res: unknown) => unknown;
+  };
+
+  const capturedRoutes: CapturedRoute[] = [];
+  const shimApi = {
+    ...api,
+    http: {
+      router(prefix: string) {
+        return {
+          post(path: string, handler: (req: unknown, res: unknown) => unknown) {
+            capturedRoutes.push({ method: "POST", path: `${prefix}${path}`, handler });
+          },
+          get(path: string, handler: (req: unknown, res: unknown) => unknown) {
+            capturedRoutes.push({ method: "GET", path: `${prefix}${path}`, handler });
+          },
+        };
+      },
+    },
+  } as PluginAPI;
+
+  registerRoutes(
+    shimApi,
+    config,
+    (record) => {
+      callService.trackInboundCall(record);
+    },
+    (from, to, body, messageId) => {
+      callService.trackInboundText(from, to, body, messageId);
+    },
+  );
+
+  for (const route of capturedRoutes) {
+    modernApi.registerHttpRoute({
+      method: route.method,
+      path: route.path,
+      handler: route.handler,
+    });
+  }
+}
+
 function initPlugin(api: PluginAPI): void {
   const config = resolveConfig(api.config);
   const validation = validateConfig(config);
@@ -115,6 +216,8 @@ function initPlugin(api: PluginAPI): void {
   const toolsRegister = (api as unknown as { tools?: { register?: unknown } }).tools?.register;
   if (typeof toolsRegister === "function") {
     registerTools(api, config, callService, memoryService);
+  } else {
+    registerModernToolsBridge(api, config, callService, memoryService);
   }
 
   const cliRegister = (api as unknown as { cli?: { register?: unknown } }).cli?.register;
@@ -136,6 +239,8 @@ function initPlugin(api: PluginAPI): void {
         callService.trackInboundText(from, to, body, messageId);
       },
     );
+  } else {
+    registerModernRoutesBridge(api, config, callService);
   }
 
   const hooksOn = (api as unknown as { hooks?: { on?: unknown } }).hooks?.on;
