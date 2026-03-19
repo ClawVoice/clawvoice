@@ -8,14 +8,14 @@ test("openclaw.plugin.json is valid JSON with required fields", () => {
   const raw = fs.readFileSync(manifestPath, "utf-8");
   const manifest = JSON.parse(raw);
 
-  assert.equal(manifest.id, "voice-assistant");
+  assert.equal(manifest.id, "clawvoice");
   assert.equal(manifest.name, "ClawVoice");
   assert.equal(manifest.kind, "channel");
   assert.equal(manifest.entryPoint, "dist/index.js");
   assert.ok(Array.isArray(manifest.channels));
   assert.ok(manifest.channels.includes("voice"));
   assert.ok(Array.isArray(manifest.skills));
-  assert.ok(manifest.skills.includes("voice-assistant"));
+  assert.ok(manifest.skills.includes("clawvoice"));
 });
 
 test("manifest entryPoint matches package.json main", () => {
@@ -25,6 +25,7 @@ test("manifest entryPoint matches package.json main", () => {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
 
   assert.equal(manifest.entryPoint, pkg.main, "manifest entryPoint must match package.json main");
+  assert.equal(pkg.name, "@clawvoice/clawvoice");
 });
 
 test("manifest configSchema has expected shape", () => {
