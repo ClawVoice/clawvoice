@@ -7,7 +7,7 @@ function invokeLifecycle(fn, api, name) {
   try {
     const result = fn(api);
     if (result && typeof result.then === "function") {
-      result.catch((error) => {
+      Promise.resolve(result).catch((error) => {
         console.error(`[clawvoice] ${name} failed`, error);
       });
     }

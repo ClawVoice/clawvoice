@@ -17,20 +17,27 @@ async function importExtension() {
 test("openclaw extension exports sync register/activate wrappers", async () => {
   const mod = await importExtension();
 
-  assert.notEqual(mod.register.constructor.name, "AsyncFunction");
-  assert.notEqual(mod.activate.constructor.name, "AsyncFunction");
+  assert.equal(mod.register.constructor.name, "Function");
+  assert.equal(mod.activate.constructor.name, "Function");
 });
 
-test("openclaw extension register swallows sync lifecycle throws", async () => {
+test("openclaw extension register swallows sync lifecycle throws", async (t) => {
   const mod = await importExtension();
-  const originalRegister = cjs.register;
-  cjs.register = () => {
+  t.mock.method(cjs, "register", () => {
     throw new Error("sync register boom");
-  };
+  });
 
-  try {
-    assert.doesNotThrow(() => mod.register({}));
-  } finally {
-    cjs.register = originalRegister;
-  }
+  assert.doesNotThrow(() => mod.register({}));
+});
+
+test("openclaw extension swallows rejected thenable from lifecycle", async (t) => {
+  const mod = await importExtension();
+
+  t.mock.method(cjs, "register", () => {
+    // Return a rejected promise — exercises the Promise.resolve().catch() path
+    return Promise.reject(new Error("async lifecycle reject"));
+  });
+
+  // Should not throw — invokeLifecycle wraps with Promise.resolve().catch()
+  assert.doesNotThrow(() => mod.register({}));
 });
