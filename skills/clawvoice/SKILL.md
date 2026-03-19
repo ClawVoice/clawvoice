@@ -1,4 +1,4 @@
-# ClawVoice Voice Assistant Skill
+# ClawVoice Skill
 
 Use this skill when handling phone call workflows through ClawVoice.
 
