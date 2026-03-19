@@ -99,13 +99,13 @@ test("plugin init registers expected tool names", async () => {
 
   const toolNames = state.tools.map((t) => t.name).sort();
   assert.deepEqual(toolNames, [
-    "voice_assistant.call",
-    "voice_assistant.clear_calls",
-    "voice_assistant.hangup",
-    "voice_assistant.promote_memory",
-    "voice_assistant.send_text",
-    "voice_assistant.status",
-    "voice_assistant.text_status"
+    "clawvoice.call",
+    "clawvoice.clear_calls",
+    "clawvoice.hangup",
+    "clawvoice.promote_memory",
+    "clawvoice.send_text",
+    "clawvoice.status",
+    "clawvoice.text_status"
   ]);
 });
 

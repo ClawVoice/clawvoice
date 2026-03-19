@@ -1,11 +1,11 @@
 {
-  "id": "voice-assistant",
+  "id": "clawvoice",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents.",
   "version": "1.0.0",
   "kind": "channel",
   "channels": ["voice"],
-  "skills": ["voice-assistant"],
+  "skills": ["clawvoice"],
   "entryPoint": "dist/index.js",
   "configSchema": {
     "type": "object",

@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Runtime credential failure tests for both Twilio and Telnyx call-start path.
 
 ### Fixed
-- OpenClaw guide manifest example now uses the correct stable plugin id (`voice-assistant`) and correct default provider (`twilio`).
+- OpenClaw guide manifest example now uses the standardized plugin id (`clawvoice`) and correct default provider (`twilio`).
 
 ---
 
@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Named `activate` and `register` exports in plugin entry point for OpenClaw loader compatibility.
 
 ### Changed
-- Plugin manifest `id` changed from `clawvoice/voice-assistant` to `voice-assistant` (shorter stable form used by OpenClaw runtime).
+- Plugin manifest and package/tool naming now standardized on `clawvoice` across docs, manifest, and runtime interfaces.
 - Init-time config validation no longer hard-fails on missing provider credentials — the plugin can be installed and enabled before credentials are configured.
 - Config schema `required` list cleared so OpenClaw's plugin host does not block enable when credentials are absent.
 - Private ignore rules (internal tooling paths) moved from tracked `.gitignore` to local-only `.git/info/exclude`.
