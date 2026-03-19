@@ -134,13 +134,13 @@ test("plugin init registers expected tool names", async () => {
 
   const toolNames = state.tools.map((t) => t.name).sort();
   assert.deepEqual(toolNames, [
-    "clawvoice.call",
-    "clawvoice.clear_calls",
-    "clawvoice.hangup",
-    "clawvoice.promote_memory",
-    "clawvoice.send_text",
-    "clawvoice.status",
-    "clawvoice.text_status"
+    "clawvoice_call",
+    "clawvoice_clear_calls",
+    "clawvoice_hangup",
+    "clawvoice_promote_memory",
+    "clawvoice_send_text",
+    "clawvoice_status",
+    "clawvoice_text_status"
   ]);
 });
 
@@ -217,13 +217,13 @@ test("plugin init registers tools via modern registerTool when legacy tools is a
   assert.equal(state.modernTools.length, 7, "expected 7 tools via modern registerTool");
   const toolNames = state.modernTools.map((t) => t.tool.name).sort();
   assert.deepEqual(toolNames, [
-    "clawvoice.call",
-    "clawvoice.clear_calls",
-    "clawvoice.hangup",
-    "clawvoice.promote_memory",
-    "clawvoice.send_text",
-    "clawvoice.status",
-    "clawvoice.text_status"
+    "clawvoice_call",
+    "clawvoice_clear_calls",
+    "clawvoice_hangup",
+    "clawvoice_promote_memory",
+    "clawvoice_send_text",
+    "clawvoice_status",
+    "clawvoice_text_status"
   ]);
 });
 

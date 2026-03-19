@@ -343,7 +343,7 @@ openclaw config set clawvoice.elevenlabsAgentId <agent-id>
 
 - Voice sessions write to `voice-memory/*`.
 - Main memory reads are controlled by `mainMemoryAccess` (`read` or `none`).
-- Promotion to main memory is explicit and confirmation-based via `clawvoice promote` or `clawvoice.promote_memory`.
+- Promotion to main memory is explicit and confirmation-based via `clawvoice promote` or `clawvoice_promote_memory`.
 
 This lets your primary OpenClaw/Telegram agent keep stable long-term memory while voice calls stay isolated until you deliberately promote entries.
 

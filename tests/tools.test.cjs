@@ -118,20 +118,20 @@ test("registerTools registers expected tool names", () => {
   const names = tools.map((tool) => tool.name).sort();
 
   assert.deepEqual(names, [
-    "clawvoice.call",
-    "clawvoice.clear_calls",
-    "clawvoice.hangup",
-    "clawvoice.promote_memory",
-    "clawvoice.send_text",
-    "clawvoice.status",
-    "clawvoice.text_status",
+    "clawvoice_call",
+    "clawvoice_clear_calls",
+    "clawvoice_hangup",
+    "clawvoice_promote_memory",
+    "clawvoice_send_text",
+    "clawvoice_status",
+    "clawvoice_text_status",
   ]);
 });
 
 test("send_text handler sends message and returns structured response", async () => {
   const callService = createMockCallService();
   const tools = registerAndGetTools(validConfig(), callService);
-  const smsTool = getTool(tools, "clawvoice.send_text");
+  const smsTool = getTool(tools, "clawvoice_send_text");
 
   const result = await smsTool.handler({
     phoneNumber: "+15559876543",
@@ -148,7 +148,7 @@ test("send_text handler sends message and returns structured response", async ()
 test("call handler invokes call service and returns structured response", async () => {
   const callService = createMockCallService();
   const tools = registerAndGetTools(validConfig(), callService);
-  const callTool = getTool(tools, "clawvoice.call");
+  const callTool = getTool(tools, "clawvoice_call");
 
   const result = await callTool.handler({
     phoneNumber: "5551234567",
@@ -168,7 +168,7 @@ test("call handler invokes call service and returns structured response", async 
 
 test("call handler rejects empty phone number", async () => {
   const tools = registerAndGetTools(validConfig(), createMockCallService());
-  const callTool = getTool(tools, "clawvoice.call");
+  const callTool = getTool(tools, "clawvoice_call");
 
   await assert.rejects(
     () => callTool.handler({ phoneNumber: "  " }),
@@ -179,7 +179,7 @@ test("call handler rejects empty phone number", async () => {
 test("hangup handler forwards optional call id", async () => {
   const callService = createMockCallService();
   const tools = registerAndGetTools(validConfig(), callService);
-  const hangupTool = getTool(tools, "clawvoice.hangup");
+  const hangupTool = getTool(tools, "clawvoice_hangup");
 
   await hangupTool.handler({ callId: "call-abc" });
   await hangupTool.handler({});
@@ -190,8 +190,8 @@ test("hangup handler forwards optional call id", async () => {
 test("status handler reports active call count", async () => {
   const callService = createMockCallService();
   const tools = registerAndGetTools(validConfig(), callService);
-  const callTool = getTool(tools, "clawvoice.call");
-  const statusTool = getTool(tools, "clawvoice.status");
+  const callTool = getTool(tools, "clawvoice_call");
+  const statusTool = getTool(tools, "clawvoice_status");
 
   const statusBefore = await statusTool.handler({});
   assert.equal(statusBefore.content, "No active calls.");
@@ -229,7 +229,7 @@ test("status handler returns call summary when callId provided", async () => {
   });
 
   const tools = registerAndGetTools(validConfig(), callService);
-  const statusTool = getTool(tools, "clawvoice.status");
+  const statusTool = getTool(tools, "clawvoice_status");
 
   const result = await statusTool.handler({ callId: "call-456" });
   assert.match(result.content, /partial/i);
@@ -243,7 +243,7 @@ test("status handler falls through to active calls when callId has no summary", 
   callService.getCallSummary = () => undefined;
 
   const tools = registerAndGetTools(validConfig(), callService);
-  const statusTool = getTool(tools, "clawvoice.status");
+  const statusTool = getTool(tools, "clawvoice_status");
 
   const result = await statusTool.handler({ callId: "call-missing" });
   assert.match(result.content, /No active calls/);
@@ -251,7 +251,7 @@ test("status handler falls through to active calls when callId has no summary", 
 
 test("clear_calls requires callId unless confirmAll=true", async () => {
   const tools = registerAndGetTools(validConfig(), createMockCallService());
-  const clearTool = getTool(tools, "clawvoice.clear_calls");
+  const clearTool = getTool(tools, "clawvoice_clear_calls");
 
   await assert.rejects(
     () => clearTool.handler({}),
@@ -261,7 +261,7 @@ test("clear_calls requires callId unless confirmAll=true", async () => {
 
 test("clear_calls allows full clear with explicit confirmAll", async () => {
   const tools = registerAndGetTools(validConfig(), createMockCallService());
-  const clearTool = getTool(tools, "clawvoice.clear_calls");
+  const clearTool = getTool(tools, "clawvoice_clear_calls");
 
   const result = await clearTool.handler({ confirmAll: true });
   assert.match(result.content, /Cleared 2 stuck call slot\(s\)/);
