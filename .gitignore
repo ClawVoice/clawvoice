@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 .env
 *.log
+
+*.tgz
+LOCAL_MEMORY.md
