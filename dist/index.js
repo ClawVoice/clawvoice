@@ -57,6 +57,14 @@ function registerModernCliBridge(api, config, callService, memoryService) {
         }
     }, { commands: ["clawvoice"] });
 }
+function extractParams(...executeArgs) {
+    for (const arg of executeArgs) {
+        if (arg !== null && arg !== undefined && typeof arg === "object" && !Array.isArray(arg)) {
+            return arg;
+        }
+    }
+    return {};
+}
 function registerModernToolsBridge(api, config, callService, memoryService) {
     const modernApi = api;
     if (typeof modernApi.registerTool !== "function") {
@@ -73,11 +81,14 @@ function registerModernToolsBridge(api, config, callService, memoryService) {
     };
     (0, tools_1.registerTools)(shimApi, config, callService, memoryService);
     for (const tool of capturedTools) {
+        const handler = tool.handler;
         modernApi.registerTool({
             name: tool.name,
             description: tool.description,
             parameters: tool.parameters,
-            execute: tool.handler,
+            execute: handler
+                ? async (...executeArgs) => handler(extractParams(...executeArgs))
+                : undefined,
         }, { name: tool.name });
     }
 }
@@ -115,7 +126,16 @@ function registerModernRoutesBridge(api, config, callService) {
         });
     }
 }
+function resolveLogger(api) {
+    const raw = api;
+    if (api.log && typeof api.log.info === "function")
+        return api.log;
+    if (raw.logger && typeof raw.logger.info === "function")
+        return raw.logger;
+    return {};
+}
 function initPlugin(api) {
+    const logger = resolveLogger(api);
     const config = (0, config_1.resolveConfig)(api.config);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
@@ -124,7 +144,7 @@ function initPlugin(api) {
     const diagnostics = (0, health_1.runDiagnostics)(config);
     for (const check of diagnostics.checks) {
         if (check.status === "fail" || check.status === "warn") {
-            api.log?.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
+            logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
                 detail: check.detail,
                 remediation: check.remediation,
             });
@@ -133,7 +153,7 @@ function initPlugin(api) {
     const callService = new voice_call_1.VoiceCallService(config);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
     void callService.start().catch((error) => {
-        api.log?.error?.("ClawVoice call service failed to start", {
+        logger.error?.("ClawVoice call service failed to start", {
             error: error instanceof Error ? error.message : String(error),
         });
     });
@@ -170,7 +190,7 @@ function initPlugin(api) {
     if (typeof servicesRegister === "function") {
         api.services.register("clawvoice-calls", callService);
     }
-    api.log?.info?.("ClawVoice initialized", {
+    logger.info?.("ClawVoice initialized", {
         telephonyProvider: config.telephonyProvider,
         voiceProvider: config.voiceProvider,
         inboundEnabled: config.inboundEnabled,

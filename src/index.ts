@@ -99,6 +99,15 @@ function registerModernCliBridge(
   );
 }
 
+function extractParams(...executeArgs: unknown[]): Record<string, unknown> {
+  for (const arg of executeArgs) {
+    if (arg !== null && arg !== undefined && typeof arg === "object" && !Array.isArray(arg)) {
+      return arg as Record<string, unknown>;
+    }
+  }
+  return {};
+}
+
 function registerModernToolsBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
@@ -123,12 +132,15 @@ function registerModernToolsBridge(
   registerTools(shimApi, config, callService, memoryService);
 
   for (const tool of capturedTools) {
+    const handler = tool.handler;
     modernApi.registerTool(
       {
         name: tool.name,
         description: tool.description,
         parameters: tool.parameters,
-        execute: tool.handler,
+        execute: handler
+          ? async (...executeArgs: unknown[]) => handler(extractParams(...executeArgs))
+          : undefined,
       },
       { name: tool.name },
     );
@@ -188,7 +200,21 @@ function registerModernRoutesBridge(
   }
 }
 
+type LoggerLike = {
+  info?: (msg: string, meta?: Record<string, unknown>) => void;
+  warn?: (msg: string, meta?: Record<string, unknown>) => void;
+  error?: (msg: string, meta?: Record<string, unknown>) => void;
+};
+
+function resolveLogger(api: PluginAPI): LoggerLike {
+  const raw = api as unknown as Record<string, unknown>;
+  if (api.log && typeof api.log.info === "function") return api.log;
+  if (raw.logger && typeof (raw.logger as LoggerLike).info === "function") return raw.logger as LoggerLike;
+  return {};
+}
+
 function initPlugin(api: PluginAPI): void {
+  const logger = resolveLogger(api);
   const config = resolveConfig(api.config);
   const validation = validateConfig(config);
   if (!validation.ok) {
@@ -198,7 +224,7 @@ function initPlugin(api: PluginAPI): void {
   const diagnostics = runDiagnostics(config);
   for (const check of diagnostics.checks) {
     if (check.status === "fail" || check.status === "warn") {
-      api.log?.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
+      logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
         detail: check.detail,
         remediation: check.remediation,
       });
@@ -208,7 +234,7 @@ function initPlugin(api: PluginAPI): void {
   const callService = new VoiceCallService(config);
   const memoryService = new MemoryExtractionService(config);
   void callService.start().catch((error) => {
-    api.log?.error?.("ClawVoice call service failed to start", {
+    logger.error?.("ClawVoice call service failed to start", {
       error: error instanceof Error ? error.message : String(error),
     });
   });
@@ -253,7 +279,7 @@ function initPlugin(api: PluginAPI): void {
     api.services.register("clawvoice-calls", callService);
   }
 
-  api.log?.info?.("ClawVoice initialized", {
+  logger.info?.("ClawVoice initialized", {
     telephonyProvider: config.telephonyProvider,
     voiceProvider: config.voiceProvider,
     inboundEnabled: config.inboundEnabled,
