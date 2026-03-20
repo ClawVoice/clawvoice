@@ -97,6 +97,14 @@ export async function runSetupWizard(
     values.twilioAccountSid = await askNonEmpty(prompter, "Twilio Account SID: ");
     values.twilioAuthToken = await askNonEmpty(prompter, "Twilio auth token: ");
     values.twilioPhoneNumber = await askNonEmpty(prompter, "Twilio phone number (E.164): ");
+    values.twilioStreamUrl = await askNonEmpty(
+      prompter,
+      "Twilio media stream URL (wss://...)\n" +
+        "  Twilio needs a public WSS endpoint to stream call audio.\n" +
+        "  Use a tunnel (ngrok, Cloudflare Tunnel) to expose your local media stream server.\n" +
+        "  Example: wss://your-tunnel.ngrok-free.dev/media-stream\n" +
+        "  Stream URL: "
+    );
   }
 
   const voiceProvider = await askChoice(

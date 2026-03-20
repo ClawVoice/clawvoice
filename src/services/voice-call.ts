@@ -231,6 +231,39 @@ export class VoiceCallService {
     }
   }
 
+  private validateCallReadiness(): void {
+    const errors: string[] = [];
+
+    if (this.config.voiceProvider === "deepgram-agent" && !this.config.deepgramApiKey) {
+      errors.push("Deepgram API key is not configured. Set DEEPGRAM_API_KEY or run 'clawvoice setup'.");
+    }
+
+    if (this.config.voiceProvider === "elevenlabs-conversational") {
+      if (!this.config.elevenlabsApiKey) {
+        errors.push("ElevenLabs API key is not configured. Set ELEVENLABS_API_KEY or run 'clawvoice setup'.");
+      }
+      if (!this.config.elevenlabsAgentId) {
+        errors.push("ElevenLabs agent ID is not configured. Set ELEVENLABS_AGENT_ID or run 'clawvoice setup'.");
+      }
+    }
+
+    if (this.config.telephonyProvider === "twilio" && this.config.callMode !== "companion") {
+      if (!this.config.twilioStreamUrl?.trim()) {
+        errors.push(
+          "Twilio media stream URL is not configured. " +
+          "Set CLAWVOICE_TWILIO_STREAM_URL to a public WSS endpoint " +
+          "(e.g. wss://your-tunnel.ngrok-free.dev/media-stream). " +
+          "You need a tunnel (ngrok, Cloudflare Tunnel) to expose your local media stream server. " +
+          "Run 'clawvoice setup' for guided configuration."
+        );
+      }
+    }
+
+    if (errors.length > 0) {
+      throw new Error(`Cannot initiate call — missing configuration:\n${errors.join("\n")}`);
+    }
+  }
+
   public async startCall(
     request: StartCallRequest,
   ): Promise<StartCallResponse> {
@@ -241,6 +274,7 @@ export class VoiceCallService {
     }
 
     this.checkDailyLimit();
+    this.validateCallReadiness();
     const baseGreeting =
       request.greeting?.trim() ||
       "Hello, this is an AI assistant calling on behalf of my user.";
@@ -286,7 +320,9 @@ export class VoiceCallService {
       voiceProviderUrl: this.config.voiceProvider === "deepgram-agent"
         ? "wss://agent.deepgram.com/v1/agent/converse"
         : `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${this.config.elevenlabsAgentId ?? ""}`,
-      voiceProviderAuth: this.config.deepgramApiKey ?? "",
+      voiceProviderAuth: this.config.voiceProvider === "elevenlabs-conversational"
+        ? (this.config.elevenlabsApiKey ?? "")
+        : (this.config.deepgramApiKey ?? ""),
       telephonyCodec: "mulaw",
       voiceProviderCodec: "mulaw",
       sampleRate: 8000,
@@ -294,7 +330,9 @@ export class VoiceCallService {
       systemPrompt: this.config.voiceSystemPrompt
         ? (request.purpose ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${request.purpose}` : this.config.voiceSystemPrompt)
         : (request.purpose ?? ""),
-      voiceModel: this.config.deepgramVoice,
+      voiceModel: this.config.voiceProvider === "elevenlabs-conversational"
+        ? (this.config.elevenlabsVoiceId ?? "")
+        : this.config.deepgramVoice,
       keepAliveIntervalMs: 5000,
       greetingGracePeriodMs: 3000,
     });
