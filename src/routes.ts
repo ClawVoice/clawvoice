@@ -100,6 +100,11 @@ export function registerRoutes(
         const record = buildInboundRecord(event, decision);
         onInbound?.(record);
       }
+      if (!config.twilioStreamUrl?.trim()) {
+        api.log?.error?.("Inbound call received but CLAWVOICE_TWILIO_STREAM_URL is not configured. " +
+          "The caller will hear a generic error. Set this to a public WSS endpoint " +
+          "(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.");
+      }
       sendTwiml(response, buildTwilioVoiceTwiml(config));
       return;
     }
@@ -215,7 +220,7 @@ function buildTwilioVoiceTwiml(config: ClawVoiceConfig): string {
 
   const streamUrl = config.twilioStreamUrl?.trim();
   if (!streamUrl) {
-    return "<Response><Say>Voice stream URL is not configured.</Say><Hangup/></Response>";
+    return "<Response><Say>We're sorry, this call cannot be completed at this time.</Say><Hangup/></Response>";
   }
   return `<Response><Connect><Stream url="${streamUrl}" track="inbound_track" /></Connect></Response>`;
 }

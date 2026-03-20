@@ -971,6 +971,33 @@ During voice calls, some tools are restricted for safety:
 - Workspace file access only
 ```
 
+## Agent Guardrails — URL Configuration
+
+**CRITICAL: AI agents MUST NOT generate, guess, or hallucinate tunnel URLs, webhook URLs, or media stream URLs.**
+
+Twilio requires publicly reachable HTTPS and WSS endpoints. These must be real URLs pointing to running tunnel services (ngrok, Cloudflare Tunnel, etc.) that the user has set up. An invented URL will silently fail — Twilio will attempt to connect, get no response, and the call will break with no useful error.
+
+### What agents MUST do:
+
+1. **Check existing configuration first.** Read `CLAWVOICE_TWILIO_STREAM_URL` and the webhook URL from config before suggesting changes.
+2. **Guide the user through tunnel setup.** If no stream URL is configured, tell the user they need to:
+   - Start a tunnel (e.g., `ngrok http 3101` for the media stream server)
+   - Copy the resulting public URL
+   - Set it as `CLAWVOICE_TWILIO_STREAM_URL` (with `wss://` protocol and `/media-stream` path)
+3. **Run `clawvoice setup`** to walk through all required configuration interactively.
+4. **Run `clawvoice diagnostics`** to verify the configuration is correct before attempting calls.
+
+### What agents MUST NOT do:
+
+- Invent URLs like `https://random-words.loca.lt` or `wss://something.ngrok.io/media-stream`
+- Assume a tunnel is running without verifying
+- Set configuration values to placeholder URLs
+- Skip the tunnel requirement by using localhost URLs (Twilio cannot reach localhost)
+
+### Why this matters:
+
+If an agent sets a fake URL, the call will connect via Twilio but the media stream will fail silently. The caller hears a generic error message or silence. Debugging this is difficult because Twilio reports the call as "connected" even though no audio bridge exists.
+
 ## Telnyx Integration Reference
 
 ### Key Differences from Twilio

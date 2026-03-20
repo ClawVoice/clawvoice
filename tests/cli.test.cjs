@@ -44,6 +44,7 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "AC123",
     "auth123",
     "+15551112222",
+    "wss://my-tunnel.ngrok-free.dev/media-stream",
     "elevenlabs-conversational",
     "dg-key",
     "el-key",
@@ -56,6 +57,7 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   assert.equal(state.saved.twilioAccountSid, "AC123");
   assert.equal(state.saved.twilioAuthToken, "auth123");
   assert.equal(state.saved.twilioPhoneNumber, "+15551112222");
+  assert.equal(state.saved.twilioStreamUrl, "wss://my-tunnel.ngrok-free.dev/media-stream");
   assert.equal(state.saved.voiceProvider, "elevenlabs-conversational");
   assert.equal(state.saved.deepgramApiKey, "dg-key");
   assert.equal(state.saved.elevenlabsApiKey, "el-key");

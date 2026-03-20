@@ -263,6 +263,67 @@ test("startCall fails fast when telnyx credentials are missing", async () => {
   );
 });
 
+test("startCall fails fast when deepgram API key is missing", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      voiceProvider: "deepgram-agent",
+      deepgramApiKey: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Cannot initiate call[\s\S]*Deepgram API key/,
+  );
+});
+
+test("startCall fails fast when elevenlabs credentials are missing", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      voiceProvider: "elevenlabs-conversational",
+      elevenlabsApiKey: "",
+      elevenlabsAgentId: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Cannot initiate call[\s\S]*ElevenLabs/,
+  );
+});
+
+test("startCall fails fast when twilio stream URL is missing", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Cannot initiate call[\s\S]*media stream URL/,
+  );
+});
+
+test("startCall skips stream URL check in companion mode", async () => {
+  const service = new VoiceCallService(
+    validTelnyxConfig({
+      callMode: "companion",
+      twilioStreamUrl: "",
+    }),
+    mockFetch(),
+  );
+
+  await assert.rejects(
+    () => service.startCall({ phoneNumber: "5551112222" }),
+    /Companion mode is enabled/,
+  );
+});
+
 test("sendText rejects oversized SMS payloads", async () => {
   const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
   const oversized = "a".repeat(1601);
