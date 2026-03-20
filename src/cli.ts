@@ -122,7 +122,11 @@ export async function runSetupWizard(
 
   await saveConfig(api, values);
 
-  api.log.info("ClawVoice setup complete", {
+  const setupRaw = api as unknown as Record<string, unknown>;
+  const setupLog = (api.log && typeof api.log.info === "function") ? api.log
+    : (setupRaw.logger && typeof (setupRaw.logger as { info?: unknown }).info === "function") ? setupRaw.logger as PluginAPI["log"]
+    : undefined;
+  setupLog?.info?.("ClawVoice setup complete", {
     telephonyProvider,
     voiceProvider,
     deepgramApiKey: maskSecret(String(values.deepgramApiKey)),
@@ -154,6 +158,16 @@ function formatDuration(ms: number): string {
 }
 
 export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: VoiceCallService, memoryService?: MemoryExtractionService): void {
+  const raw = api as unknown as Record<string, unknown>;
+  const logSource = (api.log && typeof api.log.info === "function") ? api.log
+    : (raw.logger && typeof (raw.logger as { info?: unknown }).info === "function") ? raw.logger as PluginAPI["log"]
+    : undefined;
+  const log = {
+    info: (msg: string, meta?: Record<string, unknown>) => logSource?.info?.(msg, meta),
+    warn: (msg: string, meta?: Record<string, unknown>) => logSource?.warn?.(msg, meta),
+    error: (msg: string, meta?: Record<string, unknown>) => logSource?.error?.(msg, meta),
+  };
+
   api.cli.register({
     name: "clawvoice setup",
     description: "Set up ClawVoice (configure telephony and voice providers)",
@@ -168,16 +182,16 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     run: async (args) => {
       const phoneNumber = args.find((a) => !a.startsWith("--"));
       if (!phoneNumber) {
-        api.log.info("Usage: clawvoice call <phone-number> [--greeting \"...\"] [--purpose \"...\"]");
+        log.info("Usage: clawvoice call <phone-number> [--greeting \"...\"] [--purpose \"...\"]");
         return;
       }
       const greeting = parseFlag(args, "greeting");
       const purpose = parseFlag(args, "purpose");
 
-      api.log.info("Initiating call...", { to: phoneNumber });
+      log.info("Initiating call...", { to: phoneNumber });
       try {
         const result = await callService.startCall({ phoneNumber, greeting, purpose });
-        api.log.info("Call started", {
+        log.info("Call started", {
           callId: result.callId,
           to: result.to,
           greeting: result.openingGreeting,
@@ -186,17 +200,17 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (isCompanionModeError(err)) {
-          api.log.info("Companion mode active", {
+          log.info("Companion mode active", {
             detail:
               "Live voice transport is handled by OpenClaw voice-call in companion mode.",
           });
-          api.log.info(
+          log.info(
             `Use: openclaw voicecall initiate ${phoneNumber}`,
             {},
           );
           return;
         }
-        api.log.info("Call failed", { error: message });
+        log.info("Call failed", { error: message });
       }
     },
   });
@@ -208,22 +222,22 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       const phoneNumber = args.find((a) => !a.startsWith("--"));
       const message = parseFlag(args, "message") ?? parseFlag(args, "body");
       if (!phoneNumber || !message) {
-        api.log.info("Usage: clawvoice sms <phone-number> --message \"...\"");
+        log.info("Usage: clawvoice sms <phone-number> --message \"...\"");
         return;
       }
       if (!isLikelyE164(phoneNumber)) {
-        api.log.info("Phone number must be in E.164 format (example: +15551234567).");
+        log.info("Phone number must be in E.164 format (example: +15551234567).");
         return;
       }
       try {
         const result = await callService.sendText({ phoneNumber, message });
-        api.log.info("Text sent", {
+        log.info("Text sent", {
           messageId: result.messageId,
           to: result.to,
           status: result.message,
         });
       } catch (err) {
-        api.log.info("Text send failed", {
+        log.info("Text send failed", {
           error: err instanceof Error ? err.message : String(err),
         });
       }
@@ -236,11 +250,11 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     run: async () => {
       const texts = callService.getRecentTexts();
       if (texts.length === 0) {
-        api.log.info("No recent text messages.");
+        log.info("No recent text messages.");
         return;
       }
       for (const sms of texts) {
-        api.log.info("Text", {
+        log.info("Text", {
           id: sms.id,
           direction: sms.direction,
           from: sms.from,
@@ -257,17 +271,17 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     description: "Show active calls and configuration health diagnostics",
     run: async () => {
       const report = runDiagnostics(config);
-      api.log.info(`Diagnostics: ${report.overall.toUpperCase()}`, {});
+      log.info(`Diagnostics: ${report.overall.toUpperCase()}`, {});
       for (const check of report.checks) {
         const icon = check.status === "pass" ? "✓" : check.status === "warn" ? "⚠" : "✗";
-        api.log.info(`  ${icon} ${check.name}: ${check.detail}`, {});
+        log.info(`  ${icon} ${check.name}: ${check.detail}`, {});
         if (check.remediation) {
-          api.log.info(`    → ${check.remediation}`, {});
+          log.info(`    → ${check.remediation}`, {});
         }
       }
       const active = callService.getActiveCalls();
       if (active.length > 0) {
-        api.log.info(`Active calls: ${active.length}`, {});
+        log.info(`Active calls: ${active.length}`, {});
       }
     },
   });
@@ -277,35 +291,35 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     description: "Review and promote voice memories to main MEMORY.md",
     run: async (args) => {
       if (!memoryService) {
-        api.log.info("Memory extraction service not available.");
+        log.info("Memory extraction service not available.");
         return;
       }
       const memoryId = args.find((a) => !a.startsWith("--"));
       if (memoryId) {
         const candidate = memoryService.getCandidate(memoryId);
         if (!candidate) {
-          api.log.info("Memory candidate not found", { memoryId });
+          log.info("Memory candidate not found", { memoryId });
           return;
         }
         if (parseFlag(args, "yes")) {
           const result = await memoryService.approveAndPromote(memoryId);
-          api.log.info(result.promoted ? "Promoted" : `Failed: ${result.reason}`, { memoryId });
+          log.info(result.promoted ? "Promoted" : `Failed: ${result.reason}`, { memoryId });
         } else {
-          api.log.info(`[${candidate.status}] ${candidate.category}: "${candidate.content}" (confidence: ${candidate.confidence})`);
-          api.log.info("Run again with --yes to promote.");
+          log.info(`[${candidate.status}] ${candidate.category}: "${candidate.content}" (confidence: ${candidate.confidence})`);
+          log.info("Run again with --yes to promote.");
         }
         return;
       }
       const pending = memoryService.getPendingCandidates();
       if (pending.length === 0) {
-        api.log.info("No pending memory candidates.");
+        log.info("No pending memory candidates.");
         return;
       }
-      api.log.info(`${pending.length} pending memory candidate(s):`);
+      log.info(`${pending.length} pending memory candidate(s):`);
       for (const c of pending) {
-        api.log.info(`  ${c.id}: [${c.category}] "${c.content}" (confidence: ${c.confidence})`);
+        log.info(`  ${c.id}: [${c.category}] "${c.content}" (confidence: ${c.confidence})`);
       }
-      api.log.info("Run `clawvoice promote <memoryId> --yes` to promote.");
+      log.info("Run `clawvoice promote <memoryId> --yes` to promote.");
     },
   });
 
@@ -317,13 +331,13 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       if (callId) {
         const summary = callService.getCallSummary(callId);
         if (!summary) {
-          api.log.info("No summary found for call", { callId });
+          log.info("No summary found for call", { callId });
           return;
         }
         const transcript = summary.transcriptLength > 0
           ? `${summary.transcriptLength} transcript entries`
           : "No transcript";
-        api.log.info("Call detail", {
+        log.info("Call detail", {
           callId: summary.callId,
           outcome: summary.outcome,
           duration: formatDuration(summary.durationMs),
@@ -343,11 +357,11 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
 
       const active = callService.getActiveCalls();
       if (active.length === 0) {
-        api.log.info("No recent calls.");
+        log.info("No recent calls.");
         return;
       }
       for (const call of active) {
-        api.log.info("Call", {
+        log.info("Call", {
           callId: call.callId,
           to: call.to,
           provider: call.provider,
@@ -366,21 +380,21 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       const report = runDiagnostics(config);
       const failures = report.checks.filter((c) => c.status === "fail");
       if (failures.length > 0) {
-        api.log.info("Connectivity test FAILED — fix these issues first:", {});
+        log.info("Connectivity test FAILED — fix these issues first:", {});
         for (const f of failures) {
-          api.log.info(`  ✗ ${f.name}: ${f.detail}`, {});
+          log.info(`  ✗ ${f.name}: ${f.detail}`, {});
           if (f.remediation) {
-            api.log.info(`    → ${f.remediation}`, {});
+            log.info(`    → ${f.remediation}`, {});
           }
         }
         return;
       }
-      api.log.info("Connectivity test PASSED — all providers configured.", {});
+      log.info("Connectivity test PASSED — all providers configured.", {});
       const warnings = report.checks.filter((c) => c.status === "warn");
       if (warnings.length > 0) {
-        api.log.info("Warnings:", {});
+        log.info("Warnings:", {});
         for (const w of warnings) {
-          api.log.info(`  ⚠ ${w.name}: ${w.detail}`, {});
+          log.info(`  ⚠ ${w.name}: ${w.detail}`, {});
         }
       }
     },
@@ -393,10 +407,10 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       const callId = args.find((a) => !a.startsWith("--"));
       const cleared = callService.forceClear(callId || undefined);
       if (cleared.length === 0) {
-        api.log.info("No active call slots to clear.", {});
+        log.info("No active call slots to clear.", {});
         return;
       }
-      api.log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+      log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
     },
   });
 }
