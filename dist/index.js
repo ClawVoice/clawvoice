@@ -57,6 +57,12 @@ function registerModernCliBridge(api, config, callService, memoryService) {
         }
     }, { commands: ["clawvoice"] });
 }
+/**
+ * Extract params from OpenClaw execute() call.
+ * Modern API: execute(params: Record<string, unknown>)
+ * Legacy API: execute(toolCallId: string, params: Record<string, unknown>)
+ * Returns the first object-like argument, or {} if none found.
+ */
 function extractParams(...executeArgs) {
     for (const arg of executeArgs) {
         if (arg !== null && arg !== undefined && typeof arg === "object" && !Array.isArray(arg)) {

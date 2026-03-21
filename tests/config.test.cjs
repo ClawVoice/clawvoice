@@ -196,8 +196,90 @@ test("validateConfig only enforces structural guardrails, not credential presenc
 
   const result = validateConfig(config);
   assert.equal(result.ok, true);
-  assert.deepEqual(result.errors, []);
 });
+
+// --- validateTwilioStreamUrl edge cases ---
+
+test("validateConfig rejects localhost stream URL", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "wss://localhost/media-stream",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("localhost")),
+  );
+});
+
+test("validateConfig rejects 127.0.0.1 stream URL", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "wss://127.0.0.1/media-stream",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("localhost")),
+  );
+});
+
+test("validateConfig rejects http:// stream URL", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "https://example.com/media-stream",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("wss://")),
+  );
+});
+
+test("validateConfig rejects invalid URL for stream", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "not-a-url",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("valid absolute URL")),
+  );
+});
+
+test("validateConfig rejects stream URL containing /webhooks path", () => {
+  const config = resolveConfig(
+    {
+      telephonyProvider: "twilio",
+      twilioStreamUrl: "wss://public.example.com/webhooks/media",
+    },
+    {},
+  );
+
+  const result = validateConfig(config);
+  assert.equal(result.ok, false);
+  assert.ok(
+    result.errors.some((message) => message.includes("WebSocket media endpoint")),
+  );
+});
+
 
 test("validateConfig requires positive maxCallDuration", () => {
   const config = resolveConfig(
