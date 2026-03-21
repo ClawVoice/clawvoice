@@ -63,7 +63,7 @@ export interface TextMessageRecord {
   createdAt: string;
 }
 
-export class VoiceCallService {
+export class ClawVoiceService {
   private running = false;
   private readonly activeCalls = new Map<string, CallRecord>();
   private readonly callIdByProviderCallId = new Map<string, string>();
@@ -174,7 +174,7 @@ export class VoiceCallService {
     }
     this.reaperTimer = setInterval(() => {
       this.reapStaleCalls();
-    }, VoiceCallService.REAPER_INTERVAL_MS);
+    }, ClawVoiceService.REAPER_INTERVAL_MS);
     this.reaperTimer.unref?.();
   }
 
@@ -190,8 +190,8 @@ export class VoiceCallService {
     for (const [callId, record] of this.activeCalls) {
       const started = new Date(record.startedAt).getTime();
       const maxDurationMs = Math.floor(this.config.maxCallDuration * 1000);
-      const staleAfter = Math.max(maxDurationMs, VoiceCallService.REAPER_GRACE_MS);
-      if (now - started > staleAfter + VoiceCallService.REAPER_GRACE_MS) {
+      const staleAfter = Math.max(maxDurationMs, ClawVoiceService.REAPER_GRACE_MS);
+      if (now - started > staleAfter + ClawVoiceService.REAPER_GRACE_MS) {
         this.cleanupCall(callId);
       }
     }

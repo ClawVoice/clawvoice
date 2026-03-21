@@ -48,7 +48,7 @@ export interface TextMessageRecord {
     body: string;
     createdAt: string;
 }
-export declare class VoiceCallService {
+export declare class ClawVoiceService {
     private readonly config;
     private running;
     private readonly activeCalls;

@@ -52,9 +52,14 @@ function registerRoutes(api, config, onInbound, onInboundText) {
                 const routeLog = (api.log && typeof api.log.error === "function") ? api.log
                     : (routeRaw.logger && typeof routeRaw.logger.error === "function") ? routeRaw.logger
                         : undefined;
-                routeLog?.error?.("Inbound call received but CLAWVOICE_TWILIO_STREAM_URL is not configured. " +
-                    "The caller will hear a generic error. Set this to a public WSS endpoint " +
-                    "(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.");
+                const maskPhone = (num) => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+                const from = params["From"] ? maskPhone(params["From"]) : "unknown";
+                const to = params["To"] ? maskPhone(params["To"]) : "unknown";
+                const callSid = params["CallSid"] || "unknown";
+                routeLog?.error?.(`Inbound call received but CLAWVOICE_TWILIO_STREAM_URL is not configured. ` +
+                    `From: ${from}, To: ${to}, CallSid: ${callSid}. ` +
+                    `The caller will hear a generic error. Set this to a public WSS endpoint ` +
+                    `(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.`);
             }
             sendTwiml(response, buildTwilioVoiceTwiml(config));
             return;

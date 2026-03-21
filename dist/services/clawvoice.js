@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.VoiceCallService = void 0;
+exports.ClawVoiceService = void 0;
 const telnyx_1 = require("../telephony/telnyx");
 const twilio_1 = require("../telephony/twilio");
 const deepgram_bridge_1 = require("../transport/deepgram-bridge");
@@ -8,7 +8,7 @@ const media_session_handler_1 = require("../transport/media-session-handler");
 const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
 const post_call_1 = require("./post-call");
-class VoiceCallService {
+class ClawVoiceService {
     constructor(config, fetchFn) {
         this.config = config;
         this.running = false;
@@ -100,7 +100,7 @@ class VoiceCallService {
         }
         this.reaperTimer = setInterval(() => {
             this.reapStaleCalls();
-        }, VoiceCallService.REAPER_INTERVAL_MS);
+        }, ClawVoiceService.REAPER_INTERVAL_MS);
         this.reaperTimer.unref?.();
     }
     stopReaper() {
@@ -114,8 +114,8 @@ class VoiceCallService {
         for (const [callId, record] of this.activeCalls) {
             const started = new Date(record.startedAt).getTime();
             const maxDurationMs = Math.floor(this.config.maxCallDuration * 1000);
-            const staleAfter = Math.max(maxDurationMs, VoiceCallService.REAPER_GRACE_MS);
-            if (now - started > staleAfter + VoiceCallService.REAPER_GRACE_MS) {
+            const staleAfter = Math.max(maxDurationMs, ClawVoiceService.REAPER_GRACE_MS);
+            if (now - started > staleAfter + ClawVoiceService.REAPER_GRACE_MS) {
                 this.cleanupCall(callId);
             }
         }
@@ -396,6 +396,6 @@ class VoiceCallService {
         }
     }
 }
-exports.VoiceCallService = VoiceCallService;
-VoiceCallService.REAPER_INTERVAL_MS = 30000; // check every 30s
-VoiceCallService.REAPER_GRACE_MS = 120000;
+exports.ClawVoiceService = ClawVoiceService;
+ClawVoiceService.REAPER_INTERVAL_MS = 30000; // check every 30s
+ClawVoiceService.REAPER_GRACE_MS = 120000;

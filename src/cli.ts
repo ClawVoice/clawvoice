@@ -3,7 +3,7 @@ import { ClawVoiceConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
 
 import { MemoryExtractionService } from "./services/memory-extraction";
-import { VoiceCallService } from "./services/voice-call";
+import { ClawVoiceService } from "./services/clawvoice";
 
 export interface SetupPrompter {
   ask(question: string): Promise<string>;
@@ -157,7 +157,7 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
 
-export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: VoiceCallService, memoryService?: MemoryExtractionService): void {
+export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService): void {
   const raw = api as unknown as Record<string, unknown>;
   const logSource = (api.log && typeof api.log.info === "function") ? api.log
     : (raw.logger && typeof (raw.logger as { info?: unknown }).info === "function") ? raw.logger as PluginAPI["log"]

@@ -1,6 +1,6 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
-import { VoiceCallService } from "./services/voice-call";
+import { ClawVoiceService } from "./services/clawvoice";
 import { MemoryExtractionService } from "./services/memory-extraction";
 
 function readString(value: unknown): string | undefined {
@@ -12,7 +12,7 @@ function readString(value: unknown): string | undefined {
 export function registerTools(
   api: PluginAPI,
   config: ClawVoiceConfig,
-  callService: VoiceCallService,
+  callService: ClawVoiceService,
   memoryService?: MemoryExtractionService,
 ): void {
   api.tools.register({

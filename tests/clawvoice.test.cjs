@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { VoiceCallService } = require("../dist/services/voice-call.js");
+const { ClawVoiceService } = require("../dist/services/clawvoice.js");
 
 function validTelnyxConfig(overrides = {}) {
   return {
@@ -49,7 +49,7 @@ function mockFetch() {
 }
 
 test("startCall initiates call and tracks active call", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
 
   const result = await service.startCall({
     phoneNumber: "555-222-3333",
@@ -71,7 +71,7 @@ test("startCall initiates call and tracks active call", async () => {
 });
 
 test("startCall honors custom greeting", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   const result = await service.startCall({
     phoneNumber: "+14155552671",
     greeting: "Hi, calling about your order status.",
@@ -84,7 +84,7 @@ test("startCall honors custom greeting", async () => {
 });
 
 test("startCall skips disclosure when disclosureEnabled is false", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({ disclosureEnabled: false }), mockFetch(),
   );
   const result = await service.startCall({
@@ -96,7 +96,7 @@ test("startCall skips disclosure when disclosureEnabled is false", async () => {
 });
 
 test("startCall auto-terminates call at configured max duration", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({ maxCallDuration: 0.05 }), mockFetch(),
   );
   await service.startCall({ phoneNumber: "5557778888" });
@@ -107,7 +107,7 @@ test("startCall auto-terminates call at configured max duration", async () => {
 });
 
 test("start is idempotent and does not create duplicate reaper timers", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig(),
     mockFetch(),
   );
@@ -138,7 +138,7 @@ test("start is idempotent and does not create duplicate reaper timers", async ()
 });
 
 test("hangup ends selected active call", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   const call = await service.startCall({ phoneNumber: "5551112222" });
 
   const response = await service.hangup(call.callId);
@@ -148,7 +148,7 @@ test("hangup ends selected active call", async () => {
 });
 
 test("hangup without call id uses first active call", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   const call = await service.startCall({ phoneNumber: "5553334444" });
 
   const response = await service.hangup();
@@ -157,7 +157,7 @@ test("hangup without call id uses first active call", async () => {
 });
 
 test("hangup throws when no active calls exist", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   await assert.rejects(
     () => service.hangup(),
     /No active call found to hang up/,
@@ -165,7 +165,7 @@ test("hangup throws when no active calls exist", async () => {
 });
 
 test("startCall validates phone number format via adapter", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   await assert.rejects(
     () => service.startCall({ phoneNumber: "123" }),
     /Invalid US phone number|Invalid international phone number/,
@@ -173,7 +173,7 @@ test("startCall validates phone number format via adapter", async () => {
 });
 
 test("voiceSystemPrompt + purpose produces combined systemPrompt", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({ voiceSystemPrompt: "You are a helpful dental receptionist." }), mockFetch(),
   );
   // The bridge session config systemPrompt should combine both
@@ -187,7 +187,7 @@ test("voiceSystemPrompt + purpose produces combined systemPrompt", async () => {
 });
 
 test("voiceSystemPrompt without purpose uses prompt only", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({ voiceSystemPrompt: "You are a pizza ordering assistant." }), mockFetch(),
   );
   const result = await service.startCall({ phoneNumber: "5551113333" });
@@ -196,7 +196,7 @@ test("voiceSystemPrompt without purpose uses prompt only", async () => {
 });
 
 test("purpose without voiceSystemPrompt uses purpose only", async () => {
-  const service = new VoiceCallService(validTelnyxConfig({ voiceSystemPrompt: "" }), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig({ voiceSystemPrompt: "" }), mockFetch());
   const result = await service.startCall({
     phoneNumber: "5551114444",
     purpose: "Schedule follow-up visit",
@@ -206,7 +206,7 @@ test("purpose without voiceSystemPrompt uses purpose only", async () => {
 });
 
 test("twilio provider path is used when configured", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       telephonyProvider: "twilio",
       twilioAccountSid: "AC123",
@@ -221,7 +221,7 @@ test("twilio provider path is used when configured", async () => {
 });
 
 test("startCall fails fast when twilio credentials are missing", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       telephonyProvider: "twilio",
       twilioAccountSid: "",
@@ -237,7 +237,7 @@ test("startCall fails fast when twilio credentials are missing", async () => {
 });
 
 test("startCall fails fast when telnyx credentials are missing", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       telephonyProvider: "telnyx",
       telnyxApiKey: "",
@@ -253,7 +253,7 @@ test("startCall fails fast when telnyx credentials are missing", async () => {
 });
 
 test("startCall fails fast when deepgram API key is missing", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       voiceProvider: "deepgram-agent",
       deepgramApiKey: "",
@@ -268,7 +268,7 @@ test("startCall fails fast when deepgram API key is missing", async () => {
 });
 
 test("startCall fails fast when elevenlabs credentials are missing", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       voiceProvider: "elevenlabs-conversational",
       elevenlabsApiKey: "",
@@ -284,7 +284,7 @@ test("startCall fails fast when elevenlabs credentials are missing", async () =>
 });
 
 test("startCall fails fast when twilio stream URL is missing", async () => {
-  const service = new VoiceCallService(
+  const service = new ClawVoiceService(
     validTelnyxConfig({
       telephonyProvider: "twilio",
       twilioStreamUrl: "",
@@ -301,7 +301,7 @@ test("startCall fails fast when twilio stream URL is missing", async () => {
 
 
 test("sendText rejects oversized SMS payloads", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
   const oversized = "a".repeat(1601);
 
   await assert.rejects(
@@ -311,7 +311,7 @@ test("sendText rejects oversized SMS payloads", async () => {
 });
 
 test("sendText records outbound message and exposes it in recent text status", async () => {
-  const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
+  const service = new ClawVoiceService(validTelnyxConfig(), mockFetch());
 
   const result = await service.sendText({
     phoneNumber: "+15551234567",

@@ -148,7 +148,7 @@ import { registerTools } from "./tools";
 import { registerCLI } from "./cli";
 import { registerRoutes } from "./routes";
 import { registerHooks } from "./hooks";
-import { VoiceCallService } from "./services/voice-call";
+import { ClawVoiceService } from "./services/clawvoice";
 import { WebSocketRelayService } from "./services/relay";
 import { resolveConfig, ClawVoiceConfig } from "./config";
 
@@ -175,7 +175,7 @@ const plugin: Plugin = {
     if (config.mode === "managed") {
       api.services.register("clawvoice-relay", new WebSocketRelayService(config));
     }
-    api.services.register("clawvoice-calls", new VoiceCallService(config));
+    api.services.register("clawvoice-calls", new ClawVoiceService(config));
 
     api.log.info("ClawVoice initialized", {
       mode: config.mode,
@@ -569,11 +569,11 @@ Long-running processes that operate independently of request/response cycles.
 Manages active calls, maintains WebSocket connections to voice providers.
 
 ```typescript
-// src/services/voice-call.ts
+// src/services/clawvoice.ts
 import { Service } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "../config";
 
-export class VoiceCallService implements Service {
+export class ClawVoiceService implements Service {
   private activeCalls = new Map<string, ActiveCall>();
   private config: ClawVoiceConfig;
 
@@ -1173,7 +1173,7 @@ clawvoice/
     analysis/
       post-call.ts            # Call summary, mood, topics
     services/
-      voice-call.ts           # Active call management
+      clawvoice.ts            # Active call management
       relay.ts                # Managed service WebSocket relay
     security/
       tool-policy.ts          # Voice session tool restrictions
@@ -1203,7 +1203,7 @@ When implementing, work in this order:
 ### Phase 2: Telephony + Voice Provider
 6. `src/telephony/telnyx.ts` - Telnyx Call Control (port from twilioService.ts)
 7. `src/providers/deepgram-agent.ts` - Port from deepgramAgentService.ts
-8. `src/services/voice-call.ts` - Active call management
+8. `src/services/clawvoice.ts` - Active call management
 9. `src/routes.ts` - Webhook handlers
 
 ### Phase 3: Memory + Analysis
