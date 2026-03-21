@@ -196,6 +196,7 @@ test("validateConfig only enforces structural guardrails, not credential presenc
 
   const result = validateConfig(config);
   assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
 });
 
 // --- validateTwilioStreamUrl edge cases ---
@@ -232,7 +233,7 @@ test("validateConfig rejects 127.0.0.1 stream URL", () => {
   );
 });
 
-test("validateConfig rejects http:// stream URL", () => {
+test("validateConfig rejects https:// stream URL (requires wss://)", () => {
   const config = resolveConfig(
     {
       telephonyProvider: "twilio",
