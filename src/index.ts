@@ -5,7 +5,7 @@ import { runDiagnostics } from "./diagnostics/health";
 import { registerHooks } from "./hooks";
 import { registerRoutes } from "./routes";
 import { MemoryExtractionService } from "./services/memory-extraction";
-import { VoiceCallService } from "./services/voice-call";
+import { ClawVoiceService } from "./services/clawvoice";
 import { registerTools } from "./tools";
 
 type LegacyCliCommandDefinition = {
@@ -52,7 +52,7 @@ function normalizeCliArgs(input: unknown): string[] {
 function registerModernCliBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
-  callService: VoiceCallService,
+  callService: ClawVoiceService,
   memoryService: MemoryExtractionService,
 ): void {
   const modernApi = api as unknown as ModernPluginApi;
@@ -117,7 +117,7 @@ function extractParams(...executeArgs: unknown[]): Record<string, unknown> {
 function registerModernToolsBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
-  callService: VoiceCallService,
+  callService: ClawVoiceService,
   memoryService: MemoryExtractionService,
 ): void {
   const modernApi = api as unknown as ModernPluginApi;
@@ -156,7 +156,7 @@ function registerModernToolsBridge(
 function registerModernRoutesBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
-  callService: VoiceCallService,
+  callService: ClawVoiceService,
 ): void {
   const modernApi = api as unknown as ModernPluginApi;
   if (typeof modernApi.registerHttpRoute !== "function") {
@@ -237,7 +237,7 @@ function initPlugin(api: PluginAPI): void {
     }
   }
 
-  const callService = new VoiceCallService(config);
+  const callService = new ClawVoiceService(config);
   const memoryService = new MemoryExtractionService(config);
   void callService.start().catch((error) => {
     logger.error?.("ClawVoice call service failed to start", {

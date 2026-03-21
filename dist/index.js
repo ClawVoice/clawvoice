@@ -8,7 +8,7 @@ const health_1 = require("./diagnostics/health");
 const hooks_1 = require("./hooks");
 const routes_1 = require("./routes");
 const memory_extraction_1 = require("./services/memory-extraction");
-const voice_call_1 = require("./services/voice-call");
+const clawvoice_1 = require("./services/clawvoice");
 const tools_1 = require("./tools");
 function normalizeCliArgs(input) {
     if (Array.isArray(input)) {
@@ -156,7 +156,7 @@ function initPlugin(api) {
             });
         }
     }
-    const callService = new voice_call_1.VoiceCallService(config);
+    const callService = new clawvoice_1.ClawVoiceService(config);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
     void callService.start().catch((error) => {
         logger.error?.("ClawVoice call service failed to start", {
