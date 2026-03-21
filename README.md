@@ -76,6 +76,27 @@ openclaw clawvoice call +15559876543
 
 Or ask your agent: *"Call +15559876543"*
 
+## Managing the Plugin
+
+```bash
+# Update to latest version
+openclaw plugins update @clawvoice/clawvoice
+
+# Reinstall (fixes corrupted installs or stale config)
+openclaw plugins uninstall @clawvoice/clawvoice
+openclaw plugins install @clawvoice/clawvoice
+
+# Uninstall
+openclaw plugins uninstall @clawvoice/clawvoice
+```
+
+> **Migrating from `voice-call`?** If you previously had the plugin under the old name, remove the stale config entry:
+> ```bash
+> openclaw config delete plugins.entries.voice-call
+> openclaw plugins install @clawvoice/clawvoice
+> openclaw clawvoice setup
+> ```
+
 ## Configuration
 
 ### Manual Setup (instead of wizard)
