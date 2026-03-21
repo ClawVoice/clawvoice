@@ -2,7 +2,7 @@
   "id": "clawvoice",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents.",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "kind": "channel",
   "channels": ["voice"],
   "skills": ["clawvoice"],
@@ -10,12 +10,6 @@
   "configSchema": {
     "type": "object",
     "properties": {
-      "callMode": {
-        "type": "string",
-        "enum": ["companion", "standalone"],
-        "default": "companion",
-        "description": "Companion mode delegates live call audio transport to OpenClaw voice-call. Standalone keeps ClawVoice-managed Twilio media streams."
-      },
       "telephonyProvider": {
         "type": "string",
         "enum": ["telnyx", "twilio"],
@@ -59,22 +53,22 @@
       },
       "twilioStreamUrl": {
         "type": "string",
-        "description": "Public wss:// endpoint Twilio will stream call audio to in standalone mode."
+        "description": "Public wss:// endpoint Twilio will stream call audio to. Required for Twilio calls."
       },
       "mediaStreamBind": {
         "type": "string",
         "default": "0.0.0.0",
-        "description": "Bind address for ClawVoice standalone WebSocket media transport server."
+        "description": "Bind address for WebSocket media transport server."
       },
       "mediaStreamPort": {
         "type": "number",
         "default": 3101,
-        "description": "Port for ClawVoice standalone WebSocket media transport server."
+        "description": "Port for WebSocket media transport server."
       },
       "mediaStreamPath": {
         "type": "string",
         "default": "/media-stream",
-        "description": "Path for ClawVoice standalone WebSocket media transport server."
+        "description": "Path for WebSocket media transport server."
       },
       "deepgramApiKey": {
         "type": "string"

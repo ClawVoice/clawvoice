@@ -1,5 +1,4 @@
 export type TelephonyProvider = "telnyx" | "twilio";
-export type CallMode = "companion" | "standalone";
 export type VoiceProvider = "deepgram-agent" | "elevenlabs-conversational";
 export type MainMemoryAccess = "read" | "none";
 
@@ -13,7 +12,6 @@ export const ELEVENLABS_VOICES = {
 export type ElevenLabsVoiceName = keyof typeof ELEVENLABS_VOICES;
 
 export interface ClawVoiceConfig {
-  callMode: CallMode;
   telephonyProvider: TelephonyProvider;
   voiceProvider: VoiceProvider;
   voiceSystemPrompt: string;
@@ -57,7 +55,6 @@ export interface ValidationResult {
 }
 
 const DEFAULT_CONFIG: ClawVoiceConfig = {
-  callMode: "companion",
   telephonyProvider: "twilio",
   voiceProvider: "deepgram-agent",
   voiceSystemPrompt: "",
@@ -104,10 +101,6 @@ function parseBoolean(value: unknown, fallback: boolean): boolean {
     }
   }
   return fallback;
-}
-
-function parseCallMode(value: unknown): CallMode | undefined {
-  return value === "companion" || value === "standalone" ? value : undefined;
 }
 
 function parseMainMemoryAccess(value: unknown): MainMemoryAccess | undefined {
@@ -196,7 +189,6 @@ export function resolveConfig(
   pluginConfig: Record<string, unknown> = {},
   env: NodeJS.ProcessEnv = process.env
 ): ClawVoiceConfig {
-  const envCallMode = parseCallMode(envString(env, "CLAWVOICE_CALL_MODE"));
   const envTelephony = parseTelephonyProvider(envString(env, "CLAWVOICE_TELEPHONY_PROVIDER"));
   const envVoice = parseVoiceProvider(envString(env, "CLAWVOICE_VOICE_PROVIDER"));
   const envTelnyxApiKey = envString(env, "TELNYX_API_KEY");
@@ -234,12 +226,10 @@ export function resolveConfig(
   const envDailyCallLimit = envString(env, "CLAWVOICE_DAILY_CALL_LIMIT");
 
   const configTelephony = parseTelephonyProvider(pluginConfig.telephonyProvider);
-  const configCallMode = parseCallMode(pluginConfig.callMode);
   const configVoice = parseVoiceProvider(pluginConfig.voiceProvider);
   const configMainMemoryAccess = parseMainMemoryAccess(pluginConfig.mainMemoryAccess);
 
   return {
-    callMode: getValue(envCallMode, configCallMode, DEFAULT_CONFIG.callMode),
     telephonyProvider: getValue(envTelephony, configTelephony, DEFAULT_CONFIG.telephonyProvider),
     voiceProvider: getValue(envVoice, configVoice, DEFAULT_CONFIG.voiceProvider),
     telnyxApiKey: getValue(envTelnyxApiKey, typeof pluginConfig.telnyxApiKey === "string" ? pluginConfig.telnyxApiKey : undefined, undefined),
@@ -367,14 +357,8 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     );
   }
 
-  if (config.callMode === "standalone" && config.telephonyProvider === "twilio") {
-    if (!config.twilioStreamUrl) {
-      validationErrors.push("twilioStreamUrl is required in standalone mode with Twilio.");
-    }
-    if (!config.deepgramApiKey) {
-      validationErrors.push("deepgramApiKey is required in standalone mode with Twilio.");
-    }
-  }
+  // Credential/endpoint presence is enforced at call time by validateCallReadiness()
+  // and surfaced by diagnostics. validateConfig only checks structural format.
 
   if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
     const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);

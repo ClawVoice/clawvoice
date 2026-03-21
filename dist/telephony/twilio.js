@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TwilioTelephonyAdapter = void 0;
-const errors_1 = require("../errors");
 const util_1 = require("./util");
 class TwilioTelephonyAdapter {
     constructor(config, fetchFn) {
@@ -12,9 +11,6 @@ class TwilioTelephonyAdapter {
         return "twilio";
     }
     async startCall(input) {
-        if (this.config.callMode === "companion") {
-            throw new errors_1.CompanionModeError("Companion mode is enabled. Use the OpenClaw voice-call plugin for live calls instead of ClawVoice Twilio streaming.");
-        }
         const normalizedTo = (0, util_1.normalizeE164)(input.to);
         if (!this.config.twilioAccountSid ||
             !this.config.twilioAuthToken ||

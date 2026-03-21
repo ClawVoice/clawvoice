@@ -10,7 +10,6 @@ exports.ELEVENLABS_VOICES = {
     Joseph: "8fcyCHOzlKDlxh1InJSf", // male, warm/measured
 };
 const DEFAULT_CONFIG = {
-    callMode: "companion",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     voiceSystemPrompt: "",
@@ -55,9 +54,6 @@ function parseBoolean(value, fallback) {
         }
     }
     return fallback;
-}
-function parseCallMode(value) {
-    return value === "companion" || value === "standalone" ? value : undefined;
 }
 function parseMainMemoryAccess(value) {
     return value === "read" || value === "none" ? value : undefined;
@@ -129,7 +125,6 @@ function validateTwilioStreamUrl(url) {
     return undefined;
 }
 function resolveConfig(pluginConfig = {}, env = process.env) {
-    const envCallMode = parseCallMode(envString(env, "CLAWVOICE_CALL_MODE"));
     const envTelephony = parseTelephonyProvider(envString(env, "CLAWVOICE_TELEPHONY_PROVIDER"));
     const envVoice = parseVoiceProvider(envString(env, "CLAWVOICE_VOICE_PROVIDER"));
     const envTelnyxApiKey = envString(env, "TELNYX_API_KEY");
@@ -163,11 +158,9 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
     const envInboundEnabled = envString(env, "CLAWVOICE_INBOUND_ENABLED");
     const envDailyCallLimit = envString(env, "CLAWVOICE_DAILY_CALL_LIMIT");
     const configTelephony = parseTelephonyProvider(pluginConfig.telephonyProvider);
-    const configCallMode = parseCallMode(pluginConfig.callMode);
     const configVoice = parseVoiceProvider(pluginConfig.voiceProvider);
     const configMainMemoryAccess = parseMainMemoryAccess(pluginConfig.mainMemoryAccess);
     return {
-        callMode: getValue(envCallMode, configCallMode, DEFAULT_CONFIG.callMode),
         telephonyProvider: getValue(envTelephony, configTelephony, DEFAULT_CONFIG.telephonyProvider),
         voiceProvider: getValue(envVoice, configVoice, DEFAULT_CONFIG.voiceProvider),
         telnyxApiKey: getValue(envTelnyxApiKey, typeof pluginConfig.telnyxApiKey === "string" ? pluginConfig.telnyxApiKey : undefined, undefined),
@@ -224,14 +217,8 @@ function validateConfig(config) {
         config.disclosureStatement.trim().length === 0) {
         validationErrors.push("disclosureStatement must be non-empty when disclosureEnabled is true");
     }
-    if (config.callMode === "standalone" && config.telephonyProvider === "twilio") {
-        if (!config.twilioStreamUrl) {
-            validationErrors.push("twilioStreamUrl is required in standalone mode with Twilio.");
-        }
-        if (!config.deepgramApiKey) {
-            validationErrors.push("deepgramApiKey is required in standalone mode with Twilio.");
-        }
-    }
+    // Credential/endpoint presence is enforced at call time by validateCallReadiness()
+    // and surfaced by diagnostics. validateConfig only checks structural format.
     if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
         const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);
         if (streamUrlError) {

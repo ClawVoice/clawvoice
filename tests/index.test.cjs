@@ -10,6 +10,7 @@ function validSelfHostedConfig(overrides = {}) {
     twilioAccountSid: "AC-test",
     twilioAuthToken: "auth-test",
     twilioPhoneNumber: "+15550001111",
+    twilioStreamUrl: "wss://voice.example.test/media-stream",
     deepgramApiKey: "deepgram-key",
     dailyCallLimit: 50,
     voiceSystemPrompt: "",
@@ -193,9 +194,7 @@ test("plugin init registers expected hooks", async () => {
 
 test("plugin init registers modern registerCli bridge when legacy cli is absent", async () => {
   const { api, state } = createModernApi(
-    validSelfHostedConfig({
-      callMode: "companion"
-    })
+    validSelfHostedConfig()
   );
 
   await plugin.init(api);
@@ -207,9 +206,7 @@ test("plugin init registers modern registerCli bridge when legacy cli is absent"
 
 test("plugin init registers tools via modern registerTool when legacy tools is absent", async () => {
   const { api, state } = createModernApi(
-    validSelfHostedConfig({
-      callMode: "companion"
-    })
+    validSelfHostedConfig()
   );
 
   await plugin.init(api);
@@ -229,9 +226,7 @@ test("plugin init registers tools via modern registerTool when legacy tools is a
 
 test("plugin init registers routes via modern registerHttpRoute when legacy http is absent", async () => {
   const { api, state } = createModernApi(
-    validSelfHostedConfig({
-      callMode: "companion"
-    })
+    validSelfHostedConfig()
   );
 
   await plugin.init(api);

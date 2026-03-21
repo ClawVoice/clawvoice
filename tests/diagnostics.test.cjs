@@ -4,7 +4,6 @@ const { runDiagnostics } = require("../dist/diagnostics/health.js");
 
 function validConfig(overrides = {}) {
   return {
-    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     deepgramVoice: "aura-asteria-en",
@@ -79,14 +78,12 @@ describe("Diagnostics (Story 5.3)", () => {
     assert.ok(check.remediation.includes("public"));
   });
 
-  it("passes twilio stream check in companion mode without stream URL", () => {
+  it("warns when twilioStreamUrl is missing", () => {
     const report = runDiagnostics(validConfig({
-      callMode: "companion",
       twilioStreamUrl: "",
     }));
     const check = report.checks.find((c) => c.name === "twilio-stream-config");
-    assert.equal(check.status, "pass");
-    assert.match(check.detail, /companion mode/i);
+    assert.equal(check.status, "warn");
   });
 
   it("warns when maxCallDuration exceeds 2 hours", () => {

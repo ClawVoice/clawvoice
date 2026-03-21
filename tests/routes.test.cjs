@@ -21,7 +21,6 @@ function telnyxEd25519Sign(timestamp, payload) {
 
 function baseConfig(overrides) {
   return {
-    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     amdEnabled: true,
@@ -325,9 +324,8 @@ describe("Route Handlers — Twilio voice webhook", () => {
     assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="inbound_track"\s*\/>/);
   });
 
-  it("returns companion-mode guidance TwiML when callMode=companion", async () => {
+  it("returns error TwiML when streamUrl is missing", async () => {
     const config = baseConfig({
-      callMode: "companion",
       twilioStreamUrl: undefined,
     });
     const { api, handlers } = createMockApi();
@@ -355,8 +353,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
 
     assert.equal(res.getStatus(), 200);
     assert.equal(res.getContentType(), "text/xml");
-    assert.match(res.getSentBody(), /COMPANION_MODE/i);
-    assert.match(res.getSentBody(), /OpenClaw voice-call inbound webhook/i);
+    assert.match(res.getSentBody(), /cannot be completed/i);
     assert.match(res.getSentBody(), /<Hangup\/>/);
   });
 });
