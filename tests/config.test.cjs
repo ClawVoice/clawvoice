@@ -7,7 +7,6 @@ test("resolveConfig uses defaults when no values are provided", () => {
   const config = resolveConfig({}, {});
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.callMode, "companion");
   assert.equal(config.voiceProvider, "deepgram-agent");
   assert.equal(config.maxCallDuration, 1800);
   assert.equal(config.dailyCallLimit, 50);
@@ -31,7 +30,6 @@ test("resolveConfig uses defaults when no values are provided", () => {
 test("resolveConfig uses plugin config values when env vars are absent", () => {
   const config = resolveConfig(
     {
-      callMode: "standalone",
       telephonyProvider: "twilio",
       voiceProvider: "elevenlabs-conversational",
       maxCallDuration: 900,
@@ -46,7 +44,6 @@ test("resolveConfig uses plugin config values when env vars are absent", () => {
   );
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.callMode, "standalone");
   assert.equal(config.voiceProvider, "elevenlabs-conversational");
   assert.equal(config.maxCallDuration, 900);
   assert.equal(config.disclosureEnabled, false);
@@ -60,7 +57,6 @@ test("resolveConfig uses plugin config values when env vars are absent", () => {
 test("resolveConfig prioritizes environment variables over plugin config", () => {
   const config = resolveConfig(
     {
-      callMode: "companion",
       telephonyProvider: "telnyx",
       voiceProvider: "deepgram-agent",
       maxCallDuration: 1800,
@@ -68,7 +64,6 @@ test("resolveConfig prioritizes environment variables over plugin config", () =>
       deniedTools: ["exec"]
     },
     {
-      CLAWVOICE_CALL_MODE: "standalone",
       CLAWVOICE_TELEPHONY_PROVIDER: "twilio",
       CLAWVOICE_VOICE_PROVIDER: "elevenlabs-conversational",
       CLAWVOICE_MAX_CALL_DURATION: "1200",
@@ -82,7 +77,6 @@ test("resolveConfig prioritizes environment variables over plugin config", () =>
   );
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.callMode, "standalone");
   assert.equal(config.voiceProvider, "elevenlabs-conversational");
   assert.equal(config.maxCallDuration, 1200);
   assert.equal(config.disclosureEnabled, false);
@@ -114,13 +108,11 @@ test("resolveConfig falls back to defaults for invalid env enum values", () => {
     {},
     {
       CLAWVOICE_TELEPHONY_PROVIDER: "banana",
-      CLAWVOICE_CALL_MODE: "banana",
       CLAWVOICE_VOICE_PROVIDER: "banana"
     }
   );
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.callMode, "companion");
   assert.equal(config.voiceProvider, "deepgram-agent");
 });
 
@@ -288,10 +280,9 @@ test("validateConfig rejects twilioStreamUrl that points to webhook path", () =>
   );
 });
 
-test("validateConfig requires twilioStreamUrl in standalone twilio mode", () => {
+test("validateConfig passes when twilioStreamUrl is empty (presence enforced at call time)", () => {
   const config = resolveConfig(
     {
-      callMode: "standalone",
       telephonyProvider: "twilio",
       deepgramApiKey: "dg",
       twilioStreamUrl: "",
@@ -300,19 +291,14 @@ test("validateConfig requires twilioStreamUrl in standalone twilio mode", () => 
   );
 
   const result = validateConfig(config);
-  assert.equal(result.ok, false);
-  assert.ok(
-    result.errors.some((message) =>
-      message.includes("twilioStreamUrl is required in standalone mode"),
-    ),
-  );
+  assert.equal(result.ok, true);
 });
 
-test("validateConfig requires deepgramApiKey in standalone twilio mode", () => {
+test("validateConfig passes when deepgramApiKey is empty (presence enforced at call time)", () => {
   const config = resolveConfig(
     {
-      callMode: "standalone",
       telephonyProvider: "twilio",
+      voiceProvider: "deepgram-agent",
       twilioStreamUrl: "wss://voice.example.test/media-stream",
       deepgramApiKey: "",
     },
@@ -320,10 +306,5 @@ test("validateConfig requires deepgramApiKey in standalone twilio mode", () => {
   );
 
   const result = validateConfig(config);
-  assert.equal(result.ok, false);
-  assert.ok(
-    result.errors.some((message) =>
-      message.includes("deepgramApiKey is required in standalone mode"),
-    ),
-  );
+  assert.equal(result.ok, true);
 });

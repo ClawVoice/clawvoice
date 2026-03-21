@@ -17,12 +17,6 @@ Step-by-step instructions for installing and configuring ClawVoice with your Ope
 openclaw plugins install @clawvoice/clawvoice
 ```
 
-Optional (companion mode only):
-
-```bash
-openclaw plugins install @openclaw/voice-call
-```
-
 ### From source (development)
 
 ```bash
@@ -59,12 +53,6 @@ openclaw plugins install --link .
 
 ### Step 2.5: Secure Local Webhook Access (required)
 
-Webhook routing depends on mode:
-
-- `callMode=standalone`: route Twilio voice webhooks to ClawVoice (`/clawvoice/webhooks/twilio/voice`)
-- `callMode=companion`: route Twilio voice webhooks to your OpenClaw `voice-call` inbound endpoint (commonly `https://<your-public-host>/voice-call/webhooks/twilio/inbound`; verify in your `voice-call` plugin docs/version)
-- Twilio SMS and Telnyx webhooks continue routing to ClawVoice endpoints
-
 If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **public HTTPS webhook URL**.
 `127.0.0.1` or private LAN IPs will fail (Twilio cannot reach them).
 
@@ -74,11 +62,9 @@ Use this secure pattern:
 2. Expose only webhook paths through a tunnel hostname.
 3. Keep provider signature verification enabled.
 4. Point provider webhooks to:
-   - Twilio voice/AMD:
-     - standalone mode: `https://<your-host>/clawvoice/webhooks/twilio/voice`
-     - companion mode: your OpenClaw `voice-call` inbound endpoint (commonly `https://<your-host>/voice-call/webhooks/twilio/inbound`)
+   - Twilio voice/AMD: `https://<your-host>/clawvoice/webhooks/twilio/voice`
    - Twilio SMS: `https://<your-host>/clawvoice/webhooks/twilio/sms`
-   - `https://<your-host>/clawvoice/webhooks/telnyx`
+   - Telnyx: `https://<your-host>/clawvoice/webhooks/telnyx`
 
 #### Recommended tunnel options
 
@@ -109,14 +95,11 @@ Use this section as the fast path when inbound calls are not arriving.
 2. Select the Twilio phone number you want ClawVoice to answer.
 3. Under **Voice Configuration**, set:
    - **A call comes in** -> **Webhook**
-   - URL by mode:
-     - standalone: `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
-      - companion: `https://<your-public-host>/voice-call/webhooks/twilio/inbound` (confirm for your OpenClaw `voice-call` version)
+   - URL: `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
    - Method: `HTTP POST`
 4. Save.
 5. Optional but recommended for AMD callbacks on outbound flow:
-   - standalone: set to `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
-    - companion: use your OpenClaw `voice-call` AMD callback URL (or leave managed by `voice-call` defaults)
+   - Set to `https://<your-public-host>/clawvoice/webhooks/twilio/voice`
 
 #### Twilio inbound SMS setup
 
@@ -169,7 +152,7 @@ Use this section as the fast path when inbound calls are not arriving.
 
 > **Agent IDs are account-specific.** There are no shared public demo agents — you must create your own in the ElevenLabs dashboard.
 
-> **Does your Twilio number need to be configured in ElevenLabs?** No. ClawVoice handles telephony transport in standalone mode, and OpenClaw `voice-call` handles it in companion mode. You do not need to import Twilio credentials into ElevenLabs or link your phone number there. Your ElevenLabs API key and Agent ID are all the voice stack needs.
+> **Does your Twilio number need to be configured in ElevenLabs?** No. ClawVoice handles telephony transport directly. You do not need to import Twilio credentials into ElevenLabs or link your phone number there. Your ElevenLabs API key and Agent ID are all the voice stack needs.
 
 ### ElevenLabs Agent Setup (supported path)
 
@@ -325,8 +308,7 @@ Tip: Combine each template with `restrictTools=true`, an explicit `deniedTools` 
 - Do not plan around guaranteed sub-200 ms end-to-end phone latency.
 - ClawVoice runs in a real-time bridge path (telephony network + OpenClaw host + voice provider), so real latency depends on network and provider response time.
 - In most deployments, Deepgram is the lower-latency option versus ElevenLabs.
-- In `callMode=companion`, Twilio media stream handling is delegated to OpenClaw `voice-call`.
-- In `callMode=standalone`, `CLAWVOICE_TWILIO_STREAM_URL` must be a **public WSS endpoint** (for example `wss://voice.example.com/media-stream`) and **must not** point at `/clawvoice/webhooks/*`.
+- `CLAWVOICE_TWILIO_STREAM_URL` must be a **public WSS endpoint** (for example `wss://voice.example.com/media-stream`) and **must not** point at `/clawvoice/webhooks/*`.
 
 ```bash
 # Default path
@@ -351,11 +333,10 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 
 | Setting | Env Variable | Required | Description |
 |---------|-------------|----------|-------------|
-| `callMode` | `CLAWVOICE_CALL_MODE` | No (default `companion`) | `standalone` keeps ClawVoice Twilio media streaming; `companion` delegates live audio to OpenClaw `voice-call` |
 | `twilioAccountSid` | `TWILIO_ACCOUNT_SID` | Yes | Account SID from Twilio Console (starts with `AC`) |
 | `twilioAuthToken` | `TWILIO_AUTH_TOKEN` | Yes | Auth Token from Twilio Console |
 | `twilioPhoneNumber` | `TWILIO_PHONE_NUMBER` | Yes | Your Twilio number in E.164 format, e.g. `+15551234567` |
-| `twilioStreamUrl` | `CLAWVOICE_TWILIO_STREAM_URL` | Yes for `standalone` live media | Public WebSocket endpoint for Twilio Media Streams (must start with `wss://`) |
+| `twilioStreamUrl` | `CLAWVOICE_TWILIO_STREAM_URL` | Yes (for live media) | Public WebSocket endpoint for Twilio Media Streams (must start with `wss://`) |
 
 **Where to find Twilio credentials:**
 1. Log into [console.twilio.com](https://console.twilio.com)
@@ -368,30 +349,22 @@ This lets your primary OpenClaw/Telegram agent keep stable long-term memory whil
 - For outbound calls on trial accounts, you can only call verified numbers — upgrade to a paid account for unrestricted outbound
 
 **Do you need to configure a webhook in Twilio?**
-Yes, for inbound calls.
-
-- In `callMode=standalone`: set Twilio Voice webhook URL to:
+Yes, for inbound calls. Set Twilio Voice webhook URL to:
 
 ```
 https://<your-public-host>/clawvoice/webhooks/twilio/voice
 ```
 
-- In `callMode=companion`: set Twilio Voice webhook URL to your OpenClaw `voice-call` inbound endpoint, typically:
-
-```
-https://<your-public-host>/voice-call/webhooks/twilio/inbound
-```
-
 For outbound calls only, no inbound webhook configuration is needed.
 
-**Twilio stream endpoint requirements (for `callMode=standalone` two-way live audio):**
+**Twilio stream endpoint requirements (for two-way live audio):**
 - Must be `wss://...` (not `https://...`)
 - Must be publicly reachable from Twilio (no localhost/private IP)
 - Must be a WebSocket media endpoint (not `/clawvoice/webhooks/*` HTTP routes)
 - If misconfigured, Twilio shows `Error 31920` (WebSocket handshake non-101)
 
 **Do you configure any webhook URL in ElevenLabs?**
-No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony webhooks are handled by OpenClaw `voice-call` in companion mode, or by ClawVoice routes in standalone mode.
+No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony webhooks are handled by ClawVoice directly.
 
 ### Telnyx Settings (alternative)
 

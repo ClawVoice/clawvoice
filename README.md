@@ -1,282 +1,202 @@
 # ClawVoice
 
-Voice operations plugin for OpenClaw with standalone transport and optional companion mode. Add SMS, memory isolation, and safety controls around voice calls.
+Give your OpenClaw agent a phone number. It can make and receive calls, send texts, and remember conversations — all through your existing Twilio or Telnyx account.
 
-## What It Does
+## What You Get
 
-ClawVoice adds operational layers around OpenClaw voice workflows: SMS handling, memory isolation, tool restrictions, prompt-guarding, and post-call context.
-
-ClawVoice supports two live-call modes:
-- **standalone**: ClawVoice owns Twilio media transport internally (no `voice-call` plugin required)
-- **companion**: OpenClaw `voice-call` owns transport, ClawVoice adds operations/safety layers
-
-**Key features:**
-- **Standalone transport available**: internal Twilio media stream receiver + voice provider bridge (Deepgram/ElevenLabs)
-- **Companion mode available**: delegates live call media transport to OpenClaw `voice-call`
-- **Voice memory isolation**: Phone calls write to a sandboxed `voice-memory/` namespace. Voice callers cannot corrupt your agent's main memory. Memory promotion to `MEMORY.md` requires explicit review.
-- **Post-call analysis**: After every call, get a transcript, call summary with outcome/failures/retry context, and action items written to voice memory.
-- **SMS send/receive**: Keep telephony text workflows in ClawVoice.
-
-## Live Call Mode
-
-- `callMode=standalone`: ClawVoice handles Twilio media transport directly.
-- `callMode=companion` (default): OpenClaw `voice-call` handles live call audio.
-
-Use standalone when you want a self-contained ClawVoice install. Use companion when you want OpenClaw `voice-call` to own transport.
-
-Companion remains the default for backward compatibility; the quick start below shows standalone for new self-contained installs.
-
-## Is This Worth It?
-
-Yes. ClawVoice now supports both standalone transport and companion orchestration.
-
-| Capability | OpenClaw `voice-call` | ClawVoice (standalone/companion) |
-|---|---|---|
-| Telephony/media transport | Primary owner in companion mode | Primary owner in standalone mode |
-| Real-time call audio path | Primary owner in companion mode | Reimplemented in standalone mode |
-| SMS workflows | Basic/adjacent | Primary owner |
-| Memory isolation + promotion workflow | Limited | Primary owner |
-| Prompt/tool safety guardrails for voice sessions | Limited | Primary owner |
-| Post-call retry context + operational diagnostics | Basic | Primary owner |
-
-Positioning: **ClawVoice can run standalone for end-to-end Twilio + voice transport, or as a companion layer when you prefer OpenClaw `voice-call` for transport ownership.**
-
-## Migration Notes
-
-If you are already on companion mode, your setup keeps working. To move to standalone mode:
-
-1. Set mode and stream URL:
-
-```bash
-openclaw config set clawvoice.callMode standalone
-openclaw config set clawvoice.twilioStreamUrl wss://your-host.example.com/media-stream
-```
-
-2. Update Twilio Voice webhook to `https://your-host.example.com/clawvoice/webhooks/twilio/voice`.
-3. Keep Twilio SMS webhook on `https://your-host.example.com/clawvoice/webhooks/twilio/sms`.
-4. Validate with `openclaw clawvoice test`.
+- **Phone calls**: Your agent answers inbound calls and can place outbound calls
+- **Two voice engines**: Deepgram Voice Agent (low latency) or ElevenLabs Conversational AI (premium voices)
+- **SMS**: Send and receive text messages through the same phone number
+- **Memory isolation**: Voice calls write to a separate sandbox so callers can't corrupt your agent's main memory
+- **Post-call summaries**: Transcripts, action items, and call outcomes after every call
+- **Safety guardrails**: Tool restrictions, call duration limits, AI disclosure, and answering machine detection
 
 ## Quick Start
 
 ### 1. Install
 
-Bring your own API keys. You control everything.
-<br>
-
-Configure your providers in `.env` or via `openclaw config set`:
-- **Telephony**: Telnyx (recommended) or Twilio
-- **Voice**: Deepgram Voice Agent or ElevenLabs Conversational AI
-- **Analysis**: OpenAI (optional, falls back to OpenClaw's configured model)
-
-
 ```bash
 openclaw plugins install @clawvoice/clawvoice
 ```
 
-Optional (only for companion mode):
+### 2. Run the Setup Wizard
+
+The wizard walks you through provider selection, API keys, and tunnel configuration:
 
 ```bash
-openclaw plugins install @openclaw/voice-call
+openclaw clawvoice setup
 ```
 
-### 2. Get API Keys
+Or configure manually — see [Configuration](#configuration) below.
 
-**Telephony** (pick one):
-- [Telnyx](https://telnyx.com) - Create account, get API key, buy a phone number, set up a Call Control app
-- [Twilio](https://twilio.com) - Create account, get SID + auth token, buy a phone number
+### 3. Set Up a Public Tunnel
 
-**Voice** (pick one):
-- [Deepgram](https://deepgram.com) - Create account, get API key (needed for both voice provider options)
-- [ElevenLabs](https://elevenlabs.io) - Create account, get API key, create a Conversational AI agent (for Option B only)
+Twilio and Telnyx need to reach your machine over the internet. If OpenClaw runs on your laptop or home server, you need a tunnel.
 
-### 3. Configure
+**Using ngrok (quickest to get started):**
 
 ```bash
-# Telephony
-openclaw config set clawvoice.callMode standalone
-openclaw config set clawvoice.telephonyProvider twilio
-openclaw config set clawvoice.twilioAccountSid YOUR_SID
-openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
-openclaw config set clawvoice.twilioPhoneNumber +15551234567
-openclaw config set clawvoice.twilioStreamUrl wss://your-host.example.com/media-stream
-
-# Voice (Deepgram Voice Agent)
-openclaw config set clawvoice.voiceProvider deepgram-agent
-openclaw config set clawvoice.deepgramApiKey YOUR_KEY
-
-# Or set via .env file — see .env.example
+# Install ngrok: https://ngrok.com/download
+ngrok http 3334
 ```
 
-### 4. Start
+Copy the `https://` URL ngrok gives you, then configure ClawVoice:
+
+```bash
+openclaw config set clawvoice.twilioStreamUrl wss://YOUR-NGROK-URL/media-stream
+```
+
+Set your Twilio phone number's voice webhook to:
+```
+https://YOUR-NGROK-URL/clawvoice/webhooks/twilio/voice
+```
+
+**Using Cloudflare Tunnel (stable, free, recommended for long-term use):**
+
+```bash
+# Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+cloudflared tunnel --url http://localhost:3334
+```
+
+Same idea — use the tunnel URL for webhooks and stream URL.
+
+> **Note:** Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with WebSocket upgrades for Twilio Media Streams. If you hit this, use ngrok for the media stream URL and Cloudflare for webhooks, or use ngrok for both.
+
+### 4. Start OpenClaw
 
 ```bash
 openclaw start
 ```
 
-In standalone mode, ClawVoice handles live audio calls directly.
-In companion mode, OpenClaw `voice-call` handles transport and ClawVoice adds SMS/memory/safety features on top.
-
-### 5. Make a test call
+### 5. Make a Test Call
 
 ```bash
 openclaw clawvoice call +15559876543
 ```
 
-In standalone mode, this places the call directly. In companion mode, initiate outbound calls with `openclaw voicecall initiate <number>`; `openclaw clawvoice call` may prompt you to use that command.
-
 Or ask your agent: *"Call +15559876543"*
+
+## Configuration
+
+### Manual Setup (instead of wizard)
+
+```bash
+# Telephony (Twilio)
+openclaw config set clawvoice.telephonyProvider twilio
+openclaw config set clawvoice.twilioAccountSid YOUR_SID
+openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
+openclaw config set clawvoice.twilioPhoneNumber +15551234567
+openclaw config set clawvoice.twilioStreamUrl wss://YOUR-TUNNEL-URL/media-stream
+
+# Voice (Deepgram — recommended)
+openclaw config set clawvoice.voiceProvider deepgram-agent
+openclaw config set clawvoice.deepgramApiKey YOUR_KEY
+```
+
+Or use environment variables — see [`.env.example`](.env.example).
+
+### Key Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `telephonyProvider` | `twilio` | `twilio` or `telnyx` |
+| `voiceProvider` | `deepgram-agent` | `deepgram-agent` or `elevenlabs-conversational` |
+| `twilioStreamUrl` | — | Public `wss://` URL for Twilio media streams (required) |
+| `voiceSystemPrompt` | `""` | Instructions for how the agent behaves on calls |
+| `inboundEnabled` | `true` | Accept inbound calls |
+| `mainMemoryAccess` | `read` | Can voice agent read main MEMORY.md? (`read` or `none`) |
+| `restrictTools` | `true` | Block dangerous tools during voice sessions |
+| `maxCallDuration` | `1800` | Max call length in seconds (30 min default) |
+| `amdEnabled` | `true` | Answering machine detection for outbound calls |
+| `recordCalls` | `false` | Save call recordings |
 
 ## Voice Providers
 
 ### Deepgram Voice Agent (Recommended)
 
-Single WebSocket handles STT + LLM + TTS. Lowest latency (~200ms round-trip).
+Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lowest latency.
 
-- Uses Deepgram's Agent API
-- TTS: Deepgram Aura voices (included) or ElevenLabs (BYOK, routed through Deepgram)
-- Barge-in support (caller can interrupt)
-- LLM routing happens inside Deepgram's infrastructure
+1. Create account at [deepgram.com](https://deepgram.com)
+2. Get an API key with Speech + Voice Agent permissions
+3. Set `voiceProvider` to `deepgram-agent`
 
 ### ElevenLabs Conversational AI
 
-ElevenLabs handles the entire voice pipeline. Premium voice quality.
+Premium voice quality. ElevenLabs handles the full voice pipeline.
 
-- Create an ElevenLabs Conversational AI agent in their dashboard
-- Point it at your OpenClaw gateway's `/v1/chat/completions` endpoint
-- ElevenLabs handles STT, turn-taking, and TTS
-- OpenClaw provides the brain (tools, memory, personality)
+1. Create account at [elevenlabs.io](https://elevenlabs.io)
+2. Create a Conversational AI agent in the dashboard
+3. Get your API key and Agent ID
+4. Set `voiceProvider` to `elevenlabs-conversational`
 
 ## Voice Memory Isolation
 
-Phone calls are inherently riskier than text — callers can attempt social engineering or prompt injection via voice. ClawVoice sandboxes all voice interactions:
+Voice calls are riskier than text — callers can attempt social engineering. ClawVoice sandboxes all voice interactions:
 
 ```
 ~/.openclaw/workspace/
   MEMORY.md              # Main memory (text channels)
-  memory/                # Main daily logs
   voice-memory/          # Voice-only sandbox
-    VOICE-MEMORY.md      # Curated voice long-term memory
+    VOICE-MEMORY.md      # Voice long-term memory
     2026-03-11.md        # Voice daily log
 ```
 
-**Access rules:**
-- Voice agent can READ main `MEMORY.md` (configurable)
-- Voice agent can ONLY WRITE to `voice-memory/`
-- Text channels don't see `voice-memory/` by default
-- Memory promotion requires explicit review
-
-### Promote voice memories
-
-```bash
-openclaw clawvoice promote
-```
-
-Reviews pending voice memories and lets you approve/reject promotion to main `MEMORY.md`.
+- Voice agent can **read** main memory (configurable)
+- Voice agent can **only write** to `voice-memory/`
+- Promotion to main memory requires explicit review via `openclaw clawvoice promote`
 
 ## CLI Commands
 
 ```bash
-openclaw clawvoice setup                   # Interactive setup wizard
-openclaw clawvoice call <number>           # Initiate outbound call
-openclaw clawvoice status                  # Show active calls and config
-openclaw clawvoice promote                 # Review and promote voice memories
-openclaw clawvoice history                 # Show recent call history
-openclaw clawvoice test                    # Test voice pipeline connectivity
+openclaw clawvoice setup        # Interactive setup wizard
+openclaw clawvoice call <num>   # Place an outbound call
+openclaw clawvoice status       # Show active calls and config health
+openclaw clawvoice promote      # Review and promote voice memories
+openclaw clawvoice history      # Recent call history
+openclaw clawvoice test         # Test voice pipeline connectivity
 ```
-
-If you prefer companion mode transport ownership, use `openclaw voicecall initiate <number>` for live outbound calls.
 
 ## Agent Tools
 
-The plugin registers these tools for your OpenClaw agent:
+These tools are available to your OpenClaw agent:
 
 | Tool | Description |
 |------|-------------|
-| `clawvoice_call` | Initiate outbound call in standalone mode; in companion mode, use `voicecall_initiate` |
+| `clawvoice_call` | Place an outbound phone call |
 | `clawvoice_hangup` | End an active call |
-| `clawvoice_status` | Get status of active/recent calls |
+| `clawvoice_send_text` | Send an SMS message |
+| `clawvoice_text_status` | Check SMS delivery status |
+| `clawvoice_status` | Get call status and diagnostics |
 | `clawvoice_promote_memory` | Promote a voice memory to main memory |
+| `clawvoice_clear_calls` | Clear completed call records |
 
 ## Architecture
 
-Standalone mode:
-
 ```
-Phone ──PSTN──> Twilio
-                 │
-                 └──> ClawVoice transport + operations
-                        ├──> Deepgram/ElevenLabs voice
-                        └──> OpenClaw Agent runtime
+Phone ──PSTN──> Twilio/Telnyx
+                  │
+                  ├──webhook──> ClawVoice (call control, SMS, safety)
+                  │               └──> OpenClaw Agent (tools, memory, personality)
+                  │
+                  └──media stream──> ClawVoice (audio bridge)
+                                       └──> Deepgram or ElevenLabs (voice AI)
 ```
-
-Companion mode:
-
-```
-Phone ──PSTN──> OpenClaw voice-call (transport/media)
-                 │
-                 └──> ClawVoice operations layer
-                        - SMS workflows
-                        - memory isolation/promotion
-                        - safety guardrails
-                        - post-call summaries/retry context
-```
-
-## Configuration Reference
-
-See [`.env.example`](.env.example) for all environment variables.
-
-Key settings in `openclaw.plugin.json` `configSchema`:
-
-| Setting | Type | Default | Description |
-|---------|------|---------|-------------|
-| `callMode` | `"companion" \| "standalone"` | `"companion"` | Standalone uses ClawVoice transport; companion delegates to OpenClaw `voice-call` |
-| `telephonyProvider` | `"telnyx" \| "twilio"` | `"twilio"` | PSTN provider |
-| `voiceProvider` | `"deepgram-agent" \| "elevenlabs-conversational"` | `"deepgram-agent"` | Voice pipeline |
-| `voiceSystemPrompt` | `string` | `""` | Instructions for how the agent behaves on calls |
-| `inboundEnabled` | `boolean` | `true` | Accept inbound calls (disable to only allow outbound) |
-| `mainMemoryAccess` | `"read" \| "none"` | `"read"` | Can voice agent read main MEMORY.md? |
-| `autoExtractMemories` | `boolean` | `true` | Extract memories from transcripts after calls |
-| `restrictTools` | `boolean` | `true` | Restrict tool access for voice sessions |
-| `amdEnabled` | `boolean` | `true` | Answering machine detection for outbound calls |
-| `maxCallDuration` | `number` | `1800` | Maximum call length in seconds |
-| `recordCalls` | `boolean` | `false` | Save call recordings |
-
-## Customizing the Agent's Voice Persona
-
-Set `voiceSystemPrompt` to control how your agent behaves on phone calls:
-
-```bash
-openclaw config set clawvoice.voiceSystemPrompt "You are a friendly customer support agent for Acme Corp. Be concise, helpful, and professional. Always confirm the caller's name before proceeding."
-```
-
-This prompt is injected into the voice agent's system instructions alongside OpenClaw's base personality. If left empty, the agent uses OpenClaw's default system prompt.
 
 ## Documentation
 
-- [`docs/SETUP.md`](docs/SETUP.md) - Full setup guide with step-by-step instructions and configuration reference
-- [`docs/FEATURES.md`](docs/FEATURES.md) - Complete feature list
-- [`docs/COMPANION_POSITIONING.md`](docs/COMPANION_POSITIONING.md) - Built-in vs companion differentiation and rollout checklist
-
-- [`docs/OPENCLAW_PLUGIN_GUIDE.md`](docs/OPENCLAW_PLUGIN_GUIDE.md) - Technical guide for building the OpenClaw plugin
+- [`docs/SETUP.md`](docs/SETUP.md) — Full setup guide with provider-specific instructions
+- [`docs/FEATURES.md`](docs/FEATURES.md) — Complete feature list
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
+npm install        # Install dependencies
+npm run build      # Compile TypeScript
+npm test           # Run all tests
+npm run dev        # Watch mode
 
-# Build
-npm run build
-
-# Run tests
-npm test
-
-# Development mode (watch + rebuild)
-npm run dev
-
-# Link for local OpenClaw testing
-npm link
-openclaw plugins install --link @clawvoice/clawvoice
+# Local OpenClaw testing
+npm run build && openclaw plugins install --link .
 ```
 
 ## License

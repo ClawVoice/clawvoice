@@ -1,7 +1,7 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
-import { isCompanionModeError } from "./errors";
+
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { VoiceCallService } from "./services/voice-call";
 
@@ -199,17 +199,6 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
         });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (isCompanionModeError(err)) {
-          log.info("Companion mode active", {
-            detail:
-              "Live voice transport is handled by OpenClaw voice-call in companion mode.",
-          });
-          log.info(
-            `Use: openclaw voicecall initiate ${phoneNumber}`,
-            {},
-          );
-          return;
-        }
         log.info("Call failed", { error: message });
       }
     },

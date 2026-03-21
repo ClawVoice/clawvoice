@@ -23,7 +23,7 @@ function checkMode(config) {
     return {
         name: "mode",
         status: "pass",
-        detail: `Call mode: ${config.callMode}. Inbound: ${config.inboundEnabled ? "enabled" : "disabled"}`,
+        detail: `Telephony: ${config.telephonyProvider}. Inbound: ${config.inboundEnabled ? "enabled" : "disabled"}`,
     };
 }
 function checkTelephonyProvider(config) {
@@ -141,13 +141,6 @@ function checkTwilioStreamConfig(config) {
             name: "twilio-stream-config",
             status: "pass",
             detail: "Twilio stream URL check skipped (provider is not Twilio).",
-        };
-    }
-    if (config.callMode === "companion") {
-        return {
-            name: "twilio-stream-config",
-            status: "pass",
-            detail: "Twilio stream URL check skipped in companion mode (OpenClaw voice-call handles media streaming).",
         };
     }
     if (!config.twilioStreamUrl) {

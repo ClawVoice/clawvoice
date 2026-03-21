@@ -1,7 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.VoiceCallService = void 0;
-const errors_1 = require("../errors");
 const telnyx_1 = require("../telephony/telnyx");
 const twilio_1 = require("../telephony/twilio");
 const deepgram_bridge_1 = require("../transport/deepgram-bridge");
@@ -62,17 +61,14 @@ class VoiceCallService {
         this.running = false;
     }
     async startStandaloneTransport() {
-        if (this.config.callMode !== "standalone") {
-            return;
-        }
         if (this.config.telephonyProvider !== "twilio") {
             return;
         }
         if (!this.config.twilioStreamUrl) {
-            throw new Error("twilioStreamUrl is required in standalone mode.");
+            throw new Error("twilioStreamUrl is required. Set CLAWVOICE_TWILIO_STREAM_URL to your public WSS endpoint.");
         }
         if (!this.mediaSessionHandler) {
-            throw new Error("deepgramApiKey is required in standalone mode.");
+            throw new Error("Voice provider credentials are required for Twilio media streaming.");
         }
         if (this.mediaStreamServer) {
             return;
@@ -163,7 +159,7 @@ class VoiceCallService {
                 errors.push("ElevenLabs agent ID is not configured. Set ELEVENLABS_AGENT_ID or run 'clawvoice setup'.");
             }
         }
-        if (this.config.telephonyProvider === "twilio" && this.config.callMode !== "companion") {
+        if (this.config.telephonyProvider === "twilio") {
             if (!this.config.twilioStreamUrl?.trim()) {
                 errors.push("Twilio media stream URL is not configured. " +
                     "Set CLAWVOICE_TWILIO_STREAM_URL to a public WSS endpoint " +
@@ -177,9 +173,6 @@ class VoiceCallService {
         }
     }
     async startCall(request) {
-        if (this.config.callMode === "companion") {
-            throw new errors_1.CompanionModeError("Companion mode is enabled. Live voice transport is handled by the OpenClaw voice-call plugin. Use voicecall.initiate for calls, and keep ClawVoice for SMS/memory/safety workflows.");
-        }
         this.checkDailyLimit();
         this.validateCallReadiness();
         const baseGreeting = request.greeting?.trim() ||

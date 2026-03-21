@@ -132,9 +132,6 @@ function sendTwiml(response, twiml) {
     void statusResult;
 }
 function buildTwilioVoiceTwiml(config) {
-    if (config.callMode === "companion") {
-        return "<Response><Say>COMPANION_MODE: ClawVoice is in companion mode. Point Twilio Voice webhook to the OpenClaw voice-call inbound webhook.</Say><Hangup/></Response>";
-    }
     const streamUrl = config.twilioStreamUrl?.trim();
     if (!streamUrl) {
         return "<Response><Say>We're sorry, this call cannot be completed at this time.</Say><Hangup/></Response>";

@@ -1,5 +1,4 @@
 export type TelephonyProvider = "telnyx" | "twilio";
-export type CallMode = "companion" | "standalone";
 export type VoiceProvider = "deepgram-agent" | "elevenlabs-conversational";
 export type MainMemoryAccess = "read" | "none";
 /** Well-known ElevenLabs voice IDs for Conversational AI use. Set via `elevenlabsVoiceId`. */
@@ -10,7 +9,6 @@ export declare const ELEVENLABS_VOICES: {
 };
 export type ElevenLabsVoiceName = keyof typeof ELEVENLABS_VOICES;
 export interface ClawVoiceConfig {
-    callMode: CallMode;
     telephonyProvider: TelephonyProvider;
     voiceProvider: VoiceProvider;
     voiceSystemPrompt: string;

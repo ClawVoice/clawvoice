@@ -3,7 +3,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.registerCLI = registerCLI;
 const health_1 = require("./diagnostics/health");
-const errors_1 = require("./errors");
 function maskSecret(value) {
     if (!value) {
         return "(not set)";
@@ -158,13 +157,6 @@ function registerCLI(api, config, callService, memoryService) {
             }
             catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
-                if ((0, errors_1.isCompanionModeError)(err)) {
-                    log.info("Companion mode active", {
-                        detail: "Live voice transport is handled by OpenClaw voice-call in companion mode.",
-                    });
-                    log.info(`Use: openclaw voicecall initiate ${phoneNumber}`, {});
-                    return;
-                }
                 log.info("Call failed", { error: message });
             }
         },

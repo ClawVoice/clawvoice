@@ -5,7 +5,6 @@ const { VoiceCallService } = require("../dist/services/voice-call.js");
 
 function validTelnyxConfig(overrides = {}) {
   return {
-    callMode: "standalone",
     telephonyProvider: "twilio",
     voiceProvider: "deepgram-agent",
     twilioAccountSid: "AC-test",
@@ -39,17 +38,7 @@ function validTelnyxConfig(overrides = {}) {
   };
 }
 
-test("startCall rejects in companion mode with actionable guidance", async () => {
-  const service = new VoiceCallService(
-    validTelnyxConfig({ callMode: "companion" }),
-    mockFetch(),
-  );
 
-  await assert.rejects(
-    () => service.startCall({ phoneNumber: "5551112222" }),
-    /Companion mode is enabled.*voice-call/i,
-  );
-});
 
 function mockFetch() {
   return async () => ({
@@ -119,7 +108,7 @@ test("startCall auto-terminates call at configured max duration", async () => {
 
 test("start is idempotent and does not create duplicate reaper timers", async () => {
   const service = new VoiceCallService(
-    validTelnyxConfig({ callMode: "companion" }),
+    validTelnyxConfig(),
     mockFetch(),
   );
   const originalSetInterval = global.setInterval;
@@ -309,20 +298,7 @@ test("startCall fails fast when twilio stream URL is missing", async () => {
   );
 });
 
-test("startCall skips stream URL check in companion mode", async () => {
-  const service = new VoiceCallService(
-    validTelnyxConfig({
-      callMode: "companion",
-      twilioStreamUrl: "",
-    }),
-    mockFetch(),
-  );
 
-  await assert.rejects(
-    () => service.startCall({ phoneNumber: "5551112222" }),
-    /Companion mode is enabled/,
-  );
-});
 
 test("sendText rejects oversized SMS payloads", async () => {
   const service = new VoiceCallService(validTelnyxConfig(), mockFetch());
