@@ -2,7 +2,7 @@
   "id": "clawvoice",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "kind": "channel",
   "channels": ["voice"],
   "skills": ["clawvoice"],

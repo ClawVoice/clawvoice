@@ -414,9 +414,26 @@ No. In ClawVoice, ElevenLabs only needs your API key and Agent ID. Telephony web
 
 **Agent ID format:** ~20 character alphanumeric string, e.g. `J3Pbu5gP6NNKBscdCdwB`
 
-**Recommended ElevenLabs API key permissions:**
-- Conversational AI (required: agents, conversations)
-- Text to Speech (optional: only if using `elevenlabsVoiceId` override)
+**ElevenLabs API key permissions (exact settings from the key creation UI):**
+
+| Permission | Level | Required? |
+|---|---|---|
+| **ElevenAgents** | **Write** | **Yes** — this is the Conversational AI endpoint ClawVoice uses |
+| Text to Speech | Access | Optional — only needed if you use `elevenlabsVoiceId` override |
+| Voices | Read | Optional — only if you want to list/browse voices via API |
+| Speech to Speech | No Access | Not used by ClawVoice |
+| Speech to Text | No Access | Not used by ClawVoice |
+| Sound Effects | No Access | Not used by ClawVoice |
+| Audio Isolation | No Access | Not used by ClawVoice |
+| Music Generation | No Access | Not used by ClawVoice |
+| Dubbing | No Access | Not used by ClawVoice |
+| Projects | No Access | Not used by ClawVoice |
+| Audio Native | No Access | Not used by ClawVoice |
+| Voice Generation | No Access | Not used by ClawVoice |
+| Forced Alignment | No Access | Not used by ClawVoice |
+| All Administration permissions | No Access | Not used by ClawVoice |
+
+**Minimum viable key: set ElevenAgents to Write. Everything else can be No Access.**
 
 **TTS vs Conversational AI:**
 ElevenLabs has two distinct products:
