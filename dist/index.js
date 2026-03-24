@@ -98,6 +98,93 @@ function registerModernToolsBridge(api, config, callService, memoryService) {
         }, { name: tool.name });
     }
 }
+/**
+ * Adapt an Express-style route handler to raw Node.js (IncomingMessage, ServerResponse).
+ *
+ * OpenClaw's modern registerHttpRoute API passes raw Node.js objects, but our
+ * route handlers (in routes.ts) expect Express-like req.body, res.status().json(), etc.
+ * This adapter reads/parses the body and shims the response methods.
+ */
+function adaptExpressToNode(expressHandler) {
+    return async (req, res) => {
+        const chunks = [];
+        for await (const chunk of req) {
+            chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+        }
+        const rawBody = Buffer.concat(chunks).toString("utf-8");
+        const contentType = (req.headers["content-type"] ?? "").toLowerCase();
+        let body;
+        if (contentType.includes("application/json")) {
+            try {
+                body = JSON.parse(rawBody);
+            }
+            catch {
+                body = rawBody;
+            }
+        }
+        else if (contentType.includes("application/x-www-form-urlencoded")) {
+            // Twilio sends form-urlencoded webhooks
+            const entries = new URLSearchParams(rawBody);
+            const obj = {};
+            for (const [key, value] of entries) {
+                obj[key] = value;
+            }
+            body = obj;
+        }
+        else {
+            body = rawBody;
+        }
+        const shimReq = {
+            body,
+            headers: req.headers,
+            protocol: req.headers["x-forwarded-proto"]?.split(",")[0]?.trim() ?? "https",
+            url: req.url,
+        };
+        let statusCode = 200;
+        let responseSent = false;
+        const shimRes = {
+            status(code) {
+                statusCode = code;
+                return shimRes;
+            },
+            json(value) {
+                if (responseSent)
+                    return;
+                responseSent = true;
+                const payload = JSON.stringify(value);
+                res.writeHead(statusCode, { "Content-Type": "application/json" });
+                res.end(payload);
+            },
+            send(payload) {
+                if (responseSent)
+                    return;
+                responseSent = true;
+                res.writeHead(statusCode, { "Content-Type": "text/plain" });
+                res.end(payload ?? "");
+            },
+            type(ct) {
+                return {
+                    send(payload) {
+                        if (responseSent)
+                            return;
+                        responseSent = true;
+                        res.writeHead(statusCode, { "Content-Type": ct });
+                        res.end(payload);
+                    },
+                };
+            },
+        };
+        try {
+            await expressHandler(shimReq, shimRes);
+        }
+        catch (err) {
+            if (!responseSent) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Internal server error" }));
+            }
+        }
+    };
+}
 function registerModernRoutesBridge(api, config, callService) {
     const modernApi = api;
     if (typeof modernApi.registerHttpRoute !== "function") {
@@ -130,7 +217,8 @@ function registerModernRoutesBridge(api, config, callService) {
         modernApi.registerHttpRoute({
             method: route.method,
             path: route.path,
-            handler: route.handler,
+            handler: adaptExpressToNode(route.handler),
+            auth: "plugin",
         });
     }
 }
