@@ -50,7 +50,8 @@ class ClawVoiceService {
         return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
     }
     setWebhookRoutes(routes) {
-        this.webhookRoutes = routes;
+        this.webhookRoutes.length = 0;
+        this.webhookRoutes.push(...routes);
     }
     async start() {
         await this.startStandaloneTransport();

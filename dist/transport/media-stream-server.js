@@ -35,11 +35,11 @@ class MediaStreamServer {
         this.httpServer = httpServer;
         await new Promise((resolve, reject) => {
             const onError = (error) => {
+                this.httpServer = null;
+                this.wss = null;
                 const code = error.code;
                 if (code === "EADDRINUSE") {
                     console.warn(`[clawvoice] Media stream port ${this.options.port} already in use — another agent instance owns it. This instance will skip media streaming.`);
-                    this.httpServer = null;
-                    this.wss = null;
                     resolve();
                     return;
                 }

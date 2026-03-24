@@ -58,7 +58,7 @@ If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **pub
 
 Use this secure pattern:
 
-1. Keep ClawVoice bound to localhost (default: `0.0.0.0:3101`).
+1. Keep ClawVoice on a known port (default bind: `0.0.0.0:3101`; set `CLAWVOICE_MEDIA_STREAM_BIND=127.0.0.1` to restrict to localhost).
 2. Expose only webhook paths through a tunnel hostname.
 3. Keep provider signature verification enabled.
 4. Point provider webhooks to:

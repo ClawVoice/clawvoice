@@ -165,10 +165,20 @@ function registerModernToolsBridge(
 function adaptExpressToNode(
   expressHandler: (req: unknown, res: unknown) => unknown,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  const MAX_BODY_BYTES = 1_000_000; // 1 MB
+
   return async (req: IncomingMessage, res: ServerResponse) => {
     const chunks: Buffer[] = [];
+    let totalBytes = 0;
     for await (const chunk of req) {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer));
+      const buf = typeof chunk === "string" ? Buffer.from(chunk) : (chunk as Buffer);
+      totalBytes += buf.length;
+      if (totalBytes > MAX_BODY_BYTES) {
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Payload too large" }));
+        return;
+      }
+      chunks.push(buf);
     }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
 
@@ -186,10 +196,18 @@ function adaptExpressToNode(
       body = rawBody;
     }
 
+    // Normalize headers: Node may deliver string | string[] values;
+    // Express-style handlers expect Record<string, string>.
+    const headers: Record<string, string> = {};
+    for (const [k, v] of Object.entries(req.headers)) {
+      if (typeof v === "string") headers[k] = v;
+      else if (Array.isArray(v)) headers[k] = v.join(", ");
+    }
+
     const shimReq = {
       body,
-      headers: req.headers as Record<string, string>,
-      protocol: (req.headers["x-forwarded-proto"] as string | undefined)?.split(",")[0]?.trim() ?? "https",
+      headers,
+      protocol: (headers["x-forwarded-proto"] ?? "").split(",")[0]?.trim() || "https",
       url: req.url,
     };
 
@@ -341,6 +359,25 @@ function initPlugin(api: PluginAPI): void {
 
   const callService = new ClawVoiceService(config);
   const memoryService = new MemoryExtractionService(config);
+
+  const httpRouter = (api as unknown as { http?: { router?: unknown } }).http?.router;
+  if (typeof httpRouter === "function") {
+    console.log("[clawvoice] using legacy route registration (api.http.router)");
+    registerRoutes(
+      api,
+      config,
+      (record) => {
+        callService.trackInboundCall(record);
+      },
+      (from, to, body, messageId) => {
+        callService.trackInboundText(from, to, body, messageId);
+      },
+    );
+  }
+  // Mount webhook routes BEFORE starting the service so the standalone
+  // HTTP server has routes ready when it begins listening.
+  captureAndMountWebhookRoutes(api, config, callService);
+
   void callService.start().catch((error) => {
     console.error("[clawvoice] start error:", error instanceof Error ? error.stack : String(error));
     logger.error?.("ClawVoice call service failed to start", {
@@ -361,24 +398,6 @@ function initPlugin(api: PluginAPI): void {
   } else {
     registerModernCliBridge(api, config, callService, memoryService);
   }
-
-  const httpRouter = (api as unknown as { http?: { router?: unknown } }).http?.router;
-  if (typeof httpRouter === "function") {
-    console.log("[clawvoice] using legacy route registration (api.http.router)");
-    registerRoutes(
-      api,
-      config,
-      (record) => {
-        callService.trackInboundCall(record);
-      },
-      (from, to, body, messageId) => {
-        callService.trackInboundText(from, to, body, messageId);
-      },
-    );
-  }
-  // Always capture and mount webhook routes on the standalone media stream
-  // HTTP server as a fallback for the dual-registry bug (GitHub issue #17).
-  captureAndMountWebhookRoutes(api, config, callService);
 
   const hooksOn = (api as unknown as { hooks?: { on?: unknown } }).hooks?.on;
   if (typeof hooksOn === "function") {
