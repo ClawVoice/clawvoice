@@ -16,59 +16,99 @@ Give your OpenClaw agent a phone number. It can make and receive calls, send tex
 ### 1. Install
 
 ```bash
-openclaw plugins install @clawvoice/clawvoice
+openclaw plugins install clawvoice
 ```
 
-### 2. Run the Setup Wizard
+### 2. Start a Public Tunnel
 
-The wizard walks you through provider selection, API keys, and tunnel configuration:
+Twilio/Telnyx need to reach your machine from the internet. Start your tunnel **before** running the setup wizard so you can paste the URL when prompted.
+
+**Option A — ngrok (quickest to get started):**
+
+```bash
+# Install: https://ngrok.com/download
+ngrok http 3334
+```
+
+ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep this terminal open.
+
+**Option B — Cloudflare Tunnel (stable, free, no signup required):**
+
+```bash
+# Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+cloudflared tunnel --url http://localhost:3334
+```
+
+Prints a URL like `https://random-words.trycloudflare.com`. Keep this terminal open.
+
+> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get `Error 31920`, use ngrok instead, or use Cloudflare for webhooks only and ngrok for the stream URL.
+
+**Option C — Tailscale Funnel (if you already use Tailscale):**
+
+```bash
+# Requires Tailscale installed and logged in
+tailscale funnel 3334
+```
+
+Gives you a stable `https://your-machine.tail1234.ts.net` URL. Keep this terminal open.
+
+> **Which should I pick?** ngrok is the easiest for getting started. Cloudflare Tunnel and Tailscale Funnel give you a stable URL that doesn't change on restart — better for long-term use.
+
+### 3. Run the Setup Wizard
+
+The wizard asks for your provider credentials and the tunnel URL:
 
 ```bash
 openclaw clawvoice setup
 ```
 
+When it asks for the **Twilio media stream URL**, enter your tunnel URL with the `/media-stream` path:
+```
+wss://YOUR-TUNNEL-URL/media-stream
+```
+
 Or configure manually — see [Configuration](#configuration) below.
 
-### 3. Set Up a Public Tunnel
+### 4. Configure Webhooks in Twilio/Telnyx
 
-Twilio and Telnyx need to reach your machine over the internet. If OpenClaw runs on your laptop or home server, you need a tunnel.
+The wizard sets up ClawVoice's config, but you also need to tell Twilio/Telnyx where to send incoming calls. This is a separate step in their dashboard.
 
-**Using ngrok (quickest to get started):**
+> **Why two URLs?** Twilio uses two different connections: an **HTTPS webhook** (tells ClawVoice about incoming calls) and a **WSS stream** (streams live audio). The wizard handles the WSS stream URL. You set the HTTPS webhook in Twilio's dashboard.
 
-```bash
-# Install ngrok: https://ngrok.com/download
-ngrok http 3334
-```
+**Twilio:**
+1. Open [Twilio Console](https://console.twilio.com) → **Phone Numbers** → **Manage** → **Active Numbers**
+2. Click your ClawVoice phone number
+3. Under **Voice Configuration**:
+   - **A call comes in** → **Webhook**
+   - **URL:** `https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/voice`
+   - **Method:** `HTTP POST`
+4. Under **Messaging Configuration** (for SMS):
+   - **A message comes in** → **Webhook**
+   - **URL:** `https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/sms`
+   - **Method:** `HTTP POST`
+5. Save
 
-Copy the `https://` URL ngrok gives you, then configure ClawVoice:
+**Telnyx:**
+1. Open [Telnyx Mission Control](https://portal.telnyx.com) → your **Call Control Application**
+2. Set webhook URL to: `https://YOUR-TUNNEL-URL/clawvoice/webhooks/telnyx`
+3. Assign your phone number to this application
+4. Save
 
-```bash
-openclaw config set clawvoice.twilioStreamUrl wss://YOUR-NGROK-URL/media-stream
-```
-
-Set your Twilio phone number's voice webhook to:
-```
-https://YOUR-NGROK-URL/clawvoice/webhooks/twilio/voice
-```
-
-**Using Cloudflare Tunnel (stable, free, recommended for long-term use):**
-
-```bash
-# Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:3334
-```
-
-Same idea — use the tunnel URL for webhooks and stream URL.
-
-> **Note:** Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with WebSocket upgrades for Twilio Media Streams. If you hit this, use ngrok for the media stream URL and Cloudflare for webhooks, or use ngrok for both.
-
-### 4. Start OpenClaw
+### 5. Start OpenClaw
 
 ```bash
 openclaw start
 ```
 
-### 5. Make a Test Call
+### 6. Verify Your Setup
+
+```bash
+openclaw clawvoice status
+```
+
+All checks should show **pass**. If any fail, the output includes what to fix.
+
+### 7. Make a Test Call
 
 ```bash
 openclaw clawvoice call +15559876543
@@ -80,20 +120,20 @@ Or ask your agent: *"Call +15559876543"*
 
 ```bash
 # Update to latest version
-openclaw plugins update @clawvoice/clawvoice
+openclaw plugins update clawvoice
 
 # Reinstall (fixes corrupted installs or stale config)
-openclaw plugins uninstall @clawvoice/clawvoice
-openclaw plugins install @clawvoice/clawvoice
+openclaw plugins uninstall clawvoice
+openclaw plugins install clawvoice
 
 # Uninstall
-openclaw plugins uninstall @clawvoice/clawvoice
+openclaw plugins uninstall clawvoice
 ```
 
 > **Migrating from `voice-call`?** If you previously had the plugin under the old name, remove the stale config entry:
 > ```bash
 > openclaw config delete plugins.entries.voice-call
-> openclaw plugins install @clawvoice/clawvoice
+> openclaw plugins install clawvoice
 > openclaw clawvoice setup
 > ```
 
@@ -109,9 +149,16 @@ openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
 openclaw config set clawvoice.twilioPhoneNumber +15551234567
 openclaw config set clawvoice.twilioStreamUrl wss://YOUR-TUNNEL-URL/media-stream
 
-# Voice (Deepgram — recommended)
-openclaw config set clawvoice.voiceProvider deepgram-agent
-openclaw config set clawvoice.deepgramApiKey YOUR_KEY
+# Voice — pick one:
+
+# ElevenLabs (premium voices, most popular)
+openclaw config set clawvoice.voiceProvider elevenlabs-conversational
+openclaw config set clawvoice.elevenlabsApiKey YOUR_KEY
+openclaw config set clawvoice.elevenlabsAgentId YOUR_AGENT_ID
+
+# Deepgram (lower latency, lower cost)
+# openclaw config set clawvoice.voiceProvider deepgram-agent
+# openclaw config set clawvoice.deepgramApiKey YOUR_KEY
 ```
 
 Or use environment variables — see [`.env.example`](.env.example).
@@ -121,7 +168,7 @@ Or use environment variables — see [`.env.example`](.env.example).
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `telephonyProvider` | `twilio` | `twilio` or `telnyx` |
-| `voiceProvider` | `deepgram-agent` | `deepgram-agent` or `elevenlabs-conversational` |
+| `voiceProvider` | `deepgram-agent` | `elevenlabs-conversational` or `deepgram-agent` |
 | `twilioStreamUrl` | — | Public `wss://` URL for Twilio media streams (required) |
 | `voiceSystemPrompt` | `""` | Instructions for how the agent behaves on calls |
 | `inboundEnabled` | `true` | Accept inbound calls |
@@ -133,22 +180,22 @@ Or use environment variables — see [`.env.example`](.env.example).
 
 ## Voice Providers
 
-### Deepgram Voice Agent (Recommended)
-
-Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lowest latency.
-
-1. Create account at [deepgram.com](https://deepgram.com)
-2. Get an API key with Speech + Voice Agent permissions
-3. Set `voiceProvider` to `deepgram-agent`
-
-### ElevenLabs Conversational AI
+### ElevenLabs Conversational AI (Most Popular)
 
 Premium voice quality. ElevenLabs handles the full voice pipeline.
 
 1. Create account at [elevenlabs.io](https://elevenlabs.io)
 2. Create a Conversational AI agent in the dashboard
-3. Get your API key and Agent ID
+3. Get your API key (needs **ElevenAgents → Write** permission) and Agent ID
 4. Set `voiceProvider` to `elevenlabs-conversational`
+
+### Deepgram Voice Agent
+
+Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lower latency, lower cost.
+
+1. Create account at [deepgram.com](https://deepgram.com)
+2. Get an API key with Speech + Voice Agent permissions
+3. Set `voiceProvider` to `deepgram-agent`
 
 ## Voice Memory Isolation
 
