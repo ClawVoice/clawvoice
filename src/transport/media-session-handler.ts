@@ -9,7 +9,6 @@ interface StreamSession {
   callId: string;
   streamSid: string;
   voiceSession: VoiceProviderSession;
-  localClose: boolean;
 }
 
 interface TwilioMediaSessionHandlerOptions {
@@ -39,6 +38,7 @@ type TwilioMessage = TwilioStartMessage | TwilioMediaMessage | TwilioStopMessage
 
 export class TwilioMediaSessionHandler {
   private readonly sessionsBySocket = new Map<TwilioWebSocket, StreamSession>();
+  private readonly localCloses = new Set<TwilioWebSocket>();
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
 
@@ -71,7 +71,7 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
-    session.localClose = true;
+    this.localCloses.add(socket);
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
   }
@@ -132,8 +132,7 @@ export class TwilioMediaSessionHandler {
           );
         },
         onClose: (_code, reason) => {
-          const session = this.sessionsBySocket.get(socket);
-          if (session?.localClose) return;
+          if (this.localCloses.delete(socket)) return;
           teardownFromVoiceProvider(reason || "Voice provider stream closed");
         },
         onError: () => {
@@ -181,7 +180,6 @@ export class TwilioMediaSessionHandler {
       callId,
       streamSid: message.streamSid ?? "",
       voiceSession,
-      localClose: false,
     });
 
     this.options.bridge.startHeartbeatMonitor(callId);

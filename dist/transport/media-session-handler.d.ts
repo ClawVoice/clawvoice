@@ -11,6 +11,7 @@ interface TwilioMediaSessionHandlerOptions {
 export declare class TwilioMediaSessionHandler {
     private readonly options;
     private readonly sessionsBySocket;
+    private readonly localCloses;
     constructor(options: TwilioMediaSessionHandlerOptions);
     handleMessage(socket: TwilioWebSocket, payload: string): Promise<void>;
     handleClose(socket: TwilioWebSocket): void;
