@@ -62,10 +62,11 @@ export declare class ClawVoiceService {
     private dailyResetDate;
     readonly bridge: VoiceBridgeService;
     readonly postCall: PostCallService;
-    private readonly deepgramClient;
+    private readonly voiceProviderClient;
     private readonly mediaSessionHandler;
     private mediaStreamServer;
     constructor(config: ClawVoiceConfig, fetchFn?: typeof globalThis.fetch);
+    private createVoiceProviderClient;
     private reaperTimer;
     private static readonly REAPER_INTERVAL_MS;
     private static readonly REAPER_GRACE_MS;

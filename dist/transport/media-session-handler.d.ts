@@ -1,11 +1,11 @@
-import { DeepgramBridgeClient } from "./deepgram-bridge";
+import { VoiceProviderClient } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
 export type TwilioWebSocket = VoiceWebSocket & {
     close(code?: number, reason?: string): void;
 };
 interface TwilioMediaSessionHandlerOptions {
     bridge: VoiceBridgeService;
-    deepgramClient: DeepgramBridgeClient;
+    voiceProviderClient: VoiceProviderClient;
     resolveCallIdByProviderCallId: (providerCallId: string) => string | null;
 }
 export declare class TwilioMediaSessionHandler {

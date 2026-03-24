@@ -37,12 +37,12 @@ function createMockSocket() {
   };
 }
 
-test("TwilioMediaSessionHandler closes deepgram session if socket closes before connect resolves", async () => {
+test("TwilioMediaSessionHandler closes voice session if socket closes before connect resolves", async () => {
   let resolveConnect;
   const sentAudio = [];
-  let deepgramCloseCount = 0;
+  let voiceCloseCount = 0;
 
-  const deepgramClient = {
+  const voiceProviderClient = {
     connect() {
       return new Promise((resolve) => {
         resolveConnect = () =>
@@ -51,7 +51,7 @@ test("TwilioMediaSessionHandler closes deepgram session if socket closes before 
               sentAudio.push(chunk);
             },
             close() {
-              deepgramCloseCount += 1;
+              voiceCloseCount += 1;
             },
           });
       });
@@ -88,7 +88,7 @@ test("TwilioMediaSessionHandler closes deepgram session if socket closes before 
 
   const handler = new TwilioMediaSessionHandler({
     bridge,
-    deepgramClient,
+    voiceProviderClient,
     resolveCallIdByProviderCallId() {
       return "call-1";
     },
@@ -110,7 +110,7 @@ test("TwilioMediaSessionHandler closes deepgram session if socket closes before 
     JSON.stringify({ event: "media", streamSid: "stream-1", media: { payload: Buffer.from("x").toString("base64") } }),
   );
 
-  assert.equal(deepgramCloseCount, 1);
+  assert.equal(voiceCloseCount, 1);
   assert.equal(sentAudio.length, 0);
 });
 
@@ -144,7 +144,7 @@ test("DeepgramBridgeClient sends settings after open", async () => {
     webSocketFactory: (url, protocols) => new FakeWebSocket(url, protocols),
   });
 
-  const session = await client.connect({
+  const session = await client.connectDirect({
     callId: "call-1",
     settings: { type: "Settings", agent: { greeting: { text: "hi" } } },
     onMessage: () => {},
@@ -190,7 +190,7 @@ test("DeepgramBridgeClient reports parse errors and connect timeout with callId"
 
   await assert.rejects(
     () =>
-      client.connect({
+      client.connectDirect({
         callId: "call-timeout",
         settings: { type: "Settings" },
         onMessage: () => {},
@@ -209,7 +209,7 @@ test("DeepgramBridgeClient reports parse errors and connect timeout with callId"
     },
   });
 
-  const parseSession = await parseClient.connect({
+  const parseSession = await parseClient.connectDirect({
     callId: "call-parse",
     settings: { type: "Settings" },
     onMessage: () => {},
@@ -223,9 +223,9 @@ test("DeepgramBridgeClient reports parse errors and connect timeout with callId"
   assert.match(String(parseErrors[0]), /call-parse/);
 });
 
-test("TwilioMediaSessionHandler forwards media payload to deepgram session", async () => {
+test("TwilioMediaSessionHandler forwards media payload to voice session", async () => {
   const sentAudio = [];
-  const deepgramClient = {
+  const voiceProviderClient = {
     async connect() {
       return {
         sendAudio(chunk) {
@@ -261,11 +261,12 @@ test("TwilioMediaSessionHandler forwards media payload to deepgram session", asy
       return { action: "none" };
     },
     recordActivity() {},
+    reportDisconnection() {},
   };
 
   const handler = new TwilioMediaSessionHandler({
     bridge,
-    deepgramClient,
+    voiceProviderClient,
     resolveCallIdByProviderCallId(providerCallId) {
       return providerCallId === "provider-1" ? "call-1" : null;
     },
@@ -287,11 +288,11 @@ test("TwilioMediaSessionHandler forwards media payload to deepgram session", asy
   assert.equal(sentAudio[0].toString(), "audio-bytes");
 });
 
-test("TwilioMediaSessionHandler forwards KeepAlive control messages to deepgram", async () => {
+test("TwilioMediaSessionHandler forwards KeepAlive control messages to voice provider", async () => {
   const controlMessages = [];
   let attachedVoiceSocket = null;
 
-  const deepgramClient = {
+  const voiceProviderClient = {
     async connect() {
       return {
         sendAudio() {},
@@ -330,11 +331,12 @@ test("TwilioMediaSessionHandler forwards KeepAlive control messages to deepgram"
       return { action: "none" };
     },
     recordActivity() {},
+    reportDisconnection() {},
   };
 
   const handler = new TwilioMediaSessionHandler({
     bridge,
-    deepgramClient,
+    voiceProviderClient,
     resolveCallIdByProviderCallId(providerCallId) {
       return providerCallId === "provider-1" ? "call-1" : null;
     },
@@ -352,10 +354,10 @@ test("TwilioMediaSessionHandler forwards KeepAlive control messages to deepgram"
   assert.deepEqual(controlMessages[0], { type: "KeepAlive" });
 });
 
-test("TwilioMediaSessionHandler cleans previous deepgram session on duplicate start", async () => {
+test("TwilioMediaSessionHandler cleans previous voice session on duplicate start", async () => {
   const closes = [];
   let index = 0;
-  const deepgramClient = {
+  const voiceProviderClient = {
     async connect() {
       const id = index;
       index += 1;
@@ -398,7 +400,7 @@ test("TwilioMediaSessionHandler cleans previous deepgram session on duplicate st
 
   const handler = new TwilioMediaSessionHandler({
     bridge,
-    deepgramClient,
+    voiceProviderClient,
     resolveCallIdByProviderCallId() {
       return "call-1";
     },
@@ -412,9 +414,9 @@ test("TwilioMediaSessionHandler cleans previous deepgram session on duplicate st
   assert.deepEqual(closes, [0]);
 });
 
-test("TwilioMediaSessionHandler closes twilio socket when deepgram closes", async () => {
+test("TwilioMediaSessionHandler closes twilio socket when voice provider closes", async () => {
   const callbacks = {};
-  const deepgramClient = {
+  const voiceProviderClient = {
     async connect(options) {
       callbacks.onClose = options.onClose;
       callbacks.onError = options.onError;
@@ -458,7 +460,7 @@ test("TwilioMediaSessionHandler closes twilio socket when deepgram closes", asyn
 
   const handler = new TwilioMediaSessionHandler({
     bridge,
-    deepgramClient,
+    voiceProviderClient,
     resolveCallIdByProviderCallId() {
       return "call-1";
     },
