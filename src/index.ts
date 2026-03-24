@@ -221,7 +221,8 @@ function resolveLogger(api: PluginAPI): LoggerLike {
 
 function initPlugin(api: PluginAPI): void {
   const logger = resolveLogger(api);
-  const config = resolveConfig(api.config);
+  const pluginCfg = api.pluginConfig ?? api.config;
+  const config = resolveConfig(pluginCfg);
   const validation = validateConfig(config);
   if (!validation.ok) {
     throw new Error(validation.errors.join("; "));
