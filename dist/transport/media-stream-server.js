@@ -73,8 +73,9 @@ class MediaStreamServer {
             return;
         }
         const method = (req.method ?? "GET").toUpperCase();
-        const urlPath = (req.url ?? "/").split("?")[0];
-        const match = routes.find((r) => r.method.toUpperCase() === method && r.path === urlPath);
+        const normalize = (p) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
+        const urlPath = normalize((req.url ?? "/").split("?")[0]);
+        const match = routes.find((r) => r.method.toUpperCase() === method && normalize(r.path) === urlPath);
         if (!match) {
             res.writeHead(404, { "Content-Type": "application/json" });
             res.end(JSON.stringify({ error: "Not Found" }));

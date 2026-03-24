@@ -98,10 +98,11 @@ export class MediaStreamServer {
     }
 
     const method = (req.method ?? "GET").toUpperCase();
-    const urlPath = (req.url ?? "/").split("?")[0];
+    const normalize = (p: string) => (p.length > 1 ? p.replace(/\/+$/, "") : p);
+    const urlPath = normalize((req.url ?? "/").split("?")[0]);
 
     const match = routes.find(
-      (r) => r.method.toUpperCase() === method && r.path === urlPath,
+      (r) => r.method.toUpperCase() === method && normalize(r.path) === urlPath,
     );
 
     if (!match) {

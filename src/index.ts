@@ -182,11 +182,11 @@ function adaptExpressToNode(
     }
     const rawBody = Buffer.concat(chunks).toString("utf-8");
 
-    const contentType = (req.headers["content-type"] ?? "").toLowerCase();
+    const reqContentType = (req.headers["content-type"] ?? "").toLowerCase();
     let body: unknown;
-    if (contentType.includes("application/json")) {
+    if (reqContentType.includes("application/json")) {
       try { body = JSON.parse(rawBody); } catch { body = rawBody; }
-    } else if (contentType.includes("application/x-www-form-urlencoded")) {
+    } else if (reqContentType.includes("application/x-www-form-urlencoded")) {
       // Twilio sends form-urlencoded webhooks
       const entries = new URLSearchParams(rawBody);
       const obj: Record<string, string> = {};
@@ -213,10 +213,15 @@ function adaptExpressToNode(
 
     let statusCode = 200;
     let responseSent = false;
+    let contentType: string | undefined;
 
     const shimRes = {
       status(code: number) {
         statusCode = code;
+        return shimRes;
+      },
+      type(ct: string) {
+        contentType = ct;
         return shimRes;
       },
       json(value: unknown) {
@@ -229,18 +234,8 @@ function adaptExpressToNode(
       send(payload?: string) {
         if (responseSent) return;
         responseSent = true;
-        res.writeHead(statusCode, { "Content-Type": "text/plain" });
+        res.writeHead(statusCode, { "Content-Type": contentType ?? "text/plain" });
         res.end(payload ?? "");
-      },
-      type(ct: string) {
-        return {
-          send(payload: string) {
-            if (responseSent) return;
-            responseSent = true;
-            res.writeHead(statusCode, { "Content-Type": ct });
-            res.end(payload);
-          },
-        };
       },
     };
 
