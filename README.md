@@ -100,7 +100,15 @@ The wizard sets up ClawVoice's config, but you also need to tell Twilio/Telnyx w
 openclaw start
 ```
 
-### 6. Make a Test Call
+### 6. Verify Your Setup
+
+```bash
+openclaw clawvoice status
+```
+
+All checks should show **pass**. If any fail, the output includes what to fix.
+
+### 7. Make a Test Call
 
 ```bash
 openclaw clawvoice call +15559876543
@@ -141,9 +149,16 @@ openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
 openclaw config set clawvoice.twilioPhoneNumber +15551234567
 openclaw config set clawvoice.twilioStreamUrl wss://YOUR-TUNNEL-URL/media-stream
 
-# Voice (Deepgram — recommended)
-openclaw config set clawvoice.voiceProvider deepgram-agent
-openclaw config set clawvoice.deepgramApiKey YOUR_KEY
+# Voice — pick one:
+
+# ElevenLabs (premium voices, most popular)
+openclaw config set clawvoice.voiceProvider elevenlabs-conversational
+openclaw config set clawvoice.elevenlabsApiKey YOUR_KEY
+openclaw config set clawvoice.elevenlabsAgentId YOUR_AGENT_ID
+
+# Deepgram (lower latency, lower cost)
+# openclaw config set clawvoice.voiceProvider deepgram-agent
+# openclaw config set clawvoice.deepgramApiKey YOUR_KEY
 ```
 
 Or use environment variables — see [`.env.example`](.env.example).
@@ -153,7 +168,7 @@ Or use environment variables — see [`.env.example`](.env.example).
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `telephonyProvider` | `twilio` | `twilio` or `telnyx` |
-| `voiceProvider` | `deepgram-agent` | `deepgram-agent` or `elevenlabs-conversational` |
+| `voiceProvider` | `deepgram-agent` | `elevenlabs-conversational` or `deepgram-agent` |
 | `twilioStreamUrl` | — | Public `wss://` URL for Twilio media streams (required) |
 | `voiceSystemPrompt` | `""` | Instructions for how the agent behaves on calls |
 | `inboundEnabled` | `true` | Accept inbound calls |
@@ -165,22 +180,22 @@ Or use environment variables — see [`.env.example`](.env.example).
 
 ## Voice Providers
 
-### Deepgram Voice Agent (Recommended)
-
-Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lowest latency.
-
-1. Create account at [deepgram.com](https://deepgram.com)
-2. Get an API key with Speech + Voice Agent permissions
-3. Set `voiceProvider` to `deepgram-agent`
-
-### ElevenLabs Conversational AI
+### ElevenLabs Conversational AI (Most Popular)
 
 Premium voice quality. ElevenLabs handles the full voice pipeline.
 
 1. Create account at [elevenlabs.io](https://elevenlabs.io)
 2. Create a Conversational AI agent in the dashboard
-3. Get your API key and Agent ID
+3. Get your API key (needs **ElevenAgents → Write** permission) and Agent ID
 4. Set `voiceProvider` to `elevenlabs-conversational`
+
+### Deepgram Voice Agent
+
+Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lower latency, lower cost.
+
+1. Create account at [deepgram.com](https://deepgram.com)
+2. Get an API key with Speech + Voice Agent permissions
+3. Set `voiceProvider` to `deepgram-agent`
 
 ## Voice Memory Isolation
 

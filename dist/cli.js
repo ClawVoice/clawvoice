@@ -98,8 +98,20 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         elevenlabsApiKey: maskSecret(typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined)
     });
     const tunnelPlaceholder = "<YOUR-TUNNEL-URL>";
-    const streamUrl = typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl : "";
-    const tunnelHost = streamUrl.replace(/^wss?:\/\//, "").replace(/\/.*$/, "") || tunnelPlaceholder;
+    const raw = typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl.trim() : "";
+    function hostFromMaybeUrl(input) {
+        if (!input)
+            return tunnelPlaceholder;
+        const withScheme = /^[a-z]+:\/\//i.test(input) ? input : `https://${input}`;
+        const normalized = withScheme.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+        try {
+            return new URL(normalized).host || tunnelPlaceholder;
+        }
+        catch {
+            return tunnelPlaceholder;
+        }
+    }
+    const tunnelHost = hostFromMaybeUrl(raw);
     console.log("\n✅ ClawVoice config saved!\n");
     console.log("── Next steps ──────────────────────────────────────────────\n");
     if (telephonyProvider === "twilio") {
@@ -110,6 +122,9 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/voice  (HTTP POST)\n`);
         console.log("   Messaging Configuration → A message comes in → Webhook:");
         console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/sms  (HTTP POST)\n`);
+        if (tunnelHost !== tunnelPlaceholder) {
+            console.log(`   (Derived from your stream URL. If your webhook tunnel differs, replace ${tunnelHost} above.)\n`);
+        }
     }
     else {
         console.log("1. Configure webhook in Telnyx Mission Control:");
@@ -119,8 +134,8 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     }
     console.log("2. Start OpenClaw:");
     console.log("     openclaw start\n");
-    console.log("3. Test your setup:");
-    console.log("     openclaw clawvoice test\n");
+    console.log("3. Verify your setup:");
+    console.log("     openclaw clawvoice status\n");
     console.log("4. Make a test call:");
     console.log("     openclaw clawvoice call +15559876543\n");
     console.log("────────────────────────────────────────────────────────────\n");
