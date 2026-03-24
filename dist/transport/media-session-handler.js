@@ -31,6 +31,7 @@ class TwilioMediaSessionHandler {
         if (!session) {
             return;
         }
+        session.localClose = true;
         session.voiceSession.close();
         this.sessionsBySocket.delete(socket);
     }
@@ -82,6 +83,9 @@ class TwilioMediaSessionHandler {
                     }));
                 },
                 onClose: (_code, reason) => {
+                    const session = this.sessionsBySocket.get(socket);
+                    if (session?.localClose)
+                        return;
                     teardownFromVoiceProvider(reason || "Voice provider stream closed");
                 },
                 onError: () => {
@@ -123,6 +127,7 @@ class TwilioMediaSessionHandler {
             callId,
             streamSid: message.streamSid ?? "",
             voiceSession,
+            localClose: false,
         });
         this.options.bridge.startHeartbeatMonitor(callId);
     }
