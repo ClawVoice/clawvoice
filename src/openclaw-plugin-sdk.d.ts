@@ -46,6 +46,7 @@ declare module "@openclaw/plugin-sdk" {
       set?(key: string, value: unknown): Promise<void>;
       setMany?(values: Record<string, unknown>): Promise<void>;
     };
+    pluginConfig?: Record<string, unknown>;
     tools: { register(definition: ToolDefinition): void };
     cli: { register(definition: CliCommand): void };
     http: { router(prefix: string): Router };
