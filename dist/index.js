@@ -101,6 +101,7 @@ function registerModernToolsBridge(api, config, callService, memoryService) {
 function registerModernRoutesBridge(api, config, callService) {
     const modernApi = api;
     if (typeof modernApi.registerHttpRoute !== "function") {
+        console.warn("[clawvoice] registerHttpRoute not available — webhook routes will not be registered");
         return;
     }
     const capturedRoutes = [];
@@ -125,6 +126,7 @@ function registerModernRoutesBridge(api, config, callService) {
         callService.trackInboundText(from, to, body, messageId);
     });
     for (const route of capturedRoutes) {
+        console.error(`[clawvoice] registering route: ${route.method} ${route.path}`);
         modernApi.registerHttpRoute({
             method: route.method,
             path: route.path,
@@ -142,7 +144,14 @@ function resolveLogger(api) {
 }
 function initPlugin(api) {
     const logger = resolveLogger(api);
-    const pluginCfg = api.pluginConfig ?? api.config;
+    // OpenClaw may provide plugin config at api.pluginConfig, or nested inside
+    // the full config at api.config.plugins.entries.clawvoice.config.
+    // Fall back to api.config for backward compatibility.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fullCfg = api.config;
+    const pluginCfg = api.pluginConfig
+        ?? fullCfg?.plugins?.entries?.clawvoice?.config
+        ?? api.config;
     const config = (0, config_1.resolveConfig)(pluginCfg);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
@@ -160,6 +169,7 @@ function initPlugin(api) {
     const callService = new clawvoice_1.ClawVoiceService(config);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
     void callService.start().catch((error) => {
+        console.error("[clawvoice] start error:", error instanceof Error ? error.stack : String(error));
         logger.error?.("ClawVoice call service failed to start", {
             error: error instanceof Error ? error.message : String(error),
         });
@@ -180,6 +190,7 @@ function initPlugin(api) {
     }
     const httpRouter = api.http?.router;
     if (typeof httpRouter === "function") {
+        console.error("[clawvoice] using legacy route registration (api.http.router)");
         (0, routes_1.registerRoutes)(api, config, (record) => {
             callService.trackInboundCall(record);
         }, (from, to, body, messageId) => {
@@ -187,6 +198,7 @@ function initPlugin(api) {
         });
     }
     else {
+        console.error("[clawvoice] using modern route registration (registerHttpRoute)");
         registerModernRoutesBridge(api, config, callService);
     }
     const hooksOn = api.hooks?.on;

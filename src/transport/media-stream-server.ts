@@ -40,7 +40,18 @@ export class MediaStreamServer {
 
     await new Promise<void>((resolve, reject) => {
       this.wss?.once("listening", () => resolve());
-      this.wss?.once("error", (error) => reject(error));
+      this.wss?.once("error", (error) => {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EADDRINUSE") {
+          console.warn(
+            `[clawvoice] Media stream port ${this.options.port} already in use — another agent instance owns it. This instance will skip media streaming.`,
+          );
+          this.wss = null;
+          resolve();
+          return;
+        }
+        reject(error);
+      });
     });
   }
 
