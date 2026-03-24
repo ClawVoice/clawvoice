@@ -88,7 +88,7 @@ const MULAW_ENCODE_TABLE = new Uint8Array(65536);
  * Output: Buffer of PCM16 LE (2 bytes per sample).
  */
 function mulawToPcm16(mulaw) {
-    const pcm = Buffer.alloc(mulaw.length * 2);
+    const pcm = Buffer.allocUnsafe(mulaw.length * 2);
     for (let i = 0; i < mulaw.length; i++) {
         pcm.writeInt16LE(MULAW_DECODE_TABLE[mulaw[i]], i * 2);
     }
@@ -101,7 +101,7 @@ function mulawToPcm16(mulaw) {
  */
 function pcm16ToMulaw(pcm) {
     const sampleCount = Math.floor(pcm.length / 2);
-    const mulaw = Buffer.alloc(sampleCount);
+    const mulaw = Buffer.allocUnsafe(sampleCount);
     for (let i = 0; i < sampleCount; i++) {
         const sample = pcm.readInt16LE(i * 2);
         // Map signed 16-bit [-32768..32767] to unsigned 16-bit index [0..65535]
@@ -127,7 +127,7 @@ function resamplePcm16(input, fromRate, toRate) {
     }
     const ratio = fromRate / toRate;
     const outputSamples = Math.max(1, Math.floor((inputSamples - 1) / ratio) + 1);
-    const output = Buffer.alloc(outputSamples * 2);
+    const output = Buffer.allocUnsafe(outputSamples * 2);
     for (let i = 0; i < outputSamples; i++) {
         const srcPos = i * ratio;
         const srcIndex = Math.min(inputSamples - 1, Math.floor(srcPos));

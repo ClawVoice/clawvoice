@@ -38,6 +38,7 @@ type TwilioMessage = TwilioStartMessage | TwilioMediaMessage | TwilioStopMessage
 
 export class TwilioMediaSessionHandler {
   private readonly sessionsBySocket = new Map<TwilioWebSocket, StreamSession>();
+  private readonly localCloses = new Set<TwilioWebSocket>();
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
 
@@ -70,6 +71,7 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
+    this.localCloses.add(socket);
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
   }
@@ -130,6 +132,7 @@ export class TwilioMediaSessionHandler {
           );
         },
         onClose: (_code, reason) => {
+          if (this.localCloses.delete(socket)) return;
           teardownFromVoiceProvider(reason || "Voice provider stream closed");
         },
         onError: () => {
