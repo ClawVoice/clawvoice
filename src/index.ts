@@ -285,7 +285,7 @@ function captureAndMountWebhookRoutes(
   const modernApi = api as unknown as ModernPluginApi;
   if (typeof modernApi.registerHttpRoute === "function") {
     for (const route of adaptedRoutes) {
-      console.error(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
+      console.log(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
       modernApi.registerHttpRoute({
         method: route.method,
         path: route.path,
@@ -296,7 +296,7 @@ function captureAndMountWebhookRoutes(
   }
 
   callService.setWebhookRoutes(adaptedRoutes);
-  console.error(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
+  console.log(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
 }
 
 type LoggerLike = {
@@ -317,11 +317,12 @@ function initPlugin(api: PluginAPI): void {
   // OpenClaw may provide plugin config at api.pluginConfig, or nested inside
   // the full config at api.config.plugins.entries.clawvoice.config.
   // Fall back to api.config for backward compatibility.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fullCfg = api.config as any;
-  const pluginCfg = api.pluginConfig
+  const fullCfg = api.config as unknown as {
+    plugins?: { entries?: { clawvoice?: { config?: unknown } } };
+  };
+  const pluginCfg = (api.pluginConfig
     ?? fullCfg?.plugins?.entries?.clawvoice?.config
-    ?? api.config;
+    ?? api.config) as Record<string, unknown> | undefined;
   const config = resolveConfig(pluginCfg);
   const validation = validateConfig(config);
   if (!validation.ok) {
@@ -363,7 +364,7 @@ function initPlugin(api: PluginAPI): void {
 
   const httpRouter = (api as unknown as { http?: { router?: unknown } }).http?.router;
   if (typeof httpRouter === "function") {
-    console.error("[clawvoice] using legacy route registration (api.http.router)");
+    console.log("[clawvoice] using legacy route registration (api.http.router)");
     registerRoutes(
       api,
       config,

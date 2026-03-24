@@ -34,8 +34,7 @@ class MediaStreamServer {
         });
         this.httpServer = httpServer;
         await new Promise((resolve, reject) => {
-            httpServer.once("listening", () => resolve());
-            httpServer.once("error", (error) => {
+            const onError = (error) => {
                 const code = error.code;
                 if (code === "EADDRINUSE") {
                     console.warn(`[clawvoice] Media stream port ${this.options.port} already in use — another agent instance owns it. This instance will skip media streaming.`);
@@ -45,6 +44,11 @@ class MediaStreamServer {
                     return;
                 }
                 reject(error);
+            };
+            httpServer.once("error", onError);
+            httpServer.once("listening", () => {
+                httpServer.removeListener("error", onError);
+                resolve();
             });
             httpServer.listen(this.options.port, this.options.host);
         });

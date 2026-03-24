@@ -53,8 +53,7 @@ export class MediaStreamServer {
     this.httpServer = httpServer;
 
     await new Promise<void>((resolve, reject) => {
-      httpServer.once("listening", () => resolve());
-      httpServer.once("error", (error) => {
+      const onError = (error: Error): void => {
         const code = (error as NodeJS.ErrnoException).code;
         if (code === "EADDRINUSE") {
           console.warn(
@@ -66,6 +65,11 @@ export class MediaStreamServer {
           return;
         }
         reject(error);
+      };
+      httpServer.once("error", onError);
+      httpServer.once("listening", () => {
+        httpServer.removeListener("error", onError);
+        resolve();
       });
       httpServer.listen(this.options.port, this.options.host);
     });

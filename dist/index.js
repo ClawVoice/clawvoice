@@ -215,7 +215,7 @@ function captureAndMountWebhookRoutes(api, config, callService) {
     const modernApi = api;
     if (typeof modernApi.registerHttpRoute === "function") {
         for (const route of adaptedRoutes) {
-            console.error(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
+            console.log(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
             modernApi.registerHttpRoute({
                 method: route.method,
                 path: route.path,
@@ -225,7 +225,7 @@ function captureAndMountWebhookRoutes(api, config, callService) {
         }
     }
     callService.setWebhookRoutes(adaptedRoutes);
-    console.error(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
+    console.log(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
 }
 function resolveLogger(api) {
     const raw = api;
@@ -240,11 +240,10 @@ function initPlugin(api) {
     // OpenClaw may provide plugin config at api.pluginConfig, or nested inside
     // the full config at api.config.plugins.entries.clawvoice.config.
     // Fall back to api.config for backward compatibility.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fullCfg = api.config;
-    const pluginCfg = api.pluginConfig
+    const pluginCfg = (api.pluginConfig
         ?? fullCfg?.plugins?.entries?.clawvoice?.config
-        ?? api.config;
+        ?? api.config);
     const config = (0, config_1.resolveConfig)(pluginCfg);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
@@ -283,7 +282,7 @@ function initPlugin(api) {
     }
     const httpRouter = api.http?.router;
     if (typeof httpRouter === "function") {
-        console.error("[clawvoice] using legacy route registration (api.http.router)");
+        console.log("[clawvoice] using legacy route registration (api.http.router)");
         (0, routes_1.registerRoutes)(api, config, (record) => {
             callService.trackInboundCall(record);
         }, (from, to, body, messageId) => {
