@@ -20,6 +20,16 @@ class DeepgramBridgeClient {
                 ((url, protocols) => new ws_1.default(url, protocols));
     }
     async connect(options) {
+        const settings = options.buildSettings(options.sessionConfig);
+        return this.connectDirect({
+            callId: options.callId,
+            settings,
+            onMessage: options.onMessage,
+            onClose: options.onClose,
+            onError: options.onError,
+        });
+    }
+    async connectDirect(options) {
         const ws = this.webSocketFactory(this.url, ["token", this.apiKey]);
         return new Promise((resolve, reject) => {
             let opened = false;

@@ -1,4 +1,5 @@
 import WebSocket from "ws";
+import type { VoiceProviderClient, VoiceProviderConnectOptions, VoiceProviderSession } from "./voice-provider-bridge";
 
 type DeepgramSocket = {
   readyState: number;
@@ -31,7 +32,7 @@ interface DeepgramBridgeClientOptions {
 const OPEN_SOCKET = 1;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
-export class DeepgramBridgeClient {
+export class DeepgramBridgeClient implements VoiceProviderClient {
   private readonly apiKey: string;
   private readonly url: string;
   private readonly connectTimeoutMs: number;
@@ -49,7 +50,18 @@ export class DeepgramBridgeClient {
       ((url: string, protocols: string[]) => new WebSocket(url, protocols) as unknown as DeepgramSocket);
   }
 
-  public async connect(options: DeepgramConnectOptions): Promise<DeepgramBridgeSession> {
+  public async connect(options: VoiceProviderConnectOptions): Promise<VoiceProviderSession> {
+    const settings = options.buildSettings(options.sessionConfig);
+    return this.connectDirect({
+      callId: options.callId,
+      settings,
+      onMessage: options.onMessage,
+      onClose: options.onClose,
+      onError: options.onError,
+    });
+  }
+
+  public async connectDirect(options: DeepgramConnectOptions): Promise<DeepgramBridgeSession> {
     const ws = this.webSocketFactory(this.url, ["token", this.apiKey]);
 
     return new Promise<DeepgramBridgeSession>((resolve, reject) => {

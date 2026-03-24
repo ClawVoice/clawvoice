@@ -5,8 +5,10 @@ import { TelnyxTelephonyAdapter } from "../telephony/telnyx";
 import { TelephonyProviderAdapter } from "../telephony/types";
 import { TwilioTelephonyAdapter } from "../telephony/twilio";
 import { DeepgramBridgeClient } from "../transport/deepgram-bridge";
+import { ElevenLabsBridgeClient } from "../transport/elevenlabs-bridge";
 import { TwilioMediaSessionHandler } from "../transport/media-session-handler";
 import { MediaStreamServer } from "../transport/media-stream-server";
+import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
@@ -76,7 +78,7 @@ export class ClawVoiceService {
   private dailyResetDate = new Date().toISOString().slice(0, 10);
   public readonly bridge: VoiceBridgeService;
   public readonly postCall: PostCallService;
-  private readonly deepgramClient: DeepgramBridgeClient | null;
+  private readonly voiceProviderClient: VoiceProviderClient | null;
   private readonly mediaSessionHandler: TwilioMediaSessionHandler | null;
   private mediaStreamServer: MediaStreamServer | null = null;
 
@@ -90,17 +92,25 @@ export class ClawVoiceService {
         : new TelnyxTelephonyAdapter(config, fetchFn);
     this.bridge = new VoiceBridgeService(config);
     this.postCall = new PostCallService(config);
-    this.deepgramClient = config.deepgramApiKey
-      ? new DeepgramBridgeClient({ apiKey: config.deepgramApiKey })
-      : null;
-    this.mediaSessionHandler = this.deepgramClient
+    this.voiceProviderClient = this.createVoiceProviderClient(config);
+    this.mediaSessionHandler = this.voiceProviderClient
       ? new TwilioMediaSessionHandler({
         bridge: this.bridge,
-        deepgramClient: this.deepgramClient,
+        voiceProviderClient: this.voiceProviderClient,
         resolveCallIdByProviderCallId: (providerCallId: string) =>
           this.findInternalCallIdByProviderCallId(providerCallId),
       })
       : null;
+  }
+
+  private createVoiceProviderClient(config: ClawVoiceConfig): VoiceProviderClient | null {
+    if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey) {
+      return new ElevenLabsBridgeClient();
+    }
+    if (config.deepgramApiKey) {
+      return new DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
+    }
+    return null;
   }
 
   private reaperTimer: NodeJS.Timeout | null = null;
