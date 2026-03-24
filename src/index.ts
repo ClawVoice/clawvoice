@@ -8,6 +8,7 @@ import { registerRoutes } from "./routes";
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { ClawVoiceService } from "./services/clawvoice";
 import { registerTools } from "./tools";
+import { HttpRouteEntry } from "./transport/media-stream-server";
 
 type LegacyCliCommandDefinition = {
   name: string;
@@ -236,17 +237,11 @@ function adaptExpressToNode(
   };
 }
 
-function registerModernRoutesBridge(
+function captureAndMountWebhookRoutes(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
   callService: ClawVoiceService,
 ): void {
-  const modernApi = api as unknown as ModernPluginApi;
-  if (typeof modernApi.registerHttpRoute !== "function") {
-    console.warn("[clawvoice] registerHttpRoute not available — webhook routes will not be registered");
-    return;
-  }
-
   type CapturedRoute = {
     method: string;
     path: string;
@@ -281,15 +276,27 @@ function registerModernRoutesBridge(
     },
   );
 
+  const adaptedRoutes: HttpRouteEntry[] = [];
   for (const route of capturedRoutes) {
-    console.error(`[clawvoice] registering route: ${route.method} ${route.path}`);
-    modernApi.registerHttpRoute({
-      method: route.method,
-      path: route.path,
-      handler: adaptExpressToNode(route.handler),
-      auth: "plugin",
-    });
+    const adapted = adaptExpressToNode(route.handler);
+    adaptedRoutes.push({ method: route.method, path: route.path, handler: adapted });
   }
+
+  const modernApi = api as unknown as ModernPluginApi;
+  if (typeof modernApi.registerHttpRoute === "function") {
+    for (const route of adaptedRoutes) {
+      console.error(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
+      modernApi.registerHttpRoute({
+        method: route.method,
+        path: route.path,
+        handler: route.handler,
+        auth: "plugin",
+      });
+    }
+  }
+
+  callService.setWebhookRoutes(adaptedRoutes);
+  console.error(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
 }
 
 type LoggerLike = {
@@ -367,10 +374,10 @@ function initPlugin(api: PluginAPI): void {
         callService.trackInboundText(from, to, body, messageId);
       },
     );
-  } else {
-    console.error("[clawvoice] using modern route registration (registerHttpRoute)");
-    registerModernRoutesBridge(api, config, callService);
   }
+  // Always capture and mount webhook routes on the standalone media stream
+  // HTTP server as a fallback for the dual-registry bug (GitHub issue #17).
+  captureAndMountWebhookRoutes(api, config, callService);
 
   const hooksOn = (api as unknown as { hooks?: { on?: unknown } }).hooks?.on;
   if (typeof hooksOn === "function") {
