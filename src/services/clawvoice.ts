@@ -104,7 +104,7 @@ export class ClawVoiceService {
   }
 
   private createVoiceProviderClient(config: ClawVoiceConfig): VoiceProviderClient | null {
-    if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey) {
+    if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey && config.elevenlabsAgentId) {
       return new ElevenLabsBridgeClient();
     }
     if (config.deepgramApiKey) {

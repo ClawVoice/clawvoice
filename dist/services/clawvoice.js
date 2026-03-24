@@ -39,7 +39,7 @@ class ClawVoiceService {
             : null;
     }
     createVoiceProviderClient(config) {
-        if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey) {
+        if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey && config.elevenlabsAgentId) {
             return new elevenlabs_bridge_1.ElevenLabsBridgeClient();
         }
         if (config.deepgramApiKey) {

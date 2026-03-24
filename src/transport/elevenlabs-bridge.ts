@@ -165,10 +165,14 @@ function normalizeMessage(raw: Record<string, unknown>): Record<string, unknown>
       const audioEvent = raw.audio_event as Record<string, unknown> | undefined;
       const audioBase64 = audioEvent?.audio_base_64 as string | undefined;
       if (!audioBase64) return null;
-      // PCM 44.1kHz 16-bit → mulaw 8kHz for Twilio
-      const pcm44k = Buffer.from(audioBase64, "base64");
-      const mulawBuffer = elevenLabsToTwilio(pcm44k);
-      return { type: "Audio", data: mulawBuffer };
+      try {
+        // PCM 44.1kHz 16-bit → mulaw 8kHz for Twilio
+        const pcm44k = Buffer.from(audioBase64, "base64");
+        const mulawBuffer = elevenLabsToTwilio(pcm44k);
+        return { type: "Audio", data: mulawBuffer };
+      } catch {
+        return null; // skip malformed audio frames
+      }
     }
 
     case "user_transcript": {
