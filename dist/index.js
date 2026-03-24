@@ -185,12 +185,7 @@ function adaptExpressToNode(expressHandler) {
         }
     };
 }
-function registerModernRoutesBridge(api, config, callService) {
-    const modernApi = api;
-    if (typeof modernApi.registerHttpRoute !== "function") {
-        console.warn("[clawvoice] registerHttpRoute not available — webhook routes will not be registered");
-        return;
-    }
+function captureAndMountWebhookRoutes(api, config, callService) {
     const capturedRoutes = [];
     const shimApi = {
         ...api,
@@ -212,15 +207,25 @@ function registerModernRoutesBridge(api, config, callService) {
     }, (from, to, body, messageId) => {
         callService.trackInboundText(from, to, body, messageId);
     });
+    const adaptedRoutes = [];
     for (const route of capturedRoutes) {
-        console.error(`[clawvoice] registering route: ${route.method} ${route.path}`);
-        modernApi.registerHttpRoute({
-            method: route.method,
-            path: route.path,
-            handler: adaptExpressToNode(route.handler),
-            auth: "plugin",
-        });
+        const adapted = adaptExpressToNode(route.handler);
+        adaptedRoutes.push({ method: route.method, path: route.path, handler: adapted });
     }
+    const modernApi = api;
+    if (typeof modernApi.registerHttpRoute === "function") {
+        for (const route of adaptedRoutes) {
+            console.error(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
+            modernApi.registerHttpRoute({
+                method: route.method,
+                path: route.path,
+                handler: route.handler,
+                auth: "plugin",
+            });
+        }
+    }
+    callService.setWebhookRoutes(adaptedRoutes);
+    console.error(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
 }
 function resolveLogger(api) {
     const raw = api;
@@ -285,10 +290,9 @@ function initPlugin(api) {
             callService.trackInboundText(from, to, body, messageId);
         });
     }
-    else {
-        console.error("[clawvoice] using modern route registration (registerHttpRoute)");
-        registerModernRoutesBridge(api, config, callService);
-    }
+    // Always capture and mount webhook routes on the standalone media stream
+    // HTTP server as a fallback for the dual-registry bug (GitHub issue #17).
+    captureAndMountWebhookRoutes(api, config, callService);
     const hooksOn = api.hooks?.on;
     if (typeof hooksOn === "function") {
         (0, hooks_1.registerHooks)(api, config);

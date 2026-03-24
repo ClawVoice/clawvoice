@@ -22,6 +22,7 @@ class ClawVoiceService {
         this.dailyCallCount = 0;
         this.dailyResetDate = new Date().toISOString().slice(0, 10);
         this.mediaStreamServer = null;
+        this.webhookRoutes = [];
         this.reaperTimer = null;
         this.telephonyAdapter =
             config.telephonyProvider === "twilio"
@@ -47,6 +48,9 @@ class ClawVoiceService {
         if (!config.deepgramApiKey)
             return null;
         return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
+    }
+    setWebhookRoutes(routes) {
+        this.webhookRoutes = routes;
     }
     async start() {
         await this.startStandaloneTransport();
@@ -92,6 +96,7 @@ class ClawVoiceService {
             port: streamPort,
             path: streamPath,
             sessionHandler: this.mediaSessionHandler,
+            httpRoutes: this.webhookRoutes,
         });
         await this.mediaStreamServer.start();
     }
@@ -406,5 +411,5 @@ class ClawVoiceService {
     }
 }
 exports.ClawVoiceService = ClawVoiceService;
-ClawVoiceService.REAPER_INTERVAL_MS = 30000; // check every 30s
+ClawVoiceService.REAPER_INTERVAL_MS = 30000;
 ClawVoiceService.REAPER_GRACE_MS = 120000;

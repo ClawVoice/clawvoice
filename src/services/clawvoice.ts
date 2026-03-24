@@ -7,7 +7,7 @@ import { TwilioTelephonyAdapter } from "../telephony/twilio";
 import { DeepgramBridgeClient } from "../transport/deepgram-bridge";
 import { ElevenLabsBridgeClient } from "../transport/elevenlabs-bridge";
 import { TwilioMediaSessionHandler } from "../transport/media-session-handler";
-import { MediaStreamServer } from "../transport/media-stream-server";
+import { HttpRouteEntry, MediaStreamServer } from "../transport/media-stream-server";
 import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
@@ -81,6 +81,7 @@ export class ClawVoiceService {
   private readonly voiceProviderClient: VoiceProviderClient | null;
   private readonly mediaSessionHandler: TwilioMediaSessionHandler | null;
   private mediaStreamServer: MediaStreamServer | null = null;
+  private webhookRoutes: HttpRouteEntry[] = [];
 
   public constructor(
     private readonly config: ClawVoiceConfig,
@@ -112,8 +113,12 @@ export class ClawVoiceService {
     return new DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
   }
 
+  public setWebhookRoutes(routes: HttpRouteEntry[]): void {
+    this.webhookRoutes = routes;
+  }
+
   private reaperTimer: NodeJS.Timeout | null = null;
-  private static readonly REAPER_INTERVAL_MS = 30_000; // check every 30s
+  private static readonly REAPER_INTERVAL_MS = 30_000;
   private static readonly REAPER_GRACE_MS = 120_000;
 
   public async start(): Promise<void> {
@@ -164,6 +169,7 @@ export class ClawVoiceService {
       port: streamPort,
       path: streamPath,
       sessionHandler: this.mediaSessionHandler,
+      httpRoutes: this.webhookRoutes,
     });
     await this.mediaStreamServer.start();
   }
