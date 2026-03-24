@@ -153,16 +153,116 @@ function registerModernToolsBridge(
   }
 }
 
+/**
+ * Wraps an Express-style route handler as a raw Node.js (IncomingMessage, ServerResponse) handler.
+ * OpenClaw's modern registerHttpRoute / registerPluginHttpRoute use raw Node.js http types,
+ * but routes.ts handlers expect Express-like req.body, res.status().json() etc.
+ */
+function wrapExpressHandler(
+  expressHandler: (req: unknown, res: unknown) => unknown,
+  method?: string,
+): (req: import("http").IncomingMessage, res: import("http").ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    if (method && req.method !== method) {
+      res.writeHead(405, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Method Not Allowed" }));
+      return;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    const rawBody = Buffer.concat(chunks).toString("utf8");
+    let parsedBody: Record<string, unknown> = {};
+    const ct = req.headers["content-type"] || "";
+    if (ct.includes("application/json")) {
+      try { parsedBody = JSON.parse(rawBody); } catch { /* ignore */ }
+    } else if (ct.includes("application/x-www-form-urlencoded")) {
+      parsedBody = Object.fromEntries(new URLSearchParams(rawBody));
+    }
+    const expressReq = Object.assign(req, {
+      body: parsedBody,
+      protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "http",
+    });
+    const expressRes = {
+      _statusCode: 200,
+      _headers: {} as Record<string, string>,
+      status(code: number) { this._statusCode = code; return this; },
+      type(t: string) { this._headers["Content-Type"] = t; return this; },
+      json(data: unknown) {
+        res.writeHead(this._statusCode, { ...this._headers, "Content-Type": "application/json" });
+        res.end(JSON.stringify(data));
+      },
+      send(data: string) {
+        res.writeHead(this._statusCode, this._headers);
+        res.end(data);
+      },
+    };
+    try {
+      await (expressHandler as (req: unknown, res: unknown) => Promise<void>)(expressReq, expressRes);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[clawvoice] route handler error:", msg);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal Server Error" }));
+      }
+    }
+  };
+}
+
+/**
+ * Try to locate OpenClaw's internal registerPluginHttpRoute function.
+ * This registers routes in the shared gateway HTTP registry (which the gateway
+ * HTTP server actually dispatches from), unlike api.registerHttpRoute which
+ * stores routes in a Pi-scoped registry that the gateway server never reads.
+ *
+ * Falls back to api.registerHttpRoute if the internal function can't be found.
+ */
+async function resolveInternalRouteRegistrar(
+  api: PluginAPI,
+): Promise<((params: Record<string, unknown>) => void) | null> {
+  try {
+    const path = require("path");
+    const fs = require("fs");
+    // Locate the OpenClaw dist directory from the running process entry point
+    let openclawDist = "";
+    if (process.argv[1]) {
+      let dir = path.dirname(process.argv[1]);
+      for (let i = 0; i < 5; i++) {
+        try {
+          const files = fs.readdirSync(dir) as string[];
+          if (files.some((f: string) => f.startsWith("webhook-ingress-") && f.endsWith(".js"))) {
+            openclawDist = dir;
+            break;
+          }
+        } catch { /* skip */ }
+        dir = path.dirname(dir);
+      }
+    }
+    if (!openclawDist) return null;
+    const webhookFiles = (fs.readdirSync(openclawDist) as string[]).filter(
+      (f: string) => f.startsWith("webhook-ingress-") && f.endsWith(".js"),
+    );
+    if (webhookFiles.length === 0) return null;
+    const chunkUrl = "file://" + path.join(openclawDist, webhookFiles[0]).replace(/\\/g, "/");
+    const mod = await import(chunkUrl);
+    // registerPluginHttpRoute is exported as 'l' in the bundled chunk
+    if (typeof mod.l === "function") return mod.l;
+    // Fallback: search all single-letter exports for the right signature
+    for (const key of Object.keys(mod)) {
+      if (typeof mod[key] === "function" && key.length === 1) {
+        const src = mod[key].toString();
+        if (src.includes("httpRoutes") && src.includes("pluginId")) return mod[key];
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function registerModernRoutesBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
   callService: ClawVoiceService,
 ): void {
-  const modernApi = api as unknown as ModernPluginApi;
-  if (typeof modernApi.registerHttpRoute !== "function") {
-    return;
-  }
-
   type CapturedRoute = {
     method: string;
     path: string;
@@ -197,13 +297,31 @@ function registerModernRoutesBridge(
     },
   );
 
-  for (const route of capturedRoutes) {
-    modernApi.registerHttpRoute({
-      method: route.method,
-      path: route.path,
-      handler: route.handler,
+  // Try the internal gateway registry first; fall back to api.registerHttpRoute
+  resolveInternalRouteRegistrar(api)
+    .then((internalRegister) => {
+      const registerFn = internalRegister
+        ?? (typeof (api as unknown as ModernPluginApi).registerHttpRoute === "function"
+          ? (params: Record<string, unknown>) =>
+              (api as unknown as ModernPluginApi).registerHttpRoute!(params)
+          : null);
+
+      if (!registerFn) return;
+
+      for (const route of capturedRoutes) {
+        registerFn({
+          path: route.path,
+          handler: wrapExpressHandler(route.handler, route.method),
+          auth: "plugin",
+          match: "exact",
+          pluginId: "clawvoice",
+          source: "clawvoice-route-bridge",
+        });
+      }
+    })
+    .catch((err) => {
+      console.error("[clawvoice] route registration failed:", err instanceof Error ? err.message : String(err));
     });
-  }
 }
 
 type LoggerLike = {
@@ -221,8 +339,16 @@ function resolveLogger(api: PluginAPI): LoggerLike {
 
 function initPlugin(api: PluginAPI): void {
   const logger = resolveLogger(api);
-  const pluginCfg = api.pluginConfig ?? api.config;
-  const config = resolveConfig(pluginCfg);
+  // api.pluginConfig is the intended source, but some OpenClaw versions leave it
+  // undefined and pass the full config as api.config.  Fall back through the
+  // nested path plugins.entries.clawvoice.config before using the raw config.
+  const rawCfg = api.config as Record<string, unknown> | undefined;
+  const nestedPluginCfg = (
+    (rawCfg?.plugins as Record<string, unknown> | undefined)
+      ?.entries as Record<string, unknown> | undefined
+  )?.clawvoice as Record<string, unknown> | undefined;
+  const pluginCfg = api.pluginConfig ?? nestedPluginCfg?.config ?? api.config;
+  const config = resolveConfig(pluginCfg as Record<string, unknown>);
   const validation = validateConfig(config);
   if (!validation.ok) {
     throw new Error(validation.errors.join("; "));
