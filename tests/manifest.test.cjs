@@ -25,7 +25,7 @@ test("manifest entryPoint matches package.json main", () => {
   const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
 
   assert.equal(manifest.entryPoint, pkg.main, "manifest entryPoint must match package.json main");
-  assert.equal(pkg.name, "@clawvoice/clawvoice");
+  assert.equal(pkg.name, "clawvoice");
 });
 
 test("manifest configSchema has expected shape", () => {

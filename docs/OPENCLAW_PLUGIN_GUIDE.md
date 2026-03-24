@@ -1114,7 +1114,7 @@ npm run build
 # 3. Link to local OpenClaw
 npm link
 cd /path/to/your/openclaw/workspace
-openclaw plugins install --link @clawvoice/clawvoice
+openclaw plugins install --link clawvoice
 
 # 4. Configure (minimal for testing)
 openclaw config set clawvoice.telephonyProvider telnyx
