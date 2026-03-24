@@ -5,6 +5,7 @@ class TwilioMediaSessionHandler {
     constructor(options) {
         this.options = options;
         this.sessionsBySocket = new Map();
+        this.localCloses = new Set();
     }
     async handleMessage(socket, payload) {
         let message;
@@ -31,6 +32,7 @@ class TwilioMediaSessionHandler {
         if (!session) {
             return;
         }
+        this.localCloses.add(socket);
         session.voiceSession.close();
         this.sessionsBySocket.delete(socket);
     }
@@ -82,6 +84,8 @@ class TwilioMediaSessionHandler {
                     }));
                 },
                 onClose: (_code, reason) => {
+                    if (this.localCloses.delete(socket))
+                        return;
                     teardownFromVoiceProvider(reason || "Voice provider stream closed");
                 },
                 onError: () => {
