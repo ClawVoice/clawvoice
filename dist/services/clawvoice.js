@@ -39,13 +39,14 @@ class ClawVoiceService {
             : null;
     }
     createVoiceProviderClient(config) {
-        if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey && config.elevenlabsAgentId) {
-            return new elevenlabs_bridge_1.ElevenLabsBridgeClient();
+        if (config.voiceProvider === "elevenlabs-conversational") {
+            if (!config.elevenlabsApiKey || !config.elevenlabsAgentId)
+                return null;
+            return new elevenlabs_bridge_1.ElevenLabsBridgeClient({ apiKey: config.elevenlabsApiKey });
         }
-        if (config.deepgramApiKey) {
-            return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
-        }
-        return null;
+        if (!config.deepgramApiKey)
+            return null;
+        return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
     }
     async start() {
         await this.startStandaloneTransport();

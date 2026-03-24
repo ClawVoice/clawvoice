@@ -10,30 +10,34 @@ type ElevenLabsSocket = {
 };
 
 interface ElevenLabsBridgeClientOptions {
+  apiKey: string;
   connectTimeoutMs?: number;
-  webSocketFactory?: (url: string) => ElevenLabsSocket;
+  webSocketFactory?: (url: string, apiKey: string) => ElevenLabsSocket;
 }
 
 const OPEN_SOCKET = 1;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10_000;
 
 export class ElevenLabsBridgeClient implements VoiceProviderClient {
+  private readonly apiKey: string;
   private readonly connectTimeoutMs: number;
-  private readonly webSocketFactory: (url: string) => ElevenLabsSocket;
+  private readonly webSocketFactory: (url: string, apiKey: string) => ElevenLabsSocket;
 
-  public constructor(options?: ElevenLabsBridgeClientOptions) {
+  public constructor(options: ElevenLabsBridgeClientOptions) {
+    this.apiKey = options.apiKey;
     this.connectTimeoutMs =
-      typeof options?.connectTimeoutMs === "number" && options.connectTimeoutMs > 0
+      typeof options.connectTimeoutMs === "number" && options.connectTimeoutMs > 0
         ? options.connectTimeoutMs
         : DEFAULT_CONNECT_TIMEOUT_MS;
     this.webSocketFactory =
-      options?.webSocketFactory ??
-      ((url: string) => new WebSocket(url) as unknown as ElevenLabsSocket);
+      options.webSocketFactory ??
+      ((url: string, apiKey: string) =>
+        new WebSocket(url, { headers: { "xi-api-key": apiKey } }) as unknown as ElevenLabsSocket);
   }
 
   public async connect(options: VoiceProviderConnectOptions): Promise<VoiceProviderSession> {
     const { callId, sessionConfig, onMessage, onClose, onError } = options;
-    const ws = this.webSocketFactory(sessionConfig.voiceProviderUrl);
+    const ws = this.webSocketFactory(sessionConfig.voiceProviderUrl, this.apiKey);
 
     return new Promise<VoiceProviderSession>((resolve, reject) => {
       let opened = false;

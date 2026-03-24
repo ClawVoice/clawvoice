@@ -129,22 +129,18 @@ export function resamplePcm16(input: Buffer, fromRate: number, toRate: number): 
   }
 
   const ratio = fromRate / toRate;
-  const outputSamples = Math.ceil(inputSamples / ratio);
+  const outputSamples = Math.max(1, Math.floor((inputSamples - 1) / ratio) + 1);
   const output = Buffer.alloc(outputSamples * 2);
 
   for (let i = 0; i < outputSamples; i++) {
     const srcPos = i * ratio;
-    const srcIndex = Math.floor(srcPos);
-    const frac = srcPos - srcIndex;
-
-    if (srcIndex + 1 < inputSamples) {
-      const s0 = input.readInt16LE(srcIndex * 2);
-      const s1 = input.readInt16LE((srcIndex + 1) * 2);
-      const interpolated = Math.round(s0 + frac * (s1 - s0));
-      output.writeInt16LE(Math.max(-32768, Math.min(32767, interpolated)), i * 2);
-    } else if (srcIndex < inputSamples) {
-      output.writeInt16LE(input.readInt16LE(srcIndex * 2), i * 2);
-    }
+    const srcIndex = Math.min(inputSamples - 1, Math.floor(srcPos));
+    const nextIndex = Math.min(inputSamples - 1, srcIndex + 1);
+    const frac = srcPos - Math.floor(srcPos);
+    const s0 = input.readInt16LE(srcIndex * 2);
+    const s1 = input.readInt16LE(nextIndex * 2);
+    const interpolated = Math.round(s0 + frac * (s1 - s0));
+    output.writeInt16LE(Math.max(-32768, Math.min(32767, interpolated)), i * 2);
   }
 
   return output;

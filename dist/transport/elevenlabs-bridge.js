@@ -10,17 +10,18 @@ const OPEN_SOCKET = 1;
 const DEFAULT_CONNECT_TIMEOUT_MS = 10000;
 class ElevenLabsBridgeClient {
     constructor(options) {
+        this.apiKey = options.apiKey;
         this.connectTimeoutMs =
-            typeof options?.connectTimeoutMs === "number" && options.connectTimeoutMs > 0
+            typeof options.connectTimeoutMs === "number" && options.connectTimeoutMs > 0
                 ? options.connectTimeoutMs
                 : DEFAULT_CONNECT_TIMEOUT_MS;
         this.webSocketFactory =
-            options?.webSocketFactory ??
-                ((url) => new ws_1.default(url));
+            options.webSocketFactory ??
+                ((url, apiKey) => new ws_1.default(url, { headers: { "xi-api-key": apiKey } }));
     }
     async connect(options) {
         const { callId, sessionConfig, onMessage, onClose, onError } = options;
-        const ws = this.webSocketFactory(sessionConfig.voiceProviderUrl);
+        const ws = this.webSocketFactory(sessionConfig.voiceProviderUrl, this.apiKey);
         return new Promise((resolve, reject) => {
             let opened = false;
             let settled = false;

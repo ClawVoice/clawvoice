@@ -104,13 +104,12 @@ export class ClawVoiceService {
   }
 
   private createVoiceProviderClient(config: ClawVoiceConfig): VoiceProviderClient | null {
-    if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey && config.elevenlabsAgentId) {
-      return new ElevenLabsBridgeClient();
+    if (config.voiceProvider === "elevenlabs-conversational") {
+      if (!config.elevenlabsApiKey || !config.elevenlabsAgentId) return null;
+      return new ElevenLabsBridgeClient({ apiKey: config.elevenlabsApiKey });
     }
-    if (config.deepgramApiKey) {
-      return new DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
-    }
-    return null;
+    if (!config.deepgramApiKey) return null;
+    return new DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
   }
 
   private reaperTimer: NodeJS.Timeout | null = null;

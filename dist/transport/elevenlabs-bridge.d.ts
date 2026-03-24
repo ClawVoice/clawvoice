@@ -6,13 +6,15 @@ type ElevenLabsSocket = {
     close(): void;
 };
 interface ElevenLabsBridgeClientOptions {
+    apiKey: string;
     connectTimeoutMs?: number;
-    webSocketFactory?: (url: string) => ElevenLabsSocket;
+    webSocketFactory?: (url: string, apiKey: string) => ElevenLabsSocket;
 }
 export declare class ElevenLabsBridgeClient implements VoiceProviderClient {
+    private readonly apiKey;
     private readonly connectTimeoutMs;
     private readonly webSocketFactory;
-    constructor(options?: ElevenLabsBridgeClientOptions);
+    constructor(options: ElevenLabsBridgeClientOptions);
     connect(options: VoiceProviderConnectOptions): Promise<VoiceProviderSession>;
 }
 export {};
