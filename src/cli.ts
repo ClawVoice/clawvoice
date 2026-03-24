@@ -135,6 +135,36 @@ export async function runSetupWizard(
     elevenlabsApiKey: maskSecret(typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined)
   });
 
+  const tunnelPlaceholder = "<YOUR-TUNNEL-URL>";
+  const streamUrl = typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl : "";
+  const tunnelHost = streamUrl.replace(/^wss?:\/\//, "").replace(/\/.*$/, "") || tunnelPlaceholder;
+
+  console.log("\n✅ ClawVoice config saved!\n");
+  console.log("── Next steps ──────────────────────────────────────────────\n");
+
+  if (telephonyProvider === "twilio") {
+    console.log("1. Configure webhooks in Twilio Console:");
+    console.log("   Open: https://console.twilio.com → Phone Numbers → Active Numbers");
+    console.log(`   Select your number (${values.twilioPhoneNumber || "..."}):\n`);
+    console.log("   Voice Configuration → A call comes in → Webhook:");
+    console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/voice  (HTTP POST)\n`);
+    console.log("   Messaging Configuration → A message comes in → Webhook:");
+    console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/sms  (HTTP POST)\n`);
+  } else {
+    console.log("1. Configure webhook in Telnyx Mission Control:");
+    console.log("   Open your Call Control Application and set webhook URL:");
+    console.log(`     https://${tunnelHost}/clawvoice/webhooks/telnyx\n`);
+    console.log("   Make sure your phone number is assigned to this application.\n");
+  }
+
+  console.log("2. Start OpenClaw:");
+  console.log("     openclaw start\n");
+  console.log("3. Test your setup:");
+  console.log("     openclaw clawvoice test\n");
+  console.log("4. Make a test call:");
+  console.log("     openclaw clawvoice call +15559876543\n");
+  console.log("────────────────────────────────────────────────────────────\n");
+
   prompter.close();
 }
 

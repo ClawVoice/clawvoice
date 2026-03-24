@@ -14,7 +14,7 @@ Step-by-step instructions for installing and configuring ClawVoice with your Ope
 ### From npm (recommended)
 
 ```bash
-openclaw plugins install @clawvoice/clawvoice
+openclaw plugins install clawvoice
 ```
 
 ### From source (development)
@@ -66,17 +66,38 @@ Use this secure pattern:
    - Twilio SMS: `https://<your-host>/clawvoice/webhooks/twilio/sms`
    - Telnyx: `https://<your-host>/clawvoice/webhooks/telnyx`
 
-#### Recommended tunnel options
+#### Tunnel options
 
-- **Cloudflare Tunnel (recommended for most users)**
-  - Stable hostname (IP changes do not matter).
-  - No inbound port-forwarding on your router.
-  - Can restrict to webhook path and return 404 for everything else.
+**Option A — ngrok (quickest to get started):**
 
-- **Tailscale Funnel (good if you already use Tailscale)**
-  - Stable `*.ts.net` address.
-  - Still public at the Funnel URL, so treat it like internet-facing.
-  - Best practice: funnel to a tiny local proxy that only forwards `/clawvoice/webhooks/*` and rejects everything else.
+```bash
+# Install: https://ngrok.com/download
+ngrok http 3334
+```
+
+ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. The URL changes each time you restart ngrok (unless you have a paid plan with a stable domain).
+
+**Option B — Cloudflare Tunnel (recommended for most users):**
+
+```bash
+# Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+cloudflared tunnel --url http://localhost:3334
+```
+
+Prints a URL like `https://random-words.trycloudflare.com`. Stable hostname — IP changes don't matter. No inbound port-forwarding on your router needed.
+
+> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get Twilio `Error 31920`, use ngrok for the stream URL, or use ngrok for both.
+
+**Option C — Tailscale Funnel (good if you already use Tailscale):**
+
+```bash
+# Requires Tailscale installed and logged in
+tailscale funnel 3334
+```
+
+Gives you a stable `https://your-machine.tail1234.ts.net` URL. Still public at the Funnel URL, so treat it like any internet-facing endpoint.
+
+> **Which should I pick?** ngrok is fastest for trying things out. Cloudflare Tunnel and Tailscale Funnel give you stable URLs that survive restarts — better for long-term use.
 
 #### Why this is still secure
 
