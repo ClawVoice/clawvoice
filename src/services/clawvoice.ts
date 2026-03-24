@@ -114,7 +114,8 @@ export class ClawVoiceService {
   }
 
   public setWebhookRoutes(routes: HttpRouteEntry[]): void {
-    this.webhookRoutes = routes;
+    this.webhookRoutes.length = 0;
+    this.webhookRoutes.push(...routes);
   }
 
   private reaperTimer: NodeJS.Timeout | null = null;
