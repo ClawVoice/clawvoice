@@ -121,9 +121,9 @@ function adaptExpressToNode(expressHandler) {
             chunks.push(buf);
         }
         const rawBody = Buffer.concat(chunks).toString("utf-8");
-        const contentType = (req.headers["content-type"] ?? "").toLowerCase();
+        const reqContentType = (req.headers["content-type"] ?? "").toLowerCase();
         let body;
-        if (contentType.includes("application/json")) {
+        if (reqContentType.includes("application/json")) {
             try {
                 body = JSON.parse(rawBody);
             }
@@ -131,7 +131,7 @@ function adaptExpressToNode(expressHandler) {
                 body = rawBody;
             }
         }
-        else if (contentType.includes("application/x-www-form-urlencoded")) {
+        else if (reqContentType.includes("application/x-www-form-urlencoded")) {
             // Twilio sends form-urlencoded webhooks
             const entries = new URLSearchParams(rawBody);
             const obj = {};
@@ -160,9 +160,14 @@ function adaptExpressToNode(expressHandler) {
         };
         let statusCode = 200;
         let responseSent = false;
+        let contentType;
         const shimRes = {
             status(code) {
                 statusCode = code;
+                return shimRes;
+            },
+            type(ct) {
+                contentType = ct;
                 return shimRes;
             },
             json(value) {
@@ -177,19 +182,8 @@ function adaptExpressToNode(expressHandler) {
                 if (responseSent)
                     return;
                 responseSent = true;
-                res.writeHead(statusCode, { "Content-Type": "text/plain" });
+                res.writeHead(statusCode, { "Content-Type": contentType ?? "text/plain" });
                 res.end(payload ?? "");
-            },
-            type(ct) {
-                return {
-                    send(payload) {
-                        if (responseSent)
-                            return;
-                        responseSent = true;
-                        res.writeHead(statusCode, { "Content-Type": ct });
-                        res.end(payload);
-                    },
-                };
             },
         };
         try {
