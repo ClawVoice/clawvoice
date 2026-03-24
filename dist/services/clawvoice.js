@@ -4,6 +4,7 @@ exports.ClawVoiceService = void 0;
 const telnyx_1 = require("../telephony/telnyx");
 const twilio_1 = require("../telephony/twilio");
 const deepgram_bridge_1 = require("../transport/deepgram-bridge");
+const elevenlabs_bridge_1 = require("../transport/elevenlabs-bridge");
 const media_session_handler_1 = require("../transport/media-session-handler");
 const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
@@ -28,16 +29,23 @@ class ClawVoiceService {
                 : new telnyx_1.TelnyxTelephonyAdapter(config, fetchFn);
         this.bridge = new bridge_1.VoiceBridgeService(config);
         this.postCall = new post_call_1.PostCallService(config);
-        this.deepgramClient = config.deepgramApiKey
-            ? new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey })
-            : null;
-        this.mediaSessionHandler = this.deepgramClient
+        this.voiceProviderClient = this.createVoiceProviderClient(config);
+        this.mediaSessionHandler = this.voiceProviderClient
             ? new media_session_handler_1.TwilioMediaSessionHandler({
                 bridge: this.bridge,
-                deepgramClient: this.deepgramClient,
+                voiceProviderClient: this.voiceProviderClient,
                 resolveCallIdByProviderCallId: (providerCallId) => this.findInternalCallIdByProviderCallId(providerCallId),
             })
             : null;
+    }
+    createVoiceProviderClient(config) {
+        if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey) {
+            return new elevenlabs_bridge_1.ElevenLabsBridgeClient();
+        }
+        if (config.deepgramApiKey) {
+            return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
+        }
+        return null;
     }
     async start() {
         await this.startStandaloneTransport();

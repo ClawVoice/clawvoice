@@ -1,3 +1,4 @@
+import type { VoiceProviderClient, VoiceProviderConnectOptions, VoiceProviderSession } from "./voice-provider-bridge";
 type DeepgramSocket = {
     readyState: number;
     on(event: "open" | "message" | "error" | "close", handler: (...args: unknown[]) => void): void;
@@ -22,12 +23,13 @@ interface DeepgramBridgeClientOptions {
     connectTimeoutMs?: number;
     webSocketFactory?: (url: string, protocols: string[]) => DeepgramSocket;
 }
-export declare class DeepgramBridgeClient {
+export declare class DeepgramBridgeClient implements VoiceProviderClient {
     private readonly apiKey;
     private readonly url;
     private readonly connectTimeoutMs;
     private readonly webSocketFactory;
     constructor(options: DeepgramBridgeClientOptions);
-    connect(options: DeepgramConnectOptions): Promise<DeepgramBridgeSession>;
+    connect(options: VoiceProviderConnectOptions): Promise<VoiceProviderSession>;
+    connectDirect(options: DeepgramConnectOptions): Promise<DeepgramBridgeSession>;
 }
 export {};

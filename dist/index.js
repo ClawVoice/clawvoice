@@ -142,7 +142,8 @@ function resolveLogger(api) {
 }
 function initPlugin(api) {
     const logger = resolveLogger(api);
-    const config = (0, config_1.resolveConfig)(api.config);
+    const pluginCfg = api.pluginConfig ?? api.config;
+    const config = (0, config_1.resolveConfig)(pluginCfg);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
         throw new Error(validation.errors.join("; "));
