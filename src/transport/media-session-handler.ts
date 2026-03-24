@@ -9,6 +9,7 @@ interface StreamSession {
   callId: string;
   streamSid: string;
   voiceSession: VoiceProviderSession;
+  localClose: boolean;
 }
 
 interface TwilioMediaSessionHandlerOptions {
@@ -70,6 +71,7 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
+    session.localClose = true;
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
   }
@@ -130,6 +132,8 @@ export class TwilioMediaSessionHandler {
           );
         },
         onClose: (_code, reason) => {
+          const session = this.sessionsBySocket.get(socket);
+          if (session?.localClose) return;
           teardownFromVoiceProvider(reason || "Voice provider stream closed");
         },
         onError: () => {
@@ -177,6 +181,7 @@ export class TwilioMediaSessionHandler {
       callId,
       streamSid: message.streamSid ?? "",
       voiceSession,
+      localClose: false,
     });
 
     this.options.bridge.startHeartbeatMonitor(callId);
