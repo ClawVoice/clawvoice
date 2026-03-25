@@ -15,6 +15,72 @@ Use this skill when handling phone call workflows through ClawVoice.
 - Do not use blocked tools during voice sessions.
 - Keep responses short, clear, and call-focused.
 
+## Pre-Call Workflow
+
+Before placing a call with `clawvoice_call`, follow this workflow. The goal is to give the voice agent everything it needs to succeed — packed into the `purpose` and `greeting` fields.
+
+### 1. Classify the request
+
+- **Simple call** — user provides a number and intent ("call Mom", "call +15551234567 and ask about the order"). Go straight to step 5.
+- **Task-oriented call** — user wants a goal accomplished ("find a plumber", "schedule a dentist appointment", "follow up on the insurance claim"). Continue to step 2.
+
+### 2. Identify what you must know before dialing
+
+These are **critical unknowns** — the call cannot proceed without them:
+
+- **Phone number** — if not provided, you must find it (search web, check memory, ask user)
+- **Authorization level** — should you book/commit/agree to something, or only inquire? If unclear, ask.
+- **Time-sensitive constraints** — does this need to happen today? Is there a deadline?
+
+If all critical unknowns are resolved, skip to step 4.
+
+### 3. Ask the user (one round only)
+
+- Ask all critical questions in a single message.
+- Bundle up to 4 nice-to-know questions alongside the critical ones (preferences, budget, timing details).
+- If there are **only** nice-to-know unknowns and no critical ones — skip asking entirely and proceed to call.
+- **Never ask more than one round of questions.** Gather what you can, then call.
+
+### 4. Gather context using your available tools
+
+Do this silently — do not ask permission to research. Use whatever tools you have access to:
+
+- **Scheduling a call?** Check calendar tools (Google Calendar, Apple Calendar, Outlook, or equivalent) for the user's availability. Include specific open time slots in the call purpose.
+- **Following up on something?** Search email, messages, or conversation history for recent context with this contact.
+- **Need a phone number or business info?** Use web search to find it. Check hours of operation, reviews, or service details that would help the call.
+- **Contacted before?** Check voice-memory and main memory for prior call history, outcomes, and notes about this contact.
+- **Don't over-research.** Simple calls and calls where the user already provided everything need no research. Only gather context when the task warrants it.
+
+### 5. Place the call with full context
+
+Pack everything you gathered into the `purpose` field. The voice agent receives this as its briefing.
+
+**Good example — scheduling call with research:**
+```
+clawvoice_call({
+  phoneNumber: "+15551234567",
+  purpose: "Schedule a plumber visit for kitchen sink leak (started 2 days ago, under-sink pipe joint). Owner is available Tuesday after 2pm and all day Thursday. Get the earliest available slot. Budget is flexible. Ask about emergency rates if they can come sooner.",
+  greeting: "Hi, I'm calling on behalf of Cody to schedule a plumbing appointment."
+})
+```
+
+**Good example — simple call, no research needed:**
+```
+clawvoice_call({
+  phoneNumber: "+15559876543",
+  purpose: "Ask about the status of order #12345, placed last week.",
+  greeting: "Hi, I'm calling to check on an order."
+})
+```
+
+**What NOT to do:**
+- Do not place a scheduling call without checking the user's calendar (if you have access).
+- Do not ask the user for a phone number you can easily find via web search.
+- Do not ask "should I check your calendar?" — just check it.
+- Do not send a vague purpose like "call plumber" — include the details you gathered.
+
+---
+
 ## URL Configuration — CRITICAL
 
 **NEVER generate, guess, or invent tunnel URLs, webhook URLs, or media stream URLs.**
