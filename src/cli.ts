@@ -1,11 +1,10 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
+import { PERSONALITIES, personalizePrompt, getPersonality } from "./prompts/personalities";
 
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { ClawVoiceService } from "./services/clawvoice";
-import { readUserProfile, writeDefaultProfile } from "./services/user-profile";
-import * as path from "path";
 
 export interface SetupPrompter {
   ask(question: string): Promise<string>;
@@ -81,6 +80,85 @@ async function saveConfig(api: PluginAPI, values: Record<string, unknown>): Prom
   throw new Error("Config store is not writable in this runtime");
 }
 
+interface PersonalitySelection {
+  id: string | null;
+  prompt: string | null;
+}
+
+async function selectPersonality(
+  prompter: SetupPrompter,
+  voiceProvider: string,
+  opts?: { printElevenLabs?: boolean },
+): Promise<PersonalitySelection> {
+  console.log("\n── Voice Personality ────────────────────────────────────────\n");
+  console.log("Choose a personality for your voice assistant:\n");
+
+  const ids: string[] = [];
+  for (let i = 0; i < PERSONALITIES.length; i++) {
+    const p = PERSONALITIES[i];
+    console.log(`  ${i + 1}. ${p.name} — ${p.tagline}`);
+    ids.push(String(i + 1));
+  }
+  console.log(`  ${PERSONALITIES.length + 1}. Custom — paste your own system prompt`);
+  ids.push(String(PERSONALITIES.length + 1));
+  console.log(`  ${PERSONALITIES.length + 2}. Skip — configure later`);
+  ids.push(String(PERSONALITIES.length + 2));
+  console.log("");
+
+  const choice = await askChoice(prompter, "Selection (number): ", ids);
+  const choiceNum = parseInt(choice, 10);
+
+  if (choiceNum === PERSONALITIES.length + 2) {
+    return { id: null, prompt: null };
+  }
+
+  let ownerName: string | undefined;
+  let selectedPrompt: string;
+  let selectedId: string;
+
+  if (choiceNum === PERSONALITIES.length + 1) {
+    console.log("\nPaste your system prompt below (blank line on its own to finish, blank first line to cancel):\n");
+    const lines: string[] = [];
+    while (true) {
+      const line = await prompter.ask("");
+      if (line.trim() === "") {
+        if (lines.length === 0) return { id: null, prompt: null };
+        break;
+      }
+      lines.push(line);
+    }
+    selectedPrompt = lines.join("\n").trim();
+    selectedId = "custom";
+  } else {
+    const personality = PERSONALITIES[choiceNum - 1];
+    selectedId = personality.id;
+    if (personality.prompt.includes("{{OWNER_NAME}}")) {
+      ownerName = (await prompter.ask("Your name (for the assistant to reference): ")).trim() || undefined;
+    }
+    selectedPrompt = personalizePrompt(personality.prompt, ownerName);
+  }
+
+  if (voiceProvider === "elevenlabs-conversational" && opts?.printElevenLabs) {
+    printElevenLabsPrompt(selectedPrompt);
+  }
+
+  return { id: selectedId, prompt: selectedPrompt };
+}
+
+function printElevenLabsPrompt(prompt: string): void {
+  console.log("\n── ElevenLabs Agent System Prompt ───────────────────────────\n");
+  console.log("ElevenLabs manages the system prompt in their dashboard.");
+  console.log("Copy the prompt below into your ElevenLabs agent configuration:\n");
+  console.log("  1. Open: https://elevenlabs.io/app/conversational-ai");
+  console.log("  2. Select your agent → System Prompt");
+  console.log("  3. Paste the following:\n");
+  console.log("┌─────────────────────────────────────────────────────────────");
+  for (const line of prompt.split("\n")) {
+    console.log(`│ ${line}`);
+  }
+  console.log("└─────────────────────────────────────────────────────────────\n");
+}
+
 export async function runSetupWizard(
   api: PluginAPI,
   args: string[],
@@ -120,6 +198,13 @@ export async function runSetupWizard(
   if (voiceProvider === "elevenlabs-conversational") {
     values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
     values.elevenlabsAgentId = await askNonEmpty(prompter, "ElevenLabs agent ID: ");
+  }
+
+  const personalityResult = await selectPersonality(prompter, voiceProvider, { printElevenLabs: true });
+  if (personalityResult.prompt) {
+    if (voiceProvider === "deepgram-agent") {
+      values.voiceSystemPrompt = personalityResult.prompt;
+    }
   }
 
   await saveConfig(api, values);
@@ -204,7 +289,7 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
 
-export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService, workspacePath?: string): void {
+export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService): void {
   const raw = api as unknown as Record<string, unknown>;
   const logSource = (api.log && typeof api.log.info === "function") ? api.log
     : (raw.logger && typeof (raw.logger as { info?: unknown }).info === "function") ? raw.logger as PluginAPI["log"]
@@ -451,51 +536,86 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
   });
 
   api.cli.register({
-    name: "clawvoice profile",
-    description: "View or set up your user profile for voice calls",
+    name: "clawvoice personality",
+    description: "View or change the voice assistant personality / system prompt",
     run: async (args) => {
-      const voiceMemoryDir = workspacePath
-        ? path.join(workspacePath, "voice-memory")
-        : null;
+      const subcommand = args.find((a) => !a.startsWith("--"));
 
-      if (!voiceMemoryDir) {
-        log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or run inside an OpenClaw gateway.");
-        return;
-      }
-
-      const existing = readUserProfile(voiceMemoryDir);
-
-      // Show current profile if no args or --show
-      if (args.length === 0 || args.includes("--show")) {
-        if (existing.ownerName) {
-          log.info("Current profile:", {
-            ownerName: existing.ownerName,
-            communicationStyle: existing.communicationStyle,
-            context: existing.contextBlock || "(empty)",
-          });
-        } else {
-          log.info("No user profile found. Run with --name to create one.");
-          log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+      if (subcommand === "list") {
+        log.info("Available personalities:", {});
+        for (const p of PERSONALITIES) {
+          log.info(`  ${p.id}: ${p.name} — ${p.tagline}`, {});
         }
         return;
       }
 
-      // Set profile from flags
-      const name = parseFlag(args, "name") ?? existing.ownerName;
-      const style = parseFlag(args, "style") ?? existing.communicationStyle;
-      const context = parseFlag(args, "context");
-
-      if (!name) {
-        log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+      if (subcommand === "show") {
+        const current = config.voiceSystemPrompt;
+        if (!current) {
+          log.info("No system prompt configured. Run 'clawvoice personality set' or 'clawvoice setup'.", {});
+          return;
+        }
+        const match = PERSONALITIES.find((p) => {
+          const parts = p.prompt.split("{{OWNER_NAME}}").filter(Boolean);
+          let idx = 0;
+          for (const part of parts) {
+            const next = current.indexOf(part, idx);
+            if (next === -1) return false;
+            idx = next + part.length;
+          }
+          return true;
+        });
+        if (match) {
+          log.info(`Current personality: ${match.name}`, {});
+        }
+        log.info(`System prompt (${current.length} chars):\n${current}`, {});
         return;
       }
 
-      writeDefaultProfile(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
-      log.info("Profile saved.", {
-        ownerName: name,
-        communicationStyle: style,
-        path: path.join(voiceMemoryDir, "user-profile.md"),
-      });
+      if (subcommand === "set") {
+        const presetId = parseFlag(args, "preset");
+        const prompter = createReadlinePrompter();
+        try {
+          let result: PersonalitySelection;
+          if (presetId) {
+            const preset = getPersonality(presetId);
+            if (!preset) {
+              log.info(`Unknown personality: ${presetId}. Run 'clawvoice personality list' to see options.`, {});
+              return;
+            }
+            let ownerName: string | undefined;
+            if (preset.prompt.includes("{{OWNER_NAME}}")) {
+              ownerName = (await prompter.ask("Your name (for the assistant to reference): ")).trim() || undefined;
+            }
+            result = { id: preset.id, prompt: personalizePrompt(preset.prompt, ownerName) };
+          } else {
+            result = await selectPersonality(prompter, config.voiceProvider);
+          }
+
+          if (!result.prompt) {
+            log.info("Skipped.", {});
+            return;
+          }
+
+          if (config.voiceProvider === "deepgram-agent") {
+            await saveConfig(api, { voiceSystemPrompt: result.prompt });
+            config.voiceSystemPrompt = result.prompt;
+            log.info(`Personality set: ${result.id ?? "custom"}. Saved to voiceSystemPrompt config.`, {});
+          } else {
+            printElevenLabsPrompt(result.prompt);
+            log.info("Copy the prompt above into your ElevenLabs agent dashboard.", {});
+          }
+        } finally {
+          prompter.close();
+        }
+        return;
+      }
+
+      log.info("Usage:", {});
+      log.info("  clawvoice personality list             — show available personalities", {});
+      log.info("  clawvoice personality show             — show current system prompt", {});
+      log.info("  clawvoice personality set              — interactive personality selection", {});
+      log.info("  clawvoice personality set --preset ID  — set a specific personality by ID", {});
     },
   });
 }
