@@ -1,5 +1,6 @@
 import { ClawVoiceConfig } from "../config";
 import { InboundCallRecord } from "../inbound/types";
+import { HttpRouteEntry } from "../transport/media-stream-server";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
@@ -14,7 +15,6 @@ export interface CallRecord {
     endedAt?: string;
     status: "in-progress" | "completed";
     summary?: CallSummary;
-    recordingUrl?: string;
 }
 export interface StartCallRequest {
     phoneNumber: string;
@@ -66,9 +66,10 @@ export declare class ClawVoiceService {
     private readonly voiceProviderClient;
     private readonly mediaSessionHandler;
     private mediaStreamServer;
-    private readonly workspacePath;
-    constructor(config: ClawVoiceConfig, fetchFn?: typeof globalThis.fetch, workspacePath?: string);
+    private webhookRoutes;
+    constructor(config: ClawVoiceConfig, fetchFn?: typeof globalThis.fetch);
     private createVoiceProviderClient;
+    setWebhookRoutes(routes: HttpRouteEntry[]): void;
     private reaperTimer;
     private static readonly REAPER_INTERVAL_MS;
     private static readonly REAPER_GRACE_MS;
@@ -98,7 +99,6 @@ export declare class ClawVoiceService {
     private autoHangup;
     trackInboundCall(record: InboundCallRecord): void;
     getInboundRecords(): InboundCallRecord[];
-    setRecordingUrl(providerCallId: string, recordingUrl: string): void;
     getCallSummary(callId: string): CallSummary | null;
     sendText(request: SendTextRequest): Promise<SendTextResponse>;
     trackInboundText(from: string, to: string, body: string, providerMessageId?: string): void;

@@ -7,7 +7,6 @@ interface TwilioMediaSessionHandlerOptions {
     bridge: VoiceBridgeService;
     voiceProviderClient: VoiceProviderClient;
     resolveCallIdByProviderCallId: (providerCallId: string) => string | null;
-    workspacePath?: string;
 }
 export declare class TwilioMediaSessionHandler {
     private readonly options;

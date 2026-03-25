@@ -159,11 +159,11 @@ export function twilioToElevenLabs(mulawBuffer: Buffer): Buffer {
 }
 
 /**
- * Convert ElevenLabs PCM 16kHz 16-bit audio to Twilio mulaw 8kHz.
- * ElevenLabs Conversational AI sends PCM 16-bit at 16kHz (agent_output_audio_format: "pcm_16000").
+ * Convert ElevenLabs PCM 44.1kHz 16-bit audio to Twilio mulaw 8kHz.
+ * ElevenLabs sends base64-encoded PCM 16-bit at 44.1kHz.
  * Twilio expects base64-encoded mulaw at 8kHz.
  */
-export function elevenLabsToTwilio(pcm16kBuffer: Buffer): Buffer {
-  const pcm8k = resamplePcm16(pcm16kBuffer, 16000, 8000);
+export function elevenLabsToTwilio(pcm44kBuffer: Buffer): Buffer {
+  const pcm8k = resamplePcm16(pcm44kBuffer, 44100, 8000);
   return pcm16ToMulaw(pcm8k);
 }
