@@ -1,37 +1,4 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.register = register;
@@ -52,7 +19,7 @@ function normalizeCliArgs(input) {
     }
     return [];
 }
-function registerModernCliBridge(api, config, callService, memoryService, workspacePath) {
+function registerModernCliBridge(api, config, callService, memoryService) {
     const modernApi = api;
     if (typeof modernApi.registerCli !== "function") {
         return;
@@ -66,7 +33,7 @@ function registerModernCliBridge(api, config, callService, memoryService, worksp
             },
         },
     };
-    (0, cli_1.registerCLI)(shimApi, config, callService, memoryService, workspacePath);
+    (0, cli_1.registerCLI)(shimApi, config, callService, memoryService);
     if (legacyCommands.length === 0) {
         return;
     }
@@ -132,182 +99,105 @@ function registerModernToolsBridge(api, config, callService, memoryService) {
     }
 }
 /**
- * Wraps an Express-style route handler as a raw Node.js (IncomingMessage, ServerResponse) handler.
- * OpenClaw's modern registerHttpRoute / registerPluginHttpRoute use raw Node.js http types,
- * but routes.ts handlers expect Express-like req.body, res.status().json() etc.
+ * Adapt an Express-style route handler to raw Node.js (IncomingMessage, ServerResponse).
+ *
+ * OpenClaw's modern registerHttpRoute API passes raw Node.js objects, but our
+ * route handlers (in routes.ts) expect Express-like req.body, res.status().json(), etc.
+ * This adapter reads/parses the body and shims the response methods.
  */
-function wrapExpressHandler(expressHandler, method) {
-    const MAX_BODY_BYTES = 1048576; // 1 MB
+function adaptExpressToNode(expressHandler) {
+    const MAX_BODY_BYTES = 1000000; // 1 MB
     return async (req, res) => {
-        if (method && req.method !== method) {
-            res.writeHead(405, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "Method Not Allowed" }));
-            return;
-        }
         const chunks = [];
         let totalBytes = 0;
         for await (const chunk of req) {
-            totalBytes += chunk.length;
+            const buf = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+            totalBytes += buf.length;
             if (totalBytes > MAX_BODY_BYTES) {
-                res.writeHead(413, { "Content-Type": "application/json", "Connection": "close" });
-                res.end(JSON.stringify({ error: "Payload Too Large" }));
-                req.destroy();
+                res.writeHead(413, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Payload too large" }));
                 return;
             }
-            chunks.push(chunk);
+            chunks.push(buf);
         }
-        const rawBody = Buffer.concat(chunks).toString("utf8");
-        let parsedBody = {};
-        const ct = req.headers["content-type"] || "";
-        if (ct.includes("application/json")) {
+        const rawBody = Buffer.concat(chunks).toString("utf-8");
+        const reqContentType = (req.headers["content-type"] ?? "").toLowerCase();
+        let body;
+        if (reqContentType.includes("application/json")) {
             try {
-                parsedBody = JSON.parse(rawBody);
+                body = JSON.parse(rawBody);
             }
             catch {
-                res.writeHead(400, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Invalid JSON" }));
-                return;
+                body = rawBody;
             }
         }
-        else if (ct.includes("application/x-www-form-urlencoded")) {
-            parsedBody = Object.fromEntries(new URLSearchParams(rawBody));
+        else if (reqContentType.includes("application/x-www-form-urlencoded")) {
+            // Twilio sends form-urlencoded webhooks
+            const entries = new URLSearchParams(rawBody);
+            const obj = {};
+            for (const [key, value] of entries) {
+                obj[key] = value;
+            }
+            body = obj;
         }
-        const expressReq = Object.assign(req, {
-            body: parsedBody,
-            protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "http",
-        });
-        const expressRes = {
-            _statusCode: 200,
-            _headers: {},
-            status(code) { this._statusCode = code; return this; },
-            type(t) { this._headers["Content-Type"] = t; return this; },
-            json(data) {
-                res.writeHead(this._statusCode, { ...this._headers, "Content-Type": "application/json" });
-                res.end(JSON.stringify(data));
+        else {
+            body = rawBody;
+        }
+        // Normalize headers: Node may deliver string | string[] values;
+        // Express-style handlers expect Record<string, string>.
+        const headers = {};
+        for (const [k, v] of Object.entries(req.headers)) {
+            if (typeof v === "string")
+                headers[k] = v;
+            else if (Array.isArray(v))
+                headers[k] = v.join(", ");
+        }
+        const shimReq = {
+            body,
+            headers,
+            protocol: (headers["x-forwarded-proto"] ?? "").split(",")[0]?.trim() || "https",
+            url: req.url,
+        };
+        let statusCode = 200;
+        let responseSent = false;
+        let contentType;
+        const shimRes = {
+            status(code) {
+                statusCode = code;
+                return shimRes;
             },
-            send(data) {
-                res.writeHead(this._statusCode, this._headers);
-                res.end(data);
+            type(ct) {
+                contentType = ct;
+                return shimRes;
+            },
+            json(value) {
+                if (responseSent)
+                    return;
+                responseSent = true;
+                const payload = JSON.stringify(value);
+                res.writeHead(statusCode, { "Content-Type": "application/json" });
+                res.end(payload);
+            },
+            send(payload) {
+                if (responseSent)
+                    return;
+                responseSent = true;
+                res.writeHead(statusCode, { "Content-Type": contentType ?? "text/plain" });
+                res.end(payload ?? "");
             },
         };
         try {
-            await expressHandler(expressReq, expressRes);
+            await expressHandler(shimReq, shimRes);
         }
-        catch (e) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error("[clawvoice] route handler error:", msg);
-            if (!res.headersSent) {
+        catch (err) {
+            if (!responseSent) {
                 res.writeHead(500, { "Content-Type": "application/json" });
-                res.end(JSON.stringify({ error: "Internal Server Error" }));
+                res.end(JSON.stringify({ error: "Internal server error" }));
             }
         }
     };
 }
-/**
- * Try to locate OpenClaw's internal registerPluginHttpRoute function.
- * This registers routes in the shared gateway HTTP registry (which the gateway
- * HTTP server actually dispatches from), unlike api.registerHttpRoute which
- * stores routes in a Pi-scoped registry that the gateway server never reads.
- *
- * Falls back to api.registerHttpRoute if the internal function can't be found.
- */
-async function resolveInternalRouteRegistrar(api) {
-    try {
-        const path = require("path");
-        const fs = require("fs");
-        // Locate the OpenClaw dist directory from the running process entry point
-        let openclawDist = "";
-        if (process.argv[1]) {
-            let dir = path.dirname(process.argv[1]);
-            for (let i = 0; i < 5; i++) {
-                try {
-                    const files = fs.readdirSync(dir);
-                    if (files.some((f) => f.startsWith("webhook-ingress-") && f.endsWith(".js"))) {
-                        openclawDist = dir;
-                        break;
-                    }
-                }
-                catch { /* skip */ }
-                dir = path.dirname(dir);
-            }
-        }
-        if (!openclawDist)
-            return null;
-        const webhookFiles = fs.readdirSync(openclawDist).filter((f) => f.startsWith("webhook-ingress-") && f.endsWith(".js"));
-        if (webhookFiles.length === 0)
-            return null;
-        const chunkUrl = "file://" + path.join(openclawDist, webhookFiles[0]).replace(/\\/g, "/");
-        const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
-        // registerPluginHttpRoute is exported as 'l' in the bundled chunk
-        if (typeof mod.l === "function")
-            return mod.l;
-        // Fallback: search all single-letter exports for the right signature
-        for (const key of Object.keys(mod)) {
-            if (typeof mod[key] === "function" && key.length === 1) {
-                const src = mod[key].toString();
-                if (src.includes("httpRoutes") && src.includes("pluginId"))
-                    return mod[key];
-            }
-        }
-    }
-    catch { /* ignore */ }
-    return null;
-}
-/**
- * Try to locate OpenClaw's enqueueSystemEvent for injecting messages into
- * the active conversation. Falls back to the api-level emitter if available.
- */
-async function resolveSystemEventEmitter(api) {
-    // Check if api exposes a system event emitter directly
-    const rawApi = api;
-    if (typeof rawApi.enqueueSystemEvent === "function") {
-        return rawApi.enqueueSystemEvent;
-    }
-    if (rawApi.systemEvents && typeof rawApi.systemEvents.enqueue === "function") {
-        return rawApi.systemEvents.enqueue;
-    }
-    // Try to find it in the OpenClaw dist chunks (same pattern as route registrar)
-    try {
-        const path = require("path");
-        const fs = require("fs");
-        let openclawDist = "";
-        if (process.argv[1]) {
-            let dir = path.dirname(process.argv[1]);
-            for (let i = 0; i < 5; i++) {
-                try {
-                    const files = fs.readdirSync(dir);
-                    if (files.some((f) => f.startsWith("system-events-") && f.endsWith(".js"))) {
-                        openclawDist = dir;
-                        break;
-                    }
-                }
-                catch { /* skip */ }
-                dir = path.dirname(dir);
-            }
-        }
-        if (!openclawDist)
-            return null;
-        const sysEventFiles = fs.readdirSync(openclawDist).filter((f) => f.startsWith("system-events-") && f.endsWith(".js"));
-        if (sysEventFiles.length === 0)
-            return null;
-        const chunkUrl = "file://" + path.join(openclawDist, sysEventFiles[0]).replace(/\\/g, "/");
-        const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
-        // Look for enqueueSystemEvent export
-        if (typeof mod.enqueueSystemEvent === "function")
-            return mod.enqueueSystemEvent;
-        // Fallback: search single-letter exports
-        for (const key of Object.keys(mod)) {
-            if (typeof mod[key] === "function") {
-                const src = mod[key].toString();
-                if (src.includes("systemEvent") || src.includes("enqueueSystem"))
-                    return mod[key];
-            }
-        }
-    }
-    catch { /* ignore */ }
-    return null;
-}
-function registerModernRoutesBridge(api, config, callService) {
+function captureAndMountWebhookRoutes(api, config, callService) {
     const capturedRoutes = [];
     const shimApi = {
         ...api,
@@ -328,32 +218,26 @@ function registerModernRoutesBridge(api, config, callService) {
         callService.trackInboundCall(record);
     }, (from, to, body, messageId) => {
         callService.trackInboundText(from, to, body, messageId);
-    }, (providerCallId, recordingUrl) => {
-        callService.setRecordingUrl(providerCallId, recordingUrl);
     });
-    // Try the internal gateway registry first; fall back to api.registerHttpRoute
-    resolveInternalRouteRegistrar(api)
-        .then((internalRegister) => {
-        const registerFn = internalRegister
-            ?? (typeof api.registerHttpRoute === "function"
-                ? (params) => api.registerHttpRoute(params)
-                : null);
-        if (!registerFn)
-            return;
-        for (const route of capturedRoutes) {
-            registerFn({
+    const adaptedRoutes = [];
+    for (const route of capturedRoutes) {
+        const adapted = adaptExpressToNode(route.handler);
+        adaptedRoutes.push({ method: route.method, path: route.path, handler: adapted });
+    }
+    const modernApi = api;
+    if (typeof modernApi.registerHttpRoute === "function") {
+        for (const route of adaptedRoutes) {
+            console.log(`[clawvoice] registering gateway route: ${route.method} ${route.path}`);
+            modernApi.registerHttpRoute({
+                method: route.method,
                 path: route.path,
-                handler: wrapExpressHandler(route.handler, route.method),
+                handler: route.handler,
                 auth: "plugin",
-                match: "exact",
-                pluginId: "clawvoice",
-                source: "clawvoice-route-bridge",
             });
         }
-    })
-        .catch((err) => {
-        console.error("[clawvoice] route registration failed:", err instanceof Error ? err.message : String(err));
-    });
+    }
+    callService.setWebhookRoutes(adaptedRoutes);
+    console.log(`[clawvoice] ${adaptedRoutes.length} webhook routes mounted on media stream server`);
 }
 function resolveLogger(api) {
     const raw = api;
@@ -365,13 +249,13 @@ function resolveLogger(api) {
 }
 function initPlugin(api) {
     const logger = resolveLogger(api);
-    // api.pluginConfig is the intended source, but some OpenClaw versions leave it
-    // undefined and pass the full config as api.config.  Fall back through the
-    // nested path plugins.entries.clawvoice.config before using the raw config.
-    const rawCfg = api.config;
-    const nestedPluginCfg = rawCfg?.plugins
-        ?.entries?.clawvoice;
-    const pluginCfg = api.pluginConfig ?? nestedPluginCfg?.config ?? api.config;
+    // OpenClaw may provide plugin config at api.pluginConfig, or nested inside
+    // the full config at api.config.plugins.entries.clawvoice.config.
+    // Fall back to api.config for backward compatibility.
+    const fullCfg = api.config;
+    const pluginCfg = (api.pluginConfig
+        ?? fullCfg?.plugins?.entries?.clawvoice?.config
+        ?? api.config);
     const config = (0, config_1.resolveConfig)(pluginCfg);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
@@ -386,25 +270,22 @@ function initPlugin(api) {
             });
         }
     }
-    // Resolve workspace path for user profile and voice-memory access
-    const rawApiConfig = api.config;
-    const workspacePath = (typeof rawApiConfig?.workspace === "string" ? rawApiConfig.workspace : undefined) ??
-        (typeof rawApiConfig?.dataDir === "string" ? rawApiConfig.dataDir : undefined) ??
-        (typeof rawApiConfig?.workspacePath === "string" ? rawApiConfig.workspacePath : undefined) ??
-        (typeof process.env.OPENCLAW_WORKSPACE === "string" && process.env.OPENCLAW_WORKSPACE.length > 0
-            ? process.env.OPENCLAW_WORKSPACE
-            : undefined);
-    const callService = new clawvoice_1.ClawVoiceService(config, undefined, workspacePath);
+    const callService = new clawvoice_1.ClawVoiceService(config);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
-    // Wire system event emitter for immediate post-call summary delivery
-    resolveSystemEventEmitter(api)
-        .then((emitter) => {
-        if (emitter) {
-            callService.postCall.setSystemEventEmitter(emitter);
-        }
-    })
-        .catch(() => undefined);
+    const httpRouter = api.http?.router;
+    if (typeof httpRouter === "function") {
+        console.log("[clawvoice] using legacy route registration (api.http.router)");
+        (0, routes_1.registerRoutes)(api, config, (record) => {
+            callService.trackInboundCall(record);
+        }, (from, to, body, messageId) => {
+            callService.trackInboundText(from, to, body, messageId);
+        });
+    }
+    // Mount webhook routes BEFORE starting the service so the standalone
+    // HTTP server has routes ready when it begins listening.
+    captureAndMountWebhookRoutes(api, config, callService);
     void callService.start().catch((error) => {
+        console.error("[clawvoice] start error:", error instanceof Error ? error.stack : String(error));
         logger.error?.("ClawVoice call service failed to start", {
             error: error instanceof Error ? error.message : String(error),
         });
@@ -418,23 +299,10 @@ function initPlugin(api) {
     }
     const cliRegister = api.cli?.register;
     if (typeof cliRegister === "function") {
-        (0, cli_1.registerCLI)(api, config, callService, memoryService, workspacePath);
+        (0, cli_1.registerCLI)(api, config, callService, memoryService);
     }
     else {
-        registerModernCliBridge(api, config, callService, memoryService, workspacePath);
-    }
-    const httpRouter = api.http?.router;
-    if (typeof httpRouter === "function") {
-        (0, routes_1.registerRoutes)(api, config, (record) => {
-            callService.trackInboundCall(record);
-        }, (from, to, body, messageId) => {
-            callService.trackInboundText(from, to, body, messageId);
-        }, (providerCallId, recordingUrl) => {
-            callService.setRecordingUrl(providerCallId, recordingUrl);
-        });
-    }
-    else {
-        registerModernRoutesBridge(api, config, callService);
+        registerModernCliBridge(api, config, callService, memoryService);
     }
     const hooksOn = api.hooks?.on;
     if (typeof hooksOn === "function") {

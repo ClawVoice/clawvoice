@@ -138,16 +138,7 @@ exports.ElevenLabsBridgeClient = ElevenLabsBridgeClient;
  * Returns null for unrecognized message types.
  */
 function normalizeMessage(raw) {
-    // ElevenLabs Conversational AI messages use top-level event keys
-    // (e.g. "audio_event", "user_transcription_event") rather than a "type" field.
-    const type = raw.type
-        ?? (raw.audio_event ? "audio" : undefined)
-        ?? (raw.conversation_initiation_metadata_event ? "conversation_initiation_metadata" : undefined)
-        ?? (raw.user_transcription_event ? "user_transcript" : undefined)
-        ?? (raw.agent_response_event ? "agent_response" : undefined)
-        ?? (raw.client_tool_call ? "client_tool_call" : undefined)
-        ?? (raw.ping_event ? "ping" : undefined)
-        ?? (raw.interruption ? "interruption" : undefined);
+    const type = raw.type;
     switch (type) {
         case "conversation_initiation_metadata":
             return { type: "SettingsApplied" };
@@ -157,9 +148,9 @@ function normalizeMessage(raw) {
             if (!audioBase64)
                 return null;
             try {
-                // ElevenLabs Conversational AI sends PCM 16-bit at 16kHz → mulaw 8kHz for Twilio
-                const pcm16k = Buffer.from(audioBase64, "base64");
-                const mulawBuffer = (0, audio_convert_1.elevenLabsToTwilio)(pcm16k);
+                // PCM 44.1kHz 16-bit → mulaw 8kHz for Twilio
+                const pcm44k = Buffer.from(audioBase64, "base64");
+                const mulawBuffer = (0, audio_convert_1.elevenLabsToTwilio)(pcm44k);
                 return { type: "Audio", data: mulawBuffer };
             }
             catch {

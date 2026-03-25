@@ -1,43 +1,9 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.registerCLI = registerCLI;
 const health_1 = require("./diagnostics/health");
-const user_profile_1 = require("./services/user-profile");
-const path = __importStar(require("path"));
+const personalities_1 = require("./prompts/personalities");
 function maskSecret(value) {
     if (!value) {
         return "(not set)";
@@ -93,6 +59,69 @@ async function saveConfig(api, values) {
     }
     throw new Error("Config store is not writable in this runtime");
 }
+async function selectPersonality(prompter, voiceProvider, opts) {
+    console.log("\n── Voice Personality ────────────────────────────────────────\n");
+    console.log("Choose a personality for your voice assistant:\n");
+    const ids = [];
+    for (let i = 0; i < personalities_1.PERSONALITIES.length; i++) {
+        const p = personalities_1.PERSONALITIES[i];
+        console.log(`  ${i + 1}. ${p.name} — ${p.tagline}`);
+        ids.push(String(i + 1));
+    }
+    console.log(`  ${personalities_1.PERSONALITIES.length + 1}. Custom — paste your own system prompt`);
+    ids.push(String(personalities_1.PERSONALITIES.length + 1));
+    console.log(`  ${personalities_1.PERSONALITIES.length + 2}. Skip — configure later`);
+    ids.push(String(personalities_1.PERSONALITIES.length + 2));
+    console.log("");
+    const choice = await askChoice(prompter, "Selection (number): ", ids);
+    const choiceNum = parseInt(choice, 10);
+    if (choiceNum === personalities_1.PERSONALITIES.length + 2) {
+        return { id: null, prompt: null };
+    }
+    let ownerName;
+    let selectedPrompt;
+    let selectedId;
+    if (choiceNum === personalities_1.PERSONALITIES.length + 1) {
+        console.log("\nPaste your system prompt below (blank line on its own to finish, blank first line to cancel):\n");
+        const lines = [];
+        while (true) {
+            const line = await prompter.ask("");
+            if (line.trim() === "") {
+                if (lines.length === 0)
+                    return { id: null, prompt: null };
+                break;
+            }
+            lines.push(line);
+        }
+        selectedPrompt = lines.join("\n").trim();
+        selectedId = "custom";
+    }
+    else {
+        const personality = personalities_1.PERSONALITIES[choiceNum - 1];
+        selectedId = personality.id;
+        if (personality.prompt.includes("{{OWNER_NAME}}")) {
+            ownerName = (await prompter.ask("Your name (for the assistant to reference): ")).trim() || undefined;
+        }
+        selectedPrompt = (0, personalities_1.personalizePrompt)(personality.prompt, ownerName);
+    }
+    if (voiceProvider === "elevenlabs-conversational" && opts?.printElevenLabs) {
+        printElevenLabsPrompt(selectedPrompt);
+    }
+    return { id: selectedId, prompt: selectedPrompt };
+}
+function printElevenLabsPrompt(prompt) {
+    console.log("\n── ElevenLabs Agent System Prompt ───────────────────────────\n");
+    console.log("ElevenLabs manages the system prompt in their dashboard.");
+    console.log("Copy the prompt below into your ElevenLabs agent configuration:\n");
+    console.log("  1. Open: https://elevenlabs.io/app/conversational-ai");
+    console.log("  2. Select your agent → System Prompt");
+    console.log("  3. Paste the following:\n");
+    console.log("┌─────────────────────────────────────────────────────────────");
+    for (const line of prompt.split("\n")) {
+        console.log(`│ ${line}`);
+    }
+    console.log("└─────────────────────────────────────────────────────────────\n");
+}
 async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     const values = {};
     const telephonyProvider = await askChoice(prompter, "Telephony provider (telnyx/twilio): ", ["telnyx", "twilio"]);
@@ -118,6 +147,12 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     if (voiceProvider === "elevenlabs-conversational") {
         values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
         values.elevenlabsAgentId = await askNonEmpty(prompter, "ElevenLabs agent ID: ");
+    }
+    const personalityResult = await selectPersonality(prompter, voiceProvider, { printElevenLabs: true });
+    if (personalityResult.prompt) {
+        if (voiceProvider === "deepgram-agent") {
+            values.voiceSystemPrompt = personalityResult.prompt;
+        }
     }
     await saveConfig(api, values);
     const setupRaw = api;
@@ -194,7 +229,7 @@ function formatDuration(ms) {
     const remaining = seconds % 60;
     return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
-function registerCLI(api, config, callService, memoryService, workspacePath) {
+function registerCLI(api, config, callService, memoryService) {
     const raw = api;
     const logSource = (api.log && typeof api.log.info === "function") ? api.log
         : (raw.logger && typeof raw.logger.info === "function") ? raw.logger
@@ -432,46 +467,84 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         },
     });
     api.cli.register({
-        name: "clawvoice profile",
-        description: "View or set up your user profile for voice calls",
+        name: "clawvoice personality",
+        description: "View or change the voice assistant personality / system prompt",
         run: async (args) => {
-            const voiceMemoryDir = workspacePath
-                ? path.join(workspacePath, "voice-memory")
-                : null;
-            if (!voiceMemoryDir) {
-                log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or run inside an OpenClaw gateway.");
-                return;
-            }
-            const existing = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
-            // Show current profile if no args or --show
-            if (args.length === 0 || args.includes("--show")) {
-                if (existing.ownerName) {
-                    log.info("Current profile:", {
-                        ownerName: existing.ownerName,
-                        communicationStyle: existing.communicationStyle,
-                        context: existing.contextBlock || "(empty)",
-                    });
-                }
-                else {
-                    log.info("No user profile found. Run with --name to create one.");
-                    log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+            const subcommand = args.find((a) => !a.startsWith("--"));
+            if (subcommand === "list") {
+                log.info("Available personalities:", {});
+                for (const p of personalities_1.PERSONALITIES) {
+                    log.info(`  ${p.id}: ${p.name} — ${p.tagline}`, {});
                 }
                 return;
             }
-            // Set profile from flags
-            const name = parseFlag(args, "name") ?? existing.ownerName;
-            const style = parseFlag(args, "style") ?? existing.communicationStyle;
-            const context = parseFlag(args, "context");
-            if (!name) {
-                log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+            if (subcommand === "show") {
+                const current = config.voiceSystemPrompt;
+                if (!current) {
+                    log.info("No system prompt configured. Run 'clawvoice personality set' or 'clawvoice setup'.", {});
+                    return;
+                }
+                const match = personalities_1.PERSONALITIES.find((p) => {
+                    const parts = p.prompt.split("{{OWNER_NAME}}").filter(Boolean);
+                    let idx = 0;
+                    for (const part of parts) {
+                        const next = current.indexOf(part, idx);
+                        if (next === -1)
+                            return false;
+                        idx = next + part.length;
+                    }
+                    return true;
+                });
+                if (match) {
+                    log.info(`Current personality: ${match.name}`, {});
+                }
+                log.info(`System prompt (${current.length} chars):\n${current}`, {});
                 return;
             }
-            (0, user_profile_1.writeDefaultProfile)(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
-            log.info("Profile saved.", {
-                ownerName: name,
-                communicationStyle: style,
-                path: path.join(voiceMemoryDir, "user-profile.md"),
-            });
+            if (subcommand === "set") {
+                const presetId = parseFlag(args, "preset");
+                const prompter = createReadlinePrompter();
+                try {
+                    let result;
+                    if (presetId) {
+                        const preset = (0, personalities_1.getPersonality)(presetId);
+                        if (!preset) {
+                            log.info(`Unknown personality: ${presetId}. Run 'clawvoice personality list' to see options.`, {});
+                            return;
+                        }
+                        let ownerName;
+                        if (preset.prompt.includes("{{OWNER_NAME}}")) {
+                            ownerName = (await prompter.ask("Your name (for the assistant to reference): ")).trim() || undefined;
+                        }
+                        result = { id: preset.id, prompt: (0, personalities_1.personalizePrompt)(preset.prompt, ownerName) };
+                    }
+                    else {
+                        result = await selectPersonality(prompter, config.voiceProvider);
+                    }
+                    if (!result.prompt) {
+                        log.info("Skipped.", {});
+                        return;
+                    }
+                    if (config.voiceProvider === "deepgram-agent") {
+                        await saveConfig(api, { voiceSystemPrompt: result.prompt });
+                        config.voiceSystemPrompt = result.prompt;
+                        log.info(`Personality set: ${result.id ?? "custom"}. Saved to voiceSystemPrompt config.`, {});
+                    }
+                    else {
+                        printElevenLabsPrompt(result.prompt);
+                        log.info("Copy the prompt above into your ElevenLabs agent dashboard.", {});
+                    }
+                }
+                finally {
+                    prompter.close();
+                }
+                return;
+            }
+            log.info("Usage:", {});
+            log.info("  clawvoice personality list             — show available personalities", {});
+            log.info("  clawvoice personality show             — show current system prompt", {});
+            log.info("  clawvoice personality set              — interactive personality selection", {});
+            log.info("  clawvoice personality set --preset ID  — set a specific personality by ID", {});
         },
     });
 }

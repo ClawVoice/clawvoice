@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerRoutes = registerRoutes;
 const classifier_1 = require("./inbound/classifier");
 const verify_1 = require("./webhooks/verify");
-function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
+function registerRoutes(api, config, onInbound, onInboundText) {
     const router = api.http.router("/clawvoice");
     router.post("/webhooks/telnyx", async (req, response) => {
         const request = req;
@@ -106,22 +106,6 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             onInboundText?.(from, to, body, messageId);
         }
         sendTwiml(response, "<Response></Response>");
-    });
-    router.post("/webhooks/twilio/recording", async (req, response) => {
-        const request = req;
-        const url = buildPublicUrl(request);
-        const params = typeof request.body === "object" && request.body !== null ? request.body : {};
-        const result = (0, verify_1.verifyTwilioSignature)(url, params, request.headers?.["x-twilio-signature"], config.twilioAuthToken);
-        if (!result.valid) {
-            response.status(401).json({ error: "Unauthorized", reason: result.reason });
-            return;
-        }
-        const callSid = typeof params.CallSid === "string" ? params.CallSid : "";
-        const recordingUrl = typeof params.RecordingUrl === "string" ? params.RecordingUrl : "";
-        if (callSid && recordingUrl && onRecording) {
-            onRecording(callSid, recordingUrl);
-        }
-        response.status(200).json({ ok: true });
     });
 }
 function buildPublicUrl(request) {

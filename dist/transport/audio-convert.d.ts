@@ -33,8 +33,8 @@ export declare function resamplePcm16(input: Buffer, fromRate: number, toRate: n
  */
 export declare function twilioToElevenLabs(mulawBuffer: Buffer): Buffer;
 /**
- * Convert ElevenLabs PCM 16kHz 16-bit audio to Twilio mulaw 8kHz.
- * ElevenLabs Conversational AI sends PCM 16-bit at 16kHz (agent_output_audio_format: "pcm_16000").
+ * Convert ElevenLabs PCM 44.1kHz 16-bit audio to Twilio mulaw 8kHz.
+ * ElevenLabs sends base64-encoded PCM 16-bit at 44.1kHz.
  * Twilio expects base64-encoded mulaw at 8kHz.
  */
-export declare function elevenLabsToTwilio(pcm16kBuffer: Buffer): Buffer;
+export declare function elevenLabsToTwilio(pcm44kBuffer: Buffer): Buffer;
