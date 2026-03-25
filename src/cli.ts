@@ -4,6 +4,8 @@ import { runDiagnostics } from "./diagnostics/health";
 
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { ClawVoiceService } from "./services/clawvoice";
+import { readUserProfile, writeDefaultProfile } from "./services/user-profile";
+import * as path from "path";
 
 export interface SetupPrompter {
   ask(question: string): Promise<string>;
@@ -202,7 +204,7 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
 
-export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService): void {
+export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService, workspacePath?: string): void {
   const raw = api as unknown as Record<string, unknown>;
   const logSource = (api.log && typeof api.log.info === "function") ? api.log
     : (raw.logger && typeof (raw.logger as { info?: unknown }).info === "function") ? raw.logger as PluginAPI["log"]
@@ -445,6 +447,55 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
         return;
       }
       log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+    },
+  });
+
+  api.cli.register({
+    name: "clawvoice profile",
+    description: "View or set up your user profile for voice calls",
+    run: async (args) => {
+      const voiceMemoryDir = workspacePath
+        ? path.join(workspacePath, "voice-memory")
+        : null;
+
+      if (!voiceMemoryDir) {
+        log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or run inside an OpenClaw gateway.");
+        return;
+      }
+
+      const existing = readUserProfile(voiceMemoryDir);
+
+      // Show current profile if no args or --show
+      if (args.length === 0 || args.includes("--show")) {
+        if (existing.ownerName) {
+          log.info("Current profile:", {
+            ownerName: existing.ownerName,
+            communicationStyle: existing.communicationStyle,
+            context: existing.contextBlock || "(empty)",
+          });
+        } else {
+          log.info("No user profile found. Run with --name to create one.");
+          log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+        }
+        return;
+      }
+
+      // Set profile from flags
+      const name = parseFlag(args, "name") ?? existing.ownerName;
+      const style = parseFlag(args, "style") ?? existing.communicationStyle;
+      const context = parseFlag(args, "context");
+
+      if (!name) {
+        log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+        return;
+      }
+
+      writeDefaultProfile(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
+      log.info("Profile saved.", {
+        ownerName: name,
+        communicationStyle: style,
+        path: path.join(voiceMemoryDir, "user-profile.md"),
+      });
     },
   });
 }

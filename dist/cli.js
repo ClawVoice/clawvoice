@@ -1,8 +1,43 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.registerCLI = registerCLI;
 const health_1 = require("./diagnostics/health");
+const user_profile_1 = require("./services/user-profile");
+const path = __importStar(require("path"));
 function maskSecret(value) {
     if (!value) {
         return "(not set)";
@@ -159,7 +194,7 @@ function formatDuration(ms) {
     const remaining = seconds % 60;
     return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
-function registerCLI(api, config, callService, memoryService) {
+function registerCLI(api, config, callService, memoryService, workspacePath) {
     const raw = api;
     const logSource = (api.log && typeof api.log.info === "function") ? api.log
         : (raw.logger && typeof raw.logger.info === "function") ? raw.logger
@@ -394,6 +429,49 @@ function registerCLI(api, config, callService, memoryService) {
                 return;
             }
             log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+        },
+    });
+    api.cli.register({
+        name: "clawvoice profile",
+        description: "View or set up your user profile for voice calls",
+        run: async (args) => {
+            const voiceMemoryDir = workspacePath
+                ? path.join(workspacePath, "voice-memory")
+                : null;
+            if (!voiceMemoryDir) {
+                log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or run inside an OpenClaw gateway.");
+                return;
+            }
+            const existing = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
+            // Show current profile if no args or --show
+            if (args.length === 0 || args.includes("--show")) {
+                if (existing.ownerName) {
+                    log.info("Current profile:", {
+                        ownerName: existing.ownerName,
+                        communicationStyle: existing.communicationStyle,
+                        context: existing.contextBlock || "(empty)",
+                    });
+                }
+                else {
+                    log.info("No user profile found. Run with --name to create one.");
+                    log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+                }
+                return;
+            }
+            // Set profile from flags
+            const name = parseFlag(args, "name") ?? existing.ownerName;
+            const style = parseFlag(args, "style") ?? existing.communicationStyle;
+            const context = parseFlag(args, "context");
+            if (!name) {
+                log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+                return;
+            }
+            (0, user_profile_1.writeDefaultProfile)(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
+            log.info("Profile saved.", {
+                ownerName: name,
+                communicationStyle: style,
+                path: path.join(voiceMemoryDir, "user-profile.md"),
+            });
         },
     });
 }
