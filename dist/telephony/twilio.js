@@ -24,7 +24,15 @@ class TwilioTelephonyAdapter {
             throw new Error("Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint");
         }
         const callSidPlaceholder = "{CallSid}";
-        const twiml = `<Response><Connect><Stream url="${baseWebhookUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
+        let recordAttr = "";
+        if (this.config.recordCalls) {
+            // Derive HTTPS webhook URL from the WSS stream URL for recording status callback
+            const recordingCallbackUrl = baseWebhookUrl
+                .replace(/^wss:/i, "https:")
+                .replace(/\/media-stream\/?$/, "/clawvoice/webhooks/twilio/recording");
+            recordAttr = ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackEvent="completed"`;
+        }
+        const twiml = `<Response><Connect${recordAttr}><Stream url="${baseWebhookUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
         const body = new URLSearchParams({
             To: normalizedTo,
             From: from ?? "",
