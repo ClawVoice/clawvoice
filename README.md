@@ -21,13 +21,13 @@ openclaw plugins install clawvoice
 
 ### 2. Start a Public Tunnel
 
-Twilio/Telnyx need to reach your machine from the internet. ClawVoice runs its own HTTP + WebSocket server on port **3101** (configurable via `CLAWVOICE_MEDIA_STREAM_PORT`). Point your tunnel at this port.
+Twilio/Telnyx need to reach your machine from the internet. Start your tunnel **before** running the setup wizard so you can paste the URL when prompted.
 
 **Option A — ngrok (quickest to get started):**
 
 ```bash
 # Install: https://ngrok.com/download
-ngrok http 3101
+ngrok http 3334
 ```
 
 ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep this terminal open.
@@ -36,18 +36,18 @@ ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep thi
 
 ```bash
 # Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:3101
+cloudflared tunnel --url http://localhost:3334
 ```
 
 Prints a URL like `https://random-words.trycloudflare.com`. Keep this terminal open.
 
-> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get `Error 31920`, use ngrok instead.
+> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get `Error 31920`, use ngrok instead, or use Cloudflare for webhooks only and ngrok for the stream URL.
 
 **Option C — Tailscale Funnel (if you already use Tailscale):**
 
 ```bash
 # Requires Tailscale installed and logged in
-tailscale funnel 3101
+tailscale funnel 3334
 ```
 
 Gives you a stable `https://your-machine.tail1234.ts.net` URL. Keep this terminal open.
@@ -73,7 +73,7 @@ Or configure manually — see [Configuration](#configuration) below.
 
 The wizard sets up ClawVoice's config, but you also need to tell Twilio/Telnyx where to send incoming calls. This is a separate step in their dashboard.
 
-> **One tunnel, two purposes.** Twilio uses two connections: an **HTTPS webhook** (incoming call notifications) and a **WSS stream** (live audio). Both go through the same tunnel to ClawVoice's port 3101. The wizard handles the WSS stream URL; you set the HTTPS webhook in Twilio's dashboard below.
+> **Why two URLs?** Twilio uses two different connections: an **HTTPS webhook** (tells ClawVoice about incoming calls) and a **WSS stream** (streams live audio). The wizard handles the WSS stream URL. You set the HTTPS webhook in Twilio's dashboard.
 
 **Twilio:**
 1. Open [Twilio Console](https://console.twilio.com) → **Phone Numbers** → **Manage** → **Active Numbers**

@@ -17,12 +17,14 @@ interface WebhookRequest {
 
 type InboundHandler = (record: InboundCallRecord) => void;
 type InboundTextHandler = (from: string, to: string, body: string, messageId?: string) => void;
+type RecordingHandler = (providerCallId: string, recordingUrl: string) => void;
 
 export function registerRoutes(
   api: PluginAPI,
   config: ClawVoiceConfig,
   onInbound?: InboundHandler,
   onInboundText?: InboundTextHandler,
+  onRecording?: RecordingHandler,
 ): void {
   const router = api.http.router("/clawvoice");
 
@@ -185,6 +187,31 @@ export function registerRoutes(
     }
 
     sendTwiml(response, "<Response></Response>");
+  });
+
+  router.post("/webhooks/twilio/recording", async (req, response) => {
+    const request = req as WebhookRequest;
+    const url = buildPublicUrl(request);
+    const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
+    const result = verifyTwilioSignature(
+      url,
+      params,
+      request.headers?.["x-twilio-signature"],
+      config.twilioAuthToken,
+    );
+    if (!result.valid) {
+      response.status(401).json({ error: "Unauthorized", reason: result.reason });
+      return;
+    }
+
+    const callSid = typeof params.CallSid === "string" ? params.CallSid : "";
+    const recordingUrl = typeof params.RecordingUrl === "string" ? params.RecordingUrl : "";
+
+    if (callSid && recordingUrl && onRecording) {
+      onRecording(callSid, recordingUrl);
+    }
+
+    response.status(200).json({ ok: true });
   });
 }
 
