@@ -51,15 +51,19 @@ class ClawVoiceService {
         return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
     }
     async start() {
-        await this.startStandaloneTransport();
         try {
-            this.startReaper();
-            this.running = true;
+            await this.startStandaloneTransport();
         }
         catch (error) {
-            await this.stopStandaloneTransport().catch(() => undefined);
-            throw error;
+            // EADDRINUSE is expected in multi-instance environments — another instance
+            // already owns the media stream port. Call placement still works via Twilio API;
+            // only the media stream server is unavailable in this instance.
+            const isPortConflict = error instanceof Error && error.code === "EADDRINUSE";
+            if (!isPortConflict)
+                throw error;
         }
+        this.startReaper();
+        this.running = true;
     }
     async stop() {
         await this.stopStandaloneTransport();

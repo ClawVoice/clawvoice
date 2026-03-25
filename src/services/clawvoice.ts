@@ -122,14 +122,17 @@ export class ClawVoiceService {
   private static readonly REAPER_GRACE_MS = 120_000;
 
   public async start(): Promise<void> {
-    await this.startStandaloneTransport();
     try {
-      this.startReaper();
-      this.running = true;
+      await this.startStandaloneTransport();
     } catch (error) {
-      await this.stopStandaloneTransport().catch(() => undefined);
-      throw error;
+      // EADDRINUSE is expected in multi-instance environments — another instance
+      // already owns the media stream port. Call placement still works via Twilio API;
+      // only the media stream server is unavailable in this instance.
+      const isPortConflict = error instanceof Error && (error as NodeJS.ErrnoException).code === "EADDRINUSE";
+      if (!isPortConflict) throw error;
     }
+    this.startReaper();
+    this.running = true;
   }
 
   public async stop(): Promise<void> {
