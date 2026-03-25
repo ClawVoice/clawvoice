@@ -52,7 +52,7 @@ function normalizeCliArgs(input) {
     }
     return [];
 }
-function registerModernCliBridge(api, config, callService, memoryService) {
+function registerModernCliBridge(api, config, callService, memoryService, workspacePath) {
     const modernApi = api;
     if (typeof modernApi.registerCli !== "function") {
         return;
@@ -66,7 +66,7 @@ function registerModernCliBridge(api, config, callService, memoryService) {
             },
         },
     };
-    (0, cli_1.registerCLI)(shimApi, config, callService, memoryService);
+    (0, cli_1.registerCLI)(shimApi, config, callService, memoryService, workspacePath);
     if (legacyCommands.length === 0) {
         return;
     }
@@ -239,6 +239,60 @@ async function resolveInternalRouteRegistrar(api) {
     catch { /* ignore */ }
     return null;
 }
+/**
+ * Try to locate OpenClaw's enqueueSystemEvent for injecting messages into
+ * the active conversation. Falls back to the api-level emitter if available.
+ */
+async function resolveSystemEventEmitter(api) {
+    // Check if api exposes a system event emitter directly
+    const rawApi = api;
+    if (typeof rawApi.enqueueSystemEvent === "function") {
+        return rawApi.enqueueSystemEvent;
+    }
+    if (rawApi.systemEvents && typeof rawApi.systemEvents.enqueue === "function") {
+        return rawApi.systemEvents.enqueue;
+    }
+    // Try to find it in the OpenClaw dist chunks (same pattern as route registrar)
+    try {
+        const path = require("path");
+        const fs = require("fs");
+        let openclawDist = "";
+        if (process.argv[1]) {
+            let dir = path.dirname(process.argv[1]);
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const files = fs.readdirSync(dir);
+                    if (files.some((f) => f.startsWith("system-events-") && f.endsWith(".js"))) {
+                        openclawDist = dir;
+                        break;
+                    }
+                }
+                catch { /* skip */ }
+                dir = path.dirname(dir);
+            }
+        }
+        if (!openclawDist)
+            return null;
+        const sysEventFiles = fs.readdirSync(openclawDist).filter((f) => f.startsWith("system-events-") && f.endsWith(".js"));
+        if (sysEventFiles.length === 0)
+            return null;
+        const chunkUrl = "file://" + path.join(openclawDist, sysEventFiles[0]).replace(/\\/g, "/");
+        const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
+        // Look for enqueueSystemEvent export
+        if (typeof mod.enqueueSystemEvent === "function")
+            return mod.enqueueSystemEvent;
+        // Fallback: search single-letter exports
+        for (const key of Object.keys(mod)) {
+            if (typeof mod[key] === "function") {
+                const src = mod[key].toString();
+                if (src.includes("systemEvent") || src.includes("enqueueSystem"))
+                    return mod[key];
+            }
+        }
+    }
+    catch { /* ignore */ }
+    return null;
+}
 function registerModernRoutesBridge(api, config, callService) {
     const capturedRoutes = [];
     const shimApi = {
@@ -260,6 +314,8 @@ function registerModernRoutesBridge(api, config, callService) {
         callService.trackInboundCall(record);
     }, (from, to, body, messageId) => {
         callService.trackInboundText(from, to, body, messageId);
+    }, (providerCallId, recordingUrl) => {
+        callService.setRecordingUrl(providerCallId, recordingUrl);
     });
     // Try the internal gateway registry first; fall back to api.registerHttpRoute
     resolveInternalRouteRegistrar(api)
@@ -316,8 +372,24 @@ function initPlugin(api) {
             });
         }
     }
-    const callService = new clawvoice_1.ClawVoiceService(config);
+    // Resolve workspace path for user profile and voice-memory access
+    const rawApiConfig = api.config;
+    const workspacePath = (typeof rawApiConfig?.workspace === "string" ? rawApiConfig.workspace : undefined) ??
+        (typeof rawApiConfig?.dataDir === "string" ? rawApiConfig.dataDir : undefined) ??
+        (typeof rawApiConfig?.workspacePath === "string" ? rawApiConfig.workspacePath : undefined) ??
+        (typeof process.env.OPENCLAW_WORKSPACE === "string" && process.env.OPENCLAW_WORKSPACE.length > 0
+            ? process.env.OPENCLAW_WORKSPACE
+            : undefined);
+    const callService = new clawvoice_1.ClawVoiceService(config, undefined, workspacePath);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
+    // Wire system event emitter for immediate post-call summary delivery
+    resolveSystemEventEmitter(api)
+        .then((emitter) => {
+        if (emitter) {
+            callService.postCall.setSystemEventEmitter(emitter);
+        }
+    })
+        .catch(() => undefined);
     void callService.start().catch((error) => {
         logger.error?.("ClawVoice call service failed to start", {
             error: error instanceof Error ? error.message : String(error),
@@ -332,10 +404,10 @@ function initPlugin(api) {
     }
     const cliRegister = api.cli?.register;
     if (typeof cliRegister === "function") {
-        (0, cli_1.registerCLI)(api, config, callService, memoryService);
+        (0, cli_1.registerCLI)(api, config, callService, memoryService, workspacePath);
     }
     else {
-        registerModernCliBridge(api, config, callService, memoryService);
+        registerModernCliBridge(api, config, callService, memoryService, workspacePath);
     }
     const httpRouter = api.http?.router;
     if (typeof httpRouter === "function") {
@@ -343,6 +415,8 @@ function initPlugin(api) {
             callService.trackInboundCall(record);
         }, (from, to, body, messageId) => {
             callService.trackInboundText(from, to, body, messageId);
+        }, (providerCallId, recordingUrl) => {
+            callService.setRecordingUrl(providerCallId, recordingUrl);
         });
     }
     else {
