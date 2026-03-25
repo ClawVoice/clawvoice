@@ -286,23 +286,17 @@ class VoiceBridgeService {
             }
             case "Audio": {
                 const payload = message.data;
-                if (Buffer.isBuffer(payload)) {
-                    return { action: "audio", data: payload };
+                if (typeof payload !== "string") {
+                    return { action: "none" };
                 }
-                if (typeof payload === "string") {
-                    return { action: "audio", data: Buffer.from(payload, "base64") };
-                }
-                return { action: "none" };
+                return { action: "audio", data: Buffer.from(payload, "base64") };
             }
             case "AgentAudio": {
                 const payload = message.data;
-                if (Buffer.isBuffer(payload)) {
-                    return { action: "audio", data: payload };
+                if (typeof payload !== "string") {
+                    return { action: "none" };
                 }
-                if (typeof payload === "string") {
-                    return { action: "audio", data: Buffer.from(payload, "base64") };
-                }
-                return { action: "none" };
+                return { action: "audio", data: Buffer.from(payload, "base64") };
             }
             case "FunctionCallRequest": {
                 const fcReq = {

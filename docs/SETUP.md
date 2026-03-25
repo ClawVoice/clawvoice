@@ -58,7 +58,7 @@ If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **pub
 
 Use this secure pattern:
 
-1. Keep OpenClaw bound to localhost (example: `127.0.0.1:3334`).
+1. Keep ClawVoice on a known port (default bind: `0.0.0.0:3101`; set `CLAWVOICE_MEDIA_STREAM_BIND=127.0.0.1` to restrict to localhost).
 2. Expose only webhook paths through a tunnel hostname.
 3. Keep provider signature verification enabled.
 4. Point provider webhooks to:
@@ -72,7 +72,7 @@ Use this secure pattern:
 
 ```bash
 # Install: https://ngrok.com/download
-ngrok http 3334
+ngrok http 3101
 ```
 
 ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. The URL changes each time you restart ngrok (unless you have a paid plan with a stable domain).
@@ -81,18 +81,18 @@ ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. The URL 
 
 ```bash
 # Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:3334
+cloudflared tunnel --url http://localhost:3101
 ```
 
 Prints a URL like `https://random-words.trycloudflare.com`. Stable hostname — IP changes don't matter. No inbound port-forwarding on your router needed.
 
-> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get Twilio `Error 31920`, use ngrok for the stream URL, or use ngrok for both.
+> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get Twilio `Error 31920`, use ngrok instead.
 
 **Option C — Tailscale Funnel (good if you already use Tailscale):**
 
 ```bash
 # Requires Tailscale installed and logged in
-tailscale funnel 3334
+tailscale funnel 3101
 ```
 
 Gives you a stable `https://your-machine.tail1234.ts.net` URL. Still public at the Funnel URL, so treat it like any internet-facing endpoint.

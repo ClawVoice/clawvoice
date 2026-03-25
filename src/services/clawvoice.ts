@@ -7,7 +7,7 @@ import { TwilioTelephonyAdapter } from "../telephony/twilio";
 import { DeepgramBridgeClient } from "../transport/deepgram-bridge";
 import { ElevenLabsBridgeClient } from "../transport/elevenlabs-bridge";
 import { TwilioMediaSessionHandler } from "../transport/media-session-handler";
-import { MediaStreamServer } from "../transport/media-stream-server";
+import { HttpRouteEntry, MediaStreamServer } from "../transport/media-stream-server";
 import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
@@ -24,7 +24,6 @@ export interface CallRecord {
   endedAt?: string;
   status: "in-progress" | "completed";
   summary?: CallSummary;
-  recordingUrl?: string;
 }
 
 export interface StartCallRequest {
@@ -82,14 +81,12 @@ export class ClawVoiceService {
   private readonly voiceProviderClient: VoiceProviderClient | null;
   private readonly mediaSessionHandler: TwilioMediaSessionHandler | null;
   private mediaStreamServer: MediaStreamServer | null = null;
-  private readonly workspacePath: string | undefined;
+  private webhookRoutes: HttpRouteEntry[] = [];
 
   public constructor(
     private readonly config: ClawVoiceConfig,
     fetchFn?: typeof globalThis.fetch,
-    workspacePath?: string,
   ) {
-    this.workspacePath = workspacePath;
     this.telephonyAdapter =
       config.telephonyProvider === "twilio"
         ? new TwilioTelephonyAdapter(config, fetchFn)
@@ -103,7 +100,6 @@ export class ClawVoiceService {
         voiceProviderClient: this.voiceProviderClient,
         resolveCallIdByProviderCallId: (providerCallId: string) =>
           this.findInternalCallIdByProviderCallId(providerCallId),
-        workspacePath: this.workspacePath,
       })
       : null;
   }
@@ -117,8 +113,13 @@ export class ClawVoiceService {
     return new DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
   }
 
+  public setWebhookRoutes(routes: HttpRouteEntry[]): void {
+    this.webhookRoutes.length = 0;
+    this.webhookRoutes.push(...routes);
+  }
+
   private reaperTimer: NodeJS.Timeout | null = null;
-  private static readonly REAPER_INTERVAL_MS = 30_000; // check every 30s
+  private static readonly REAPER_INTERVAL_MS = 30_000;
   private static readonly REAPER_GRACE_MS = 120_000;
 
   public async start(): Promise<void> {
@@ -169,6 +170,7 @@ export class ClawVoiceService {
       port: streamPort,
       path: streamPath,
       sessionHandler: this.mediaSessionHandler,
+      httpRoutes: this.webhookRoutes,
     });
     await this.mediaStreamServer.start();
   }
@@ -446,24 +448,6 @@ export class ClawVoiceService {
     return [...this.inboundRecords];
   }
 
-  public setRecordingUrl(providerCallId: string, recordingUrl: string): void {
-    const callId = this.callIdByProviderCallId.get(providerCallId);
-    if (!callId) {
-      // Call may already be completed — check recent calls
-      for (const call of this.recentCalls) {
-        if (call.providerCallId === providerCallId) {
-          call.recordingUrl = recordingUrl;
-          return;
-        }
-      }
-      return;
-    }
-    const call = this.activeCalls.get(callId);
-    if (call) {
-      call.recordingUrl = recordingUrl;
-    }
-  }
-
   public getCallSummary(callId: string): CallSummary | null {
     const call = this.recentCalls.find((c) => c.callId === callId);
     return call?.summary ?? null;
@@ -545,7 +529,7 @@ export class ClawVoiceService {
     this.callIdByProviderCallId.delete(call.providerCallId);
 
     if (summary) {
-      await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl).catch(() => undefined);
+      await this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
     }
 
     const timer = this.callTimers.get(callId);

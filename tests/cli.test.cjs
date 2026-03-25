@@ -47,7 +47,8 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "elevenlabs-conversational",
     "dg-key",
     "el-key",
-    "agent-1"
+    "agent-1",
+    "7"  // skip personality selection
   ]);
 
   await runSetupWizard(api, [], prompter);
@@ -63,6 +64,47 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   assert.equal(state.saved.elevenlabsAgentId, "agent-1");
   assert.equal(state.logs.length, 1);
   assert.equal(state.logs[0].metadata.deepgramApiKey, "dg-k...");
+});
+
+test("runSetupWizard saves personality to voiceSystemPrompt for deepgram", async () => {
+  const { api, state } = createApi();
+  const prompter = createPrompter([
+    "twilio",
+    "AC123",
+    "auth123",
+    "+15551112222",
+    "wss://my-tunnel.ngrok-free.dev/media-stream",
+    "deepgram-agent",
+    "dg-key",
+    "1",       // select "Professional Assistant"
+    "Alice"    // owner name
+  ]);
+
+  await runSetupWizard(api, [], prompter);
+
+  assert.equal(state.saved.voiceProvider, "deepgram-agent");
+  assert.ok(state.saved.voiceSystemPrompt);
+  assert.ok(state.saved.voiceSystemPrompt.includes("Alice"));
+  assert.ok(state.saved.voiceSystemPrompt.includes("professional AI voice assistant"));
+});
+
+test("runSetupWizard skips personality when user selects skip", async () => {
+  const { api, state } = createApi();
+  const prompter = createPrompter([
+    "twilio",
+    "AC123",
+    "auth123",
+    "+15551112222",
+    "wss://my-tunnel.ngrok-free.dev/media-stream",
+    "deepgram-agent",
+    "dg-key",
+    "7"  // skip
+  ]);
+
+  await runSetupWizard(api, [], prompter);
+
+  assert.equal(state.saved.voiceProvider, "deepgram-agent");
+  assert.equal(state.saved.voiceSystemPrompt, undefined);
 });
 
 // --- Story 4.1: CLI Call Initiation ---
