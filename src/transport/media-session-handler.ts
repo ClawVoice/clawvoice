@@ -1,5 +1,7 @@
 import { VoiceProviderClient, VoiceProviderSession } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
+import { readUserProfile, buildCallPrompt } from "../services/user-profile";
+import * as path from "path";
 
 export type TwilioWebSocket = VoiceWebSocket & {
   close(code?: number, reason?: string): void;
@@ -15,6 +17,7 @@ interface TwilioMediaSessionHandlerOptions {
   bridge: VoiceBridgeService;
   voiceProviderClient: VoiceProviderClient;
   resolveCallIdByProviderCallId: (providerCallId: string) => string | null;
+  workspacePath?: string;
 }
 
 interface TwilioStartMessage {
@@ -98,6 +101,19 @@ export class TwilioMediaSessionHandler {
     if (!sessionConfig) {
       socket.close(1011, "Missing bridge session");
       return;
+    }
+
+    // Enrich systemPrompt with user profile context if workspace is available
+    if (this.options.workspacePath) {
+      const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
+      const profile = readUserProfile(voiceMemoryDir);
+      if (profile.ownerName || profile.contextBlock) {
+        const profilePrompt = buildCallPrompt(profile);
+        const existing = sessionConfig.systemPrompt || "";
+        sessionConfig.systemPrompt = existing
+          ? `${profilePrompt}\n\n${existing}`
+          : profilePrompt;
+      }
     }
 
     let teardownTriggered = false;
