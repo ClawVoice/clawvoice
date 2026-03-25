@@ -81,11 +81,14 @@ export class ClawVoiceService {
   private readonly voiceProviderClient: VoiceProviderClient | null;
   private readonly mediaSessionHandler: TwilioMediaSessionHandler | null;
   private mediaStreamServer: MediaStreamServer | null = null;
+  private readonly workspacePath: string | undefined;
 
   public constructor(
     private readonly config: ClawVoiceConfig,
     fetchFn?: typeof globalThis.fetch,
+    workspacePath?: string,
   ) {
+    this.workspacePath = workspacePath;
     this.telephonyAdapter =
       config.telephonyProvider === "twilio"
         ? new TwilioTelephonyAdapter(config, fetchFn)
@@ -99,6 +102,7 @@ export class ClawVoiceService {
         voiceProviderClient: this.voiceProviderClient,
         resolveCallIdByProviderCallId: (providerCallId: string) =>
           this.findInternalCallIdByProviderCallId(providerCallId),
+        workspacePath: this.workspacePath,
       })
       : null;
   }

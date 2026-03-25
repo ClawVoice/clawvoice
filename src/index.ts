@@ -364,7 +364,17 @@ function initPlugin(api: PluginAPI): void {
     }
   }
 
-  const callService = new ClawVoiceService(config);
+  // Resolve workspace path for user profile and voice-memory access
+  const rawApiConfig = api.config as Record<string, unknown> | undefined;
+  const workspacePath =
+    (typeof rawApiConfig?.workspace === "string" ? rawApiConfig.workspace : undefined) ??
+    (typeof rawApiConfig?.dataDir === "string" ? rawApiConfig.dataDir : undefined) ??
+    (typeof rawApiConfig?.workspacePath === "string" ? rawApiConfig.workspacePath : undefined) ??
+    (typeof process.env.OPENCLAW_WORKSPACE === "string" && process.env.OPENCLAW_WORKSPACE.length > 0
+      ? process.env.OPENCLAW_WORKSPACE
+      : undefined);
+
+  const callService = new ClawVoiceService(config, undefined, workspacePath);
   const memoryService = new MemoryExtractionService(config);
   void callService.start().catch((error) => {
     logger.error?.("ClawVoice call service failed to start", {
