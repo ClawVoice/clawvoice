@@ -54,6 +54,7 @@ function registerModernCliBridge(
   config: ReturnType<typeof resolveConfig>,
   callService: ClawVoiceService,
   memoryService: MemoryExtractionService,
+  workspacePath?: string,
 ): void {
   const modernApi = api as unknown as ModernPluginApi;
   if (typeof modernApi.registerCli !== "function") {
@@ -70,7 +71,7 @@ function registerModernCliBridge(
     },
   } as PluginAPI;
 
-  registerCLI(shimApi, config, callService, memoryService);
+  registerCLI(shimApi, config, callService, memoryService, workspacePath);
   if (legacyCommands.length === 0) {
     return;
   }
@@ -455,9 +456,9 @@ function initPlugin(api: PluginAPI): void {
 
   const cliRegister = (api as unknown as { cli?: { register?: unknown } }).cli?.register;
   if (typeof cliRegister === "function") {
-    registerCLI(api, config, callService, memoryService);
+    registerCLI(api, config, callService, memoryService, workspacePath);
   } else {
-    registerModernCliBridge(api, config, callService, memoryService);
+    registerModernCliBridge(api, config, callService, memoryService, workspacePath);
   }
 
   const httpRouter = (api as unknown as { http?: { router?: unknown } }).http?.router;
