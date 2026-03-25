@@ -191,7 +191,18 @@ export function registerRoutes(
 
   router.post("/webhooks/twilio/recording", async (req, response) => {
     const request = req as WebhookRequest;
+    const url = buildPublicUrl(request);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
+    const result = verifyTwilioSignature(
+      url,
+      params,
+      request.headers?.["x-twilio-signature"],
+      config.twilioAuthToken,
+    );
+    if (!result.valid) {
+      response.status(401).json({ error: "Unauthorized", reason: result.reason });
+      return;
+    }
 
     const callSid = typeof params.CallSid === "string" ? params.CallSid : "";
     const recordingUrl = typeof params.RecordingUrl === "string" ? params.RecordingUrl : "";
