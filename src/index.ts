@@ -258,6 +258,60 @@ async function resolveInternalRouteRegistrar(
   return null;
 }
 
+/**
+ * Try to locate OpenClaw's enqueueSystemEvent for injecting messages into
+ * the active conversation. Falls back to the api-level emitter if available.
+ */
+async function resolveSystemEventEmitter(
+  api: PluginAPI,
+): Promise<((text: string, options?: { source?: string }) => void) | null> {
+  // Check if api exposes a system event emitter directly
+  const rawApi = api as unknown as Record<string, unknown>;
+  if (typeof rawApi.enqueueSystemEvent === "function") {
+    return rawApi.enqueueSystemEvent as (text: string, options?: { source?: string }) => void;
+  }
+  if (rawApi.systemEvents && typeof (rawApi.systemEvents as Record<string, unknown>).enqueue === "function") {
+    return (rawApi.systemEvents as { enqueue: (text: string, options?: { source?: string }) => void }).enqueue;
+  }
+
+  // Try to find it in the OpenClaw dist chunks (same pattern as route registrar)
+  try {
+    const path = require("path");
+    const fs = require("fs");
+    let openclawDist = "";
+    if (process.argv[1]) {
+      let dir = path.dirname(process.argv[1]);
+      for (let i = 0; i < 5; i++) {
+        try {
+          const files = fs.readdirSync(dir) as string[];
+          if (files.some((f: string) => f.startsWith("system-events-") && f.endsWith(".js"))) {
+            openclawDist = dir;
+            break;
+          }
+        } catch { /* skip */ }
+        dir = path.dirname(dir);
+      }
+    }
+    if (!openclawDist) return null;
+    const sysEventFiles = (fs.readdirSync(openclawDist) as string[]).filter(
+      (f: string) => f.startsWith("system-events-") && f.endsWith(".js"),
+    );
+    if (sysEventFiles.length === 0) return null;
+    const chunkUrl = "file://" + path.join(openclawDist, sysEventFiles[0]).replace(/\\/g, "/");
+    const mod = await import(chunkUrl);
+    // Look for enqueueSystemEvent export
+    if (typeof mod.enqueueSystemEvent === "function") return mod.enqueueSystemEvent;
+    // Fallback: search single-letter exports
+    for (const key of Object.keys(mod)) {
+      if (typeof mod[key] === "function") {
+        const src = mod[key].toString();
+        if (src.includes("systemEvent") || src.includes("enqueueSystem")) return mod[key];
+      }
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function registerModernRoutesBridge(
   api: PluginAPI,
   config: ReturnType<typeof resolveConfig>,
@@ -376,6 +430,16 @@ function initPlugin(api: PluginAPI): void {
 
   const callService = new ClawVoiceService(config, undefined, workspacePath);
   const memoryService = new MemoryExtractionService(config);
+
+  // Wire system event emitter for immediate post-call summary delivery
+  resolveSystemEventEmitter(api)
+    .then((emitter) => {
+      if (emitter) {
+        callService.postCall.setSystemEventEmitter(emitter);
+      }
+    })
+    .catch(() => undefined);
+
   void callService.start().catch((error) => {
     logger.error?.("ClawVoice call service failed to start", {
       error: error instanceof Error ? error.message : String(error),
