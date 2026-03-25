@@ -19,7 +19,7 @@ function registerTools(api, config, callService, memoryService) {
                 },
                 purpose: {
                     type: "string",
-                    description: "Brief description of call purpose",
+                    description: "Call context and objectives for the voice agent. Include relevant details gathered from research — availability, preferences, account info, prior interactions, or specific questions to ask. The more context provided, the more effective the call.",
                 },
                 greeting: {
                     type: "string",
