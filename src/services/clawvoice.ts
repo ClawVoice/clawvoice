@@ -24,6 +24,7 @@ export interface CallRecord {
   endedAt?: string;
   status: "in-progress" | "completed";
   summary?: CallSummary;
+  recordingUrl?: string;
 }
 
 export interface StartCallRequest {
@@ -445,6 +446,24 @@ export class ClawVoiceService {
     return [...this.inboundRecords];
   }
 
+  public setRecordingUrl(providerCallId: string, recordingUrl: string): void {
+    const callId = this.callIdByProviderCallId.get(providerCallId);
+    if (!callId) {
+      // Call may already be completed — check recent calls
+      for (const call of this.recentCalls) {
+        if (call.providerCallId === providerCallId) {
+          call.recordingUrl = recordingUrl;
+          return;
+        }
+      }
+      return;
+    }
+    const call = this.activeCalls.get(callId);
+    if (call) {
+      call.recordingUrl = recordingUrl;
+    }
+  }
+
   public getCallSummary(callId: string): CallSummary | null {
     const call = this.recentCalls.find((c) => c.callId === callId);
     return call?.summary ?? null;
@@ -526,7 +545,7 @@ export class ClawVoiceService {
     this.callIdByProviderCallId.delete(call.providerCallId);
 
     if (summary) {
-      await this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
+      await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl).catch(() => undefined);
     }
 
     const timer = this.callTimers.get(callId);

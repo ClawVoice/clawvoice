@@ -71,6 +71,7 @@ export class PostCallService {
   public async processCompletedCall(
     summary: CallSummary,
     transcript: TranscriptEntry[],
+    recordingUrl?: string,
   ): Promise<{ persisted: boolean; notified: boolean }> {
     if (this.processedCalls.has(summary.callId)) {
       return { persisted: false, notified: false };
@@ -86,7 +87,7 @@ export class PostCallService {
     }
 
     const persisted = await this.persistCallRecord(summary, transcript);
-    const notified = await this.deliverSummary(summary, transcript);
+    const notified = await this.deliverSummary(summary, transcript, recordingUrl);
 
     return { persisted, notified };
   }
@@ -123,6 +124,7 @@ export class PostCallService {
   private async deliverSummary(
     summary: CallSummary,
     transcript: TranscriptEntry[],
+    recordingUrl?: string,
   ): Promise<boolean> {
     const text = this.formatSummaryText(summary, transcript);
     let delivered = false;
@@ -130,7 +132,7 @@ export class PostCallService {
     // Deliver via system event (immediate in-conversation delivery)
     if (this.systemEventEmitter) {
       try {
-        const systemText = this.formatSystemEventText(summary, transcript);
+        const systemText = this.formatSystemEventText(summary, transcript, recordingUrl);
         this.systemEventEmitter(systemText, { source: "clawvoice" });
         delivered = true;
       } catch {
@@ -160,6 +162,7 @@ export class PostCallService {
   private formatSystemEventText(
     summary: CallSummary,
     transcript: TranscriptEntry[],
+    recordingUrl?: string,
   ): string {
     const lines: string[] = [];
     lines.push(`📞 Call Summary — ${summary.callId}`);
@@ -185,6 +188,10 @@ export class PostCallService {
 
     if (summary.pendingActions.length > 0) {
       lines.push(`Pending: ${summary.pendingActions.join(", ")}`);
+    }
+
+    if (recordingUrl) {
+      lines.push(`Recording: ${recordingUrl}`);
     }
 
     return lines.join("\n");

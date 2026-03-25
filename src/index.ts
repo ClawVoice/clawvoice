@@ -350,6 +350,9 @@ function registerModernRoutesBridge(
     (from, to, body, messageId) => {
       callService.trackInboundText(from, to, body, messageId);
     },
+    (providerCallId, recordingUrl) => {
+      callService.setRecordingUrl(providerCallId, recordingUrl);
+    },
   );
 
   // Try the internal gateway registry first; fall back to api.registerHttpRoute
@@ -471,6 +474,9 @@ function initPlugin(api: PluginAPI): void {
       },
       (from, to, body, messageId) => {
         callService.trackInboundText(from, to, body, messageId);
+      },
+      (providerCallId, recordingUrl) => {
+        callService.setRecordingUrl(providerCallId, recordingUrl);
       },
     );
   } else {
