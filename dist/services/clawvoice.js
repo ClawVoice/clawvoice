@@ -10,7 +10,7 @@ const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
 const post_call_1 = require("./post-call");
 class ClawVoiceService {
-    constructor(config, fetchFn) {
+    constructor(config, fetchFn, workspacePath) {
         this.config = config;
         this.running = false;
         this.activeCalls = new Map();
@@ -22,8 +22,8 @@ class ClawVoiceService {
         this.dailyCallCount = 0;
         this.dailyResetDate = new Date().toISOString().slice(0, 10);
         this.mediaStreamServer = null;
-        this.webhookRoutes = [];
         this.reaperTimer = null;
+        this.workspacePath = workspacePath;
         this.telephonyAdapter =
             config.telephonyProvider === "twilio"
                 ? new twilio_1.TwilioTelephonyAdapter(config, fetchFn)
@@ -36,6 +36,7 @@ class ClawVoiceService {
                 bridge: this.bridge,
                 voiceProviderClient: this.voiceProviderClient,
                 resolveCallIdByProviderCallId: (providerCallId) => this.findInternalCallIdByProviderCallId(providerCallId),
+                workspacePath: this.workspacePath,
             })
             : null;
     }
@@ -49,20 +50,20 @@ class ClawVoiceService {
             return null;
         return new deepgram_bridge_1.DeepgramBridgeClient({ apiKey: config.deepgramApiKey });
     }
-    setWebhookRoutes(routes) {
-        this.webhookRoutes.length = 0;
-        this.webhookRoutes.push(...routes);
-    }
     async start() {
-        await this.startStandaloneTransport();
         try {
-            this.startReaper();
-            this.running = true;
+            await this.startStandaloneTransport();
         }
         catch (error) {
-            await this.stopStandaloneTransport().catch(() => undefined);
-            throw error;
+            // EADDRINUSE is expected in multi-instance environments — another instance
+            // already owns the media stream port. Call placement still works via Twilio API;
+            // only the media stream server is unavailable in this instance.
+            const isPortConflict = error instanceof Error && error.code === "EADDRINUSE";
+            if (!isPortConflict)
+                throw error;
         }
+        this.startReaper();
+        this.running = true;
     }
     async stop() {
         await this.stopStandaloneTransport();
@@ -97,7 +98,6 @@ class ClawVoiceService {
             port: streamPort,
             path: streamPath,
             sessionHandler: this.mediaSessionHandler,
-            httpRoutes: this.webhookRoutes,
         });
         await this.mediaStreamServer.start();
     }
@@ -335,6 +335,23 @@ class ClawVoiceService {
     getInboundRecords() {
         return [...this.inboundRecords];
     }
+    setRecordingUrl(providerCallId, recordingUrl) {
+        const callId = this.callIdByProviderCallId.get(providerCallId);
+        if (!callId) {
+            // Call may already be completed — check recent calls
+            for (const call of this.recentCalls) {
+                if (call.providerCallId === providerCallId) {
+                    call.recordingUrl = recordingUrl;
+                    return;
+                }
+            }
+            return;
+        }
+        const call = this.activeCalls.get(callId);
+        if (call) {
+            call.recordingUrl = recordingUrl;
+        }
+    }
     getCallSummary(callId) {
         const call = this.recentCalls.find((c) => c.callId === callId);
         return call?.summary ?? null;
@@ -402,7 +419,7 @@ class ClawVoiceService {
         this.activeCalls.delete(callId);
         this.callIdByProviderCallId.delete(call.providerCallId);
         if (summary) {
-            await this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
+            await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl).catch(() => undefined);
         }
         const timer = this.callTimers.get(callId);
         if (timer) {
@@ -412,5 +429,5 @@ class ClawVoiceService {
     }
 }
 exports.ClawVoiceService = ClawVoiceService;
-ClawVoiceService.REAPER_INTERVAL_MS = 30000;
+ClawVoiceService.REAPER_INTERVAL_MS = 30000; // check every 30s
 ClawVoiceService.REAPER_GRACE_MS = 120000;

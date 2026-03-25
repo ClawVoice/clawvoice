@@ -7,4 +7,4 @@ export interface SetupPrompter {
     close(): void;
 }
 export declare function runSetupWizard(api: PluginAPI, args: string[], prompter?: SetupPrompter): Promise<void>;
-export declare function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService): void;
+export declare function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService, workspacePath?: string): void;
