@@ -372,9 +372,13 @@ function initPlugin(api) {
             });
         }
     }
-    // Resolve workspace path for user profile and voice-memory access
+    // Resolve workspace path for user profile and voice-memory access.
+    // OpenClaw stores it at agents.defaults.workspace in the config.
     const rawApiConfig = api.config;
+    const agentsDefaults = rawApiConfig?.agents
+        ?.defaults;
     const workspacePath = (typeof rawApiConfig?.workspace === "string" ? rawApiConfig.workspace : undefined) ??
+        (typeof agentsDefaults?.workspace === "string" ? agentsDefaults.workspace : undefined) ??
         (typeof rawApiConfig?.dataDir === "string" ? rawApiConfig.dataDir : undefined) ??
         (typeof rawApiConfig?.workspacePath === "string" ? rawApiConfig.workspacePath : undefined) ??
         (typeof process.env.OPENCLAW_WORKSPACE === "string" && process.env.OPENCLAW_WORKSPACE.length > 0

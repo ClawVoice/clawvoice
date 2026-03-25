@@ -454,12 +454,27 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     name: "clawvoice profile",
     description: "View or set up your user profile for voice calls",
     run: async (args) => {
-      const voiceMemoryDir = workspacePath
-        ? path.join(workspacePath, "voice-memory")
+      // Resolve workspace: explicit param > OPENCLAW_WORKSPACE env > OpenClaw state dir config
+      const resolvedWorkspace = workspacePath
+        ?? process.env.OPENCLAW_WORKSPACE
+        ?? (() => {
+          // Try reading workspace from OpenClaw config file
+          const configPath = process.env.OPENCLAW_CONFIG_PATH;
+          if (configPath) {
+            try {
+              const fs = require("fs");
+              const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
+              return cfg?.agents?.defaults?.workspace ?? cfg?.workspace ?? null;
+            } catch { /* ignore */ }
+          }
+          return null;
+        })();
+      const voiceMemoryDir = resolvedWorkspace
+        ? path.join(resolvedWorkspace, "voice-memory")
         : null;
 
       if (!voiceMemoryDir) {
-        log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or run inside an OpenClaw gateway.");
+        log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or use --profile flag with openclaw CLI.");
         return;
       }
 

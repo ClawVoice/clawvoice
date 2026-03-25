@@ -422,10 +422,14 @@ function initPlugin(api: PluginAPI): void {
     }
   }
 
-  // Resolve workspace path for user profile and voice-memory access
+  // Resolve workspace path for user profile and voice-memory access.
+  // OpenClaw stores it at agents.defaults.workspace in the config.
   const rawApiConfig = api.config as Record<string, unknown> | undefined;
+  const agentsDefaults = (rawApiConfig?.agents as Record<string, unknown> | undefined)
+    ?.defaults as Record<string, unknown> | undefined;
   const workspacePath =
     (typeof rawApiConfig?.workspace === "string" ? rawApiConfig.workspace : undefined) ??
+    (typeof agentsDefaults?.workspace === "string" ? agentsDefaults.workspace : undefined) ??
     (typeof rawApiConfig?.dataDir === "string" ? rawApiConfig.dataDir : undefined) ??
     (typeof rawApiConfig?.workspacePath === "string" ? rawApiConfig.workspacePath : undefined) ??
     (typeof process.env.OPENCLAW_WORKSPACE === "string" && process.env.OPENCLAW_WORKSPACE.length > 0
