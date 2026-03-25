@@ -483,11 +483,11 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       // Show current profile if no args or --show
       if (args.length === 0 || args.includes("--show")) {
         if (existing.ownerName) {
-          log.info("Current profile:", {
-            ownerName: existing.ownerName,
-            communicationStyle: existing.communicationStyle,
-            context: existing.contextBlock || "(empty)",
-          });
+          log.info(`Current profile:`);
+          log.info(`  Owner: ${existing.ownerName}`);
+          log.info(`  Style: ${existing.communicationStyle}`);
+          log.info(`  Context: ${existing.contextBlock || "(empty)"}`);
+          log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
         } else {
           log.info("No user profile found. Run with --name to create one.");
           log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
@@ -506,11 +506,10 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
       }
 
       writeDefaultProfile(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
-      log.info("Profile saved.", {
-        ownerName: name,
-        communicationStyle: style,
-        path: path.join(voiceMemoryDir, "user-profile.md"),
-      });
+      log.info(`Profile saved!`);
+      log.info(`  Owner: ${name}`);
+      log.info(`  Style: ${style}`);
+      log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
     },
   });
 }

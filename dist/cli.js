@@ -462,11 +462,11 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             // Show current profile if no args or --show
             if (args.length === 0 || args.includes("--show")) {
                 if (existing.ownerName) {
-                    log.info("Current profile:", {
-                        ownerName: existing.ownerName,
-                        communicationStyle: existing.communicationStyle,
-                        context: existing.contextBlock || "(empty)",
-                    });
+                    log.info(`Current profile:`);
+                    log.info(`  Owner: ${existing.ownerName}`);
+                    log.info(`  Style: ${existing.communicationStyle}`);
+                    log.info(`  Context: ${existing.contextBlock || "(empty)"}`);
+                    log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
                 }
                 else {
                     log.info("No user profile found. Run with --name to create one.");
@@ -483,11 +483,10 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
                 return;
             }
             (0, user_profile_1.writeDefaultProfile)(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
-            log.info("Profile saved.", {
-                ownerName: name,
-                communicationStyle: style,
-                path: path.join(voiceMemoryDir, "user-profile.md"),
-            });
+            log.info(`Profile saved!`);
+            log.info(`  Owner: ${name}`);
+            log.info(`  Style: ${style}`);
+            log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
         },
     });
 }
