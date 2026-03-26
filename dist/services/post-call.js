@@ -76,12 +76,14 @@ class PostCallService {
         // Deliver via notification channels (Telegram, Discord, Slack)
         if (this.notificationSender) {
             const text = this.formatNotificationText(summary, transcript, recordingUrl, meta, extracted);
+            const transcriptFile = this.formatTranscriptFile(summary, transcript, meta, extracted);
             const channels = this.getConfiguredChannels();
             for (const channel of channels) {
                 await this.notificationSender({
                     channel,
                     text,
                     callId: summary.callId,
+                    file: transcriptFile,
                 });
                 delivered = true;
             }
@@ -209,6 +211,55 @@ class PostCallService {
      */
     formatSummaryText(summary, transcript) {
         return this.formatNotificationText(summary, transcript);
+    }
+    /**
+     * Format a readable transcript file for attachment to notifications.
+     */
+    formatTranscriptFile(summary, transcript, meta, extracted) {
+        const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
+        const time = new Date(summary.completedAt).toLocaleString("en-US", {
+            timeZone: "America/Chicago",
+            weekday: "short", month: "short", day: "numeric", year: "numeric",
+            hour: "numeric", minute: "2-digit",
+        });
+        const lines = [];
+        lines.push(`CALL TRANSCRIPT — ${dir}`);
+        lines.push("=".repeat(40));
+        lines.push(`Date:     ${time}`);
+        lines.push(`Duration: ${this.formatDuration(summary.durationMs)}`);
+        lines.push(`Outcome:  ${summary.outcome}`);
+        if (meta?.callerPhone)
+            lines.push(`Phone:    ${meta.callerPhone}`);
+        if (extracted?.callerName) {
+            lines.push(`Caller:   ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
+        }
+        if (extracted?.callbackNumber)
+            lines.push(`Callback: ${extracted.callbackNumber}`);
+        if (extracted?.reason)
+            lines.push(`Reason:   ${extracted.reason}`);
+        lines.push("=".repeat(40));
+        lines.push("");
+        for (const entry of transcript) {
+            const role = entry.speaker === "agent" ? "Jessica" : "Caller";
+            const ts = new Date(entry.timestamp).toLocaleTimeString("en-US", {
+                timeZone: "America/Chicago",
+                hour: "numeric", minute: "2-digit", second: "2-digit",
+            });
+            lines.push(`[${ts}] ${role}:`);
+            lines.push(`  ${entry.text}`);
+            lines.push("");
+        }
+        if (summary.failures.length > 0) {
+            lines.push("--- Issues ---");
+            for (const f of summary.failures) {
+                lines.push(`- ${f.type}: ${f.description}`);
+            }
+        }
+        // Date-based filename for easy sorting
+        const dateStr = new Date(summary.completedAt).toISOString().slice(0, 10);
+        const shortId = summary.callId.slice(-8);
+        const name = `call-${dateStr}-${shortId}.txt`;
+        return { name, content: lines.join("\n"), mimeType: "text/plain" };
     }
     formatDuration(ms) {
         const totalSec = Math.round(ms / 1000);

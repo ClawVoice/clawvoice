@@ -476,8 +476,10 @@ function initPlugin(api) {
         catch { /* ignore — file may not exist */ }
         if (ownerChatId) {
             callService.postCall.setNotificationSender(async (notification) => {
+                const botUrl = `https://api.telegram.org/bot${botToken}`;
                 try {
-                    await globalThis.fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    // Send the summary message
+                    await globalThis.fetch(`${botUrl}/sendMessage`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -486,6 +488,27 @@ function initPlugin(api) {
                             parse_mode: "Markdown",
                         }),
                     });
+                    // Send transcript file attachment if available
+                    if (notification.file) {
+                        const boundary = `----ClawVoice${Date.now()}`;
+                        const fileBuf = Buffer.from(notification.file.content, "utf8");
+                        const body = Buffer.concat([
+                            Buffer.from(`--${boundary}\r\n` +
+                                `Content-Disposition: form-data; name="chat_id"\r\n\r\n${ownerChatId}\r\n` +
+                                `--${boundary}\r\n` +
+                                `Content-Disposition: form-data; name="caption"\r\n\r\nCall transcript\r\n` +
+                                `--${boundary}\r\n` +
+                                `Content-Disposition: form-data; name="document"; filename="${notification.file.name}"\r\n` +
+                                `Content-Type: ${notification.file.mimeType}\r\n\r\n`),
+                            fileBuf,
+                            Buffer.from(`\r\n--${boundary}--\r\n`),
+                        ]);
+                        await globalThis.fetch(`${botUrl}/sendDocument`, {
+                            method: "POST",
+                            headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+                            body,
+                        });
+                    }
                 }
                 catch { /* best-effort delivery */ }
             });
