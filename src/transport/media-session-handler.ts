@@ -145,24 +145,25 @@ export class TwilioMediaSessionHandler {
       // Auto-create a bridge session with default config for auto-accepted calls.
       // Read voice provider URL/auth/model from handler options.
       const defaultGreeting = urlGreeting || "Hello, this is an AI assistant.";
-      let systemPrompt = this.options.voiceSystemPrompt || "";
-      if (urlPurpose) {
-        systemPrompt = systemPrompt
-          ? `${systemPrompt}\n\nCall purpose: ${urlPurpose}`
-          : `Call purpose: ${urlPurpose}`;
-      }
 
-      // Enrich with user profile before creating session
+      // Build system prompt from user profile + purpose (stated once, not duplicated).
+      // buildCallPrompt already includes "Call purpose: ..." when purpose is provided.
+      const parts: string[] = [];
       if (this.options.workspacePath) {
         const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
         const profile = readUserProfile(voiceMemoryDir);
         if (profile.ownerName || profile.contextBlock) {
-          const profilePrompt = buildCallPrompt(profile, urlPurpose || undefined);
-          systemPrompt = systemPrompt
-            ? `${profilePrompt}\n\n${systemPrompt}`
-            : profilePrompt;
+          parts.push(buildCallPrompt(profile, urlPurpose || undefined));
         }
       }
+      // Only add purpose separately if user profile didn't already include it
+      if (urlPurpose && parts.length === 0) {
+        parts.push(`Call purpose: ${urlPurpose}`);
+      }
+      if (this.options.voiceSystemPrompt) {
+        parts.push(this.options.voiceSystemPrompt);
+      }
+      const systemPrompt = parts.join("\n\n");
 
       const autoConfig = {
         callId,
