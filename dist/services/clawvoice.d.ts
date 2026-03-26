@@ -3,6 +3,9 @@ import { InboundCallRecord } from "../inbound/types";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
+export type SystemEventEmitter = (text: string, options?: {
+    source?: string;
+}) => void;
 export interface CallRecord {
     callId: string;
     providerCallId: string;
@@ -61,12 +64,15 @@ export declare class ClawVoiceService {
     private readonly telephonyAdapter;
     private dailyCallCount;
     private dailyResetDate;
+    private systemEventEmitter;
+    private readonly smsReplyTimestamps;
     readonly bridge: VoiceBridgeService;
     readonly postCall: PostCallService;
     private readonly voiceProviderClient;
     private readonly mediaSessionHandler;
     private mediaStreamServer;
     private readonly workspacePath;
+    getWorkspacePath(): string | undefined;
     constructor(config: ClawVoiceConfig, fetchFn?: typeof globalThis.fetch, workspacePath?: string);
     private createVoiceProviderClient;
     private reaperTimer;
@@ -102,6 +108,21 @@ export declare class ClawVoiceService {
     getCallSummary(callId: string): CallSummary | null;
     sendText(request: SendTextRequest): Promise<SendTextResponse>;
     trackInboundText(from: string, to: string, body: string, providerMessageId?: string): void;
+    setSystemEventEmitter(emitter: SystemEventEmitter): void;
+    /**
+     * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
+     */
+    handleInboundSms(from: string, to: string, body: string, messageId?: string): Promise<void>;
+    /**
+     * Emit a system event when an inbound call arrives.
+     */
+    notifyInboundCall(record: InboundCallRecord): void;
+    /**
+     * Wait for a call to complete (status changes from in-progress to completed).
+     * Resolves with the call summary, or null if the call wasn't found.
+     * Times out after maxWaitMs (default: maxCallDuration + 30s buffer).
+     */
+    waitForCallCompletion(callId: string, maxWaitMs?: number): Promise<CallSummary | null>;
     getRecentTexts(): TextMessageRecord[];
     private completeCall;
 }

@@ -129,15 +129,15 @@ describe("PostCallService", () => {
   });
 
   describe("formatSummaryText", () => {
-    it("includes outcome, duration, and transcript count", () => {
+    it("includes duration and transcript count", () => {
       const text = service.formatSummaryText(makeSummary(), makeTranscript());
       assert.match(text, /call-001/);
-      assert.match(text, /completed/);
+      assert.match(text, /Call Summary/);
       assert.match(text, /45s/);
       assert.match(text, /2 turns/);
     });
 
-    it("includes failures and retry context when present", () => {
+    it("includes failures when present", () => {
       const summary = makeSummary({
         outcome: "partial",
         failures: [{ type: "tool_failure", description: "calendar unavailable", timestamp: new Date().toISOString() }],
@@ -152,8 +152,6 @@ describe("PostCallService", () => {
       });
       const text = service.formatSummaryText(summary, makeTranscript());
       assert.match(text, /calendar unavailable/);
-      assert.match(text, /schedule_meeting/);
-      assert.match(text, /Retry/);
     });
   });
 

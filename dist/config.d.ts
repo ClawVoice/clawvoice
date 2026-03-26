@@ -41,6 +41,7 @@ export interface ClawVoiceConfig {
     amdEnabled: boolean;
     restrictTools: boolean;
     deniedTools: string[];
+    smsAutoReply: boolean;
     notifyTelegram: boolean;
     notifyDiscord: boolean;
     notifySlack: boolean;

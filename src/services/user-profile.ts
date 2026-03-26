@@ -3,6 +3,7 @@ import * as path from "path";
 
 export interface UserProfile {
   ownerName: string;
+  ownerPhone: string;
   communicationStyle: string;
   contextBlock: string;
   raw: string;
@@ -10,6 +11,7 @@ export interface UserProfile {
 
 const DEFAULT_PROFILE: UserProfile = {
   ownerName: "",
+  ownerPhone: "",
   communicationStyle: "casual",
   contextBlock: "",
   raw: "",
@@ -26,13 +28,15 @@ export function readUserProfile(voiceMemoryDir: string): UserProfile {
   const yaml = frontmatterMatch[1];
   const body = frontmatterMatch[2].trim();
   const ownerName = extractYamlValue(yaml, "ownerName") || "";
+  const ownerPhone = extractYamlValue(yaml, "ownerPhone") || "";
   const communicationStyle = extractYamlValue(yaml, "communicationStyle") || "casual";
 
-  return { ownerName, communicationStyle, contextBlock: body, raw };
+  return { ownerName, ownerPhone, communicationStyle, contextBlock: body, raw };
 }
 
 function extractYamlValue(yaml: string, key: string): string | undefined {
-  const match = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = yaml.match(new RegExp(`^${escapedKey}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 
@@ -40,6 +44,9 @@ export function buildCallPrompt(profile: UserProfile, purpose?: string): string 
   const parts: string[] = [];
   if (profile.ownerName) {
     parts.push(`You are calling on behalf of ${profile.ownerName}.`);
+  }
+  if (profile.ownerPhone) {
+    parts.push(`Owner's phone number: ${profile.ownerPhone}. Use this when asked for a callback number or contact number.`);
   }
   if (purpose) {
     parts.push(`Call purpose: ${purpose}`);
@@ -50,9 +57,19 @@ export function buildCallPrompt(profile: UserProfile, purpose?: string): string 
   return parts.join("\n");
 }
 
+/**
+ * Escape a string for safe inclusion as a YAML value.
+ * Wraps in double quotes if it contains characters that could cause YAML injection.
+ */
+function yamlSafeValue(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
+}
+
 export function writeDefaultProfile(voiceMemoryDir: string, ownerName: string, style?: string, context?: string): void {
   fs.mkdirSync(voiceMemoryDir, { recursive: true });
   const filePath = path.join(voiceMemoryDir, "user-profile.md");
-  const content = `---\nownerName: ${ownerName}\ncommunicationStyle: ${style || "casual"}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
+  const safeName = yamlSafeValue(ownerName);
+  const safeStyle = yamlSafeValue(style || "casual");
+  const content = `---\nownerName: ${safeName}\ncommunicationStyle: ${safeStyle}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
   fs.writeFileSync(filePath, content);
 }

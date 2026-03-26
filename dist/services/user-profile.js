@@ -40,6 +40,7 @@ const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const DEFAULT_PROFILE = {
     ownerName: "",
+    ownerPhone: "",
     communicationStyle: "casual",
     contextBlock: "",
     raw: "",
@@ -55,17 +56,22 @@ function readUserProfile(voiceMemoryDir) {
     const yaml = frontmatterMatch[1];
     const body = frontmatterMatch[2].trim();
     const ownerName = extractYamlValue(yaml, "ownerName") || "";
+    const ownerPhone = extractYamlValue(yaml, "ownerPhone") || "";
     const communicationStyle = extractYamlValue(yaml, "communicationStyle") || "casual";
-    return { ownerName, communicationStyle, contextBlock: body, raw };
+    return { ownerName, ownerPhone, communicationStyle, contextBlock: body, raw };
 }
 function extractYamlValue(yaml, key) {
-    const match = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = yaml.match(new RegExp(`^${escapedKey}:\\s*(.+)$`, "m"));
     return match?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 function buildCallPrompt(profile, purpose) {
     const parts = [];
     if (profile.ownerName) {
         parts.push(`You are calling on behalf of ${profile.ownerName}.`);
+    }
+    if (profile.ownerPhone) {
+        parts.push(`Owner's phone number: ${profile.ownerPhone}. Use this when asked for a callback number or contact number.`);
     }
     if (purpose) {
         parts.push(`Call purpose: ${purpose}`);
@@ -75,9 +81,18 @@ function buildCallPrompt(profile, purpose) {
     }
     return parts.join("\n");
 }
+/**
+ * Escape a string for safe inclusion as a YAML value.
+ * Wraps in double quotes if it contains characters that could cause YAML injection.
+ */
+function yamlSafeValue(value) {
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
+}
 function writeDefaultProfile(voiceMemoryDir, ownerName, style, context) {
     fs.mkdirSync(voiceMemoryDir, { recursive: true });
     const filePath = path.join(voiceMemoryDir, "user-profile.md");
-    const content = `---\nownerName: ${ownerName}\ncommunicationStyle: ${style || "casual"}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
+    const safeName = yamlSafeValue(ownerName);
+    const safeStyle = yamlSafeValue(style || "casual");
+    const content = `---\nownerName: ${safeName}\ncommunicationStyle: ${safeStyle}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
     fs.writeFileSync(filePath, content);
 }
