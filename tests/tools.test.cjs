@@ -120,6 +120,7 @@ test("registerTools registers expected tool names", () => {
   assert.deepEqual(names, [
     "clawvoice_batch_call",
     "clawvoice_call",
+    "clawvoice_campaign_report",
     "clawvoice_clear_calls",
     "clawvoice_hangup",
     "clawvoice_promote_memory",

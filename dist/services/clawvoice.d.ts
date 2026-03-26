@@ -72,6 +72,7 @@ export declare class ClawVoiceService {
     private readonly mediaSessionHandler;
     private mediaStreamServer;
     private readonly workspacePath;
+    getWorkspacePath(): string | undefined;
     constructor(config: ClawVoiceConfig, fetchFn?: typeof globalThis.fetch, workspacePath?: string);
     private createVoiceProviderClient;
     private reaperTimer;
