@@ -59,7 +59,8 @@ function readUserProfile(voiceMemoryDir) {
     return { ownerName, communicationStyle, contextBlock: body, raw };
 }
 function extractYamlValue(yaml, key) {
-    const match = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const match = yaml.match(new RegExp(`^${escapedKey}:\\s*(.+)$`, "m"));
     return match?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 function buildCallPrompt(profile, purpose) {
