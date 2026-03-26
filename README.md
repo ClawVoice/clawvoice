@@ -45,17 +45,44 @@ There are two ways to set up ClawVoice:
 | **Guided setup** — Tell your agent *"Set up ClawVoice"* or run `openclaw clawvoice setup` | First-time users. The wizard walks through every step with explanations. |
 | **Manual setup** — Follow the steps below | Experienced users or automated deployments |
 
-### Prerequisites
+### What You'll Need
 
-- An [OpenClaw](https://github.com/openclaw) instance running
-- A [Twilio](https://twilio.com) or [Telnyx](https://telnyx.com) account with a phone number
-- A voice provider account: [ElevenLabs](https://elevenlabs.io) (recommended) or [Deepgram](https://deepgram.com)
-- A public tunnel (ngrok, Cloudflare Tunnel, or Tailscale Funnel)
+| Requirement | Where to get it | Cost |
+|-------------|----------------|------|
+| **OpenClaw** installed and running | [openclaw.dev](https://openclaw.dev) | Free (open source) |
+| **Phone number** from Twilio or Telnyx | [twilio.com](https://twilio.com) or [telnyx.com](https://telnyx.com) | ~$1.50/mo |
+| **Deepgram API key** | [deepgram.com](https://deepgram.com) | Free tier available |
+| **ElevenLabs API key + Agent ID** *(optional, for premium voices)* | [elevenlabs.io](https://elevenlabs.io) | Free tier available |
+| **Tunnel tool** (ngrok, Cloudflare Tunnel, or Tailscale Funnel) | See [Step 2](#2-start-a-public-tunnel) | Free options available |
+
+> **Note:** A Deepgram API key is always required — even if you use ElevenLabs for voice. Deepgram handles speech-to-text for call transcription.
+
+**Cost per call:**
+
+| Voice Stack | Telephony | Voice AI | Total per minute |
+|-------------|-----------|----------|------------------|
+| **Deepgram** (recommended to start) | ~$0.01 | ~$0.01 | **~$0.02/min** |
+| **ElevenLabs** (premium voices) | ~$0.01 | ~$0.12–0.15 | **~$0.13–0.16/min** |
+
+A typical 5-minute call costs **$0.10** on Deepgram or **$0.65–0.80** on ElevenLabs. Both voice providers offer free tiers to get started.
+
+> **If you're using ElevenLabs:** Create your ElevenLabs Conversational AI agent **before** running the setup wizard — the wizard asks for your Agent ID. See [Step 4](#4-configure-elevenlabs-agent-if-using-elevenlabs) for instructions.
 
 ### 1. Install
 
+ClawVoice is published on **npm**. Install it as an OpenClaw plugin:
+
 ```bash
 openclaw plugins install clawvoice
+```
+
+**Or install from source** (for contributors or pre-release versions):
+
+```bash
+git clone https://github.com/ClawVoice/clawvoice.git
+cd clawvoice
+npm install && npm run build
+openclaw plugins install --link .
 ```
 
 ### 2. Start a Public Tunnel
@@ -194,11 +221,32 @@ The `ownerPhone` is important — when a restaurant asks *"what number for the r
 
 ```bash
 openclaw start
-openclaw clawvoice status    # All checks should pass
+openclaw clawvoice status
+```
+
+All checks should show **pass**. If any fail, the output tells you exactly what to fix.
+
+> **Tip:** Run `openclaw clawvoice status` anytime to re-check your setup — after config changes, provider swaps, or if calls stop working.
+
+### 8. Test Connectivity
+
+Before spending money on a real call, verify the voice pipeline is wired up correctly:
+
+```bash
+openclaw clawvoice test
+```
+
+This checks that your tunnel is reachable, provider credentials are valid, and the voice pipeline can connect. Fix any failures before proceeding.
+
+### 9. Make a Test Call
+
+```bash
 openclaw clawvoice call +15559876543 --purpose "Test call"
 ```
 
-### 8. Enable Post-Call Notifications (Optional)
+If the call connects and you hear the voice agent, you're all set.
+
+### 10. Enable Post-Call Notifications (Optional)
 
 Get call summaries on Telegram/Discord/Slack after every call:
 
@@ -371,12 +419,12 @@ workspace/
 ## Development
 
 ```bash
-npm install        # Install dependencies
-npm run build      # Compile TypeScript
-npm test           # Run all tests (218 tests)
-
-# Local testing
-npm run build && openclaw plugins install --link .
+git clone https://github.com/ClawVoice/clawvoice.git
+cd clawvoice
+npm install                                # Install dependencies
+npm run build                              # Compile TypeScript
+npm test                                   # Run all tests (218 tests)
+openclaw plugins install --link .          # Link local build as plugin
 ```
 
 ## License
