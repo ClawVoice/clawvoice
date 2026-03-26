@@ -229,12 +229,16 @@ export async function runSetupWizard(
             `https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone)}`,
             { headers: { Authorization: `Basic ${auth}` } },
           );
+          if (!listResp.ok) {
+            const errText = await listResp.text().catch(() => "");
+            throw new Error(`Twilio API error ${listResp.status}: ${errText || listResp.statusText}`);
+          }
           const listData = await listResp.json() as { incoming_phone_numbers?: Array<{ sid: string }> };
           const phoneSid = listData.incoming_phone_numbers?.[0]?.sid;
 
           if (phoneSid) {
             // Update the phone number webhooks
-            await globalThis.fetch(
+            const updateResp = await globalThis.fetch(
               `https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`,
               {
                 method: "POST",
@@ -250,6 +254,10 @@ export async function runSetupWizard(
                 }).toString(),
               },
             );
+            if (!updateResp.ok) {
+              const errText = await updateResp.text().catch(() => "");
+              throw new Error(`Twilio webhook update failed ${updateResp.status}: ${errText || updateResp.statusText}`);
+            }
             console.log(`\n  ✓ Twilio webhooks configured automatically!`);
             console.log(`    Voice: ${voiceWebhookUrl}`);
             console.log(`    SMS:   ${smsWebhookUrl}\n`);

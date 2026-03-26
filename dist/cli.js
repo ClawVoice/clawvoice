@@ -210,11 +210,15 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
                     const auth = Buffer.from(`${sid}:${token}`).toString("base64");
                     // Find the phone number SID
                     const listResp = await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone)}`, { headers: { Authorization: `Basic ${auth}` } });
+                    if (!listResp.ok) {
+                        const errText = await listResp.text().catch(() => "");
+                        throw new Error(`Twilio API error ${listResp.status}: ${errText || listResp.statusText}`);
+                    }
                     const listData = await listResp.json();
                     const phoneSid = listData.incoming_phone_numbers?.[0]?.sid;
                     if (phoneSid) {
                         // Update the phone number webhooks
-                        await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`, {
+                        const updateResp = await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`, {
                             method: "POST",
                             headers: {
                                 Authorization: `Basic ${auth}`,
@@ -227,6 +231,10 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
                                 SmsMethod: "POST",
                             }).toString(),
                         });
+                        if (!updateResp.ok) {
+                            const errText = await updateResp.text().catch(() => "");
+                            throw new Error(`Twilio webhook update failed ${updateResp.status}: ${errText || updateResp.statusText}`);
+                        }
                         console.log(`\n  ✓ Twilio webhooks configured automatically!`);
                         console.log(`    Voice: ${voiceWebhookUrl}`);
                         console.log(`    SMS:   ${smsWebhookUrl}\n`);
