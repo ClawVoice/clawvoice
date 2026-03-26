@@ -202,6 +202,127 @@ export function registerTools(
   });
 
   api.tools.register({
+    name: "clawvoice_batch_call",
+    description:
+      "Make multiple sequential phone calls. Each call is placed one at a time — the next call " +
+      "starts only after the previous one completes. Returns a consolidated summary report of all " +
+      "calls when finished. Use this when you have a list of people to call.",
+    parameters: {
+      type: "object",
+      properties: {
+        calls: {
+          type: "array",
+          description: "List of calls to make sequentially",
+          items: {
+            type: "object",
+            properties: {
+              phoneNumber: {
+                type: "string",
+                description: "Phone number in E.164 format",
+              },
+              purpose: {
+                type: "string",
+                description: "Purpose/instructions for this specific call (see clawvoice_call for details)",
+              },
+              greeting: {
+                type: "string",
+                description: "Custom greeting for this call (optional)",
+              },
+            },
+            required: ["phoneNumber", "purpose"],
+          },
+        },
+      },
+      required: ["calls"],
+    },
+    handler: async (input) => {
+      const calls = input.calls;
+      if (!Array.isArray(calls) || calls.length === 0) {
+        throw new Error("calls must be a non-empty array.");
+      }
+      if (calls.length > 20) {
+        throw new Error("Maximum 20 calls per batch to prevent abuse.");
+      }
+
+      interface BatchResult {
+        phoneNumber: string;
+        purpose: string;
+        callId: string;
+        outcome: string;
+        durationMs: number;
+        transcriptLength: number;
+        error?: string;
+      }
+
+      const results: BatchResult[] = [];
+
+      for (const entry of calls) {
+        const phoneNumber = readString((entry as Record<string, unknown>).phoneNumber);
+        const purpose = readString((entry as Record<string, unknown>).purpose);
+        const greeting = readString((entry as Record<string, unknown>).greeting);
+
+        if (!phoneNumber || !purpose) {
+          results.push({
+            phoneNumber: phoneNumber ?? "unknown",
+            purpose: purpose ?? "unknown",
+            callId: "",
+            outcome: "skipped",
+            durationMs: 0,
+            transcriptLength: 0,
+            error: "Missing phoneNumber or purpose",
+          });
+          continue;
+        }
+
+        try {
+          const callResult = await callService.startCall({ phoneNumber, purpose, greeting });
+
+          // Wait for the call to complete before starting the next one
+          const summary = await callService.waitForCallCompletion(callResult.callId);
+
+          results.push({
+            phoneNumber,
+            purpose,
+            callId: callResult.callId,
+            outcome: summary?.outcome ?? "unknown",
+            durationMs: summary?.durationMs ?? 0,
+            transcriptLength: summary?.transcriptLength ?? 0,
+          });
+        } catch (err) {
+          results.push({
+            phoneNumber,
+            purpose,
+            callId: "",
+            outcome: "failed",
+            durationMs: 0,
+            transcriptLength: 0,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+
+      // Build consolidated report
+      const completed = results.filter((r) => r.outcome === "completed").length;
+      const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "skipped").length;
+      const partial = results.filter((r) => r.outcome === "partial").length;
+
+      const lines: string[] = [];
+      lines.push(`Batch call report: ${results.length} calls — ${completed} completed, ${partial} partial, ${failed} failed.`);
+      lines.push("");
+      for (const r of results) {
+        const dur = r.durationMs > 0 ? `${Math.round(r.durationMs / 1000)}s` : "n/a";
+        const status = r.error ? `${r.outcome} (${r.error})` : r.outcome;
+        lines.push(`• ${r.phoneNumber}: ${status} | ${dur} | ${r.transcriptLength} turns | purpose: ${r.purpose.slice(0, 60)}`);
+      }
+
+      return {
+        content: lines.join("\n"),
+        data: { results, completed, partial, failed, total: results.length },
+      };
+    },
+  });
+
+  api.tools.register({
     name: "clawvoice_promote_memory",
     description:
       "Review and promote a voice memory to main MEMORY.md. Requires operator confirmation.",

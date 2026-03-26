@@ -116,6 +116,12 @@ export declare class ClawVoiceService {
      * Emit a system event when an inbound call arrives.
      */
     notifyInboundCall(record: InboundCallRecord): void;
+    /**
+     * Wait for a call to complete (status changes from in-progress to completed).
+     * Resolves with the call summary, or null if the call wasn't found.
+     * Times out after maxWaitMs (default: maxCallDuration + 30s buffer).
+     */
+    waitForCallCompletion(callId: string, maxWaitMs?: number): Promise<CallSummary | null>;
     getRecentTexts(): TextMessageRecord[];
     private completeCall;
 }

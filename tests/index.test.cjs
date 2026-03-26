@@ -119,7 +119,7 @@ test("plugin init registers core extension points", async () => {
 
   await plugin.init(api);
 
-  assert.equal(state.tools.length, 7, "expected 7 tools: call, clear_calls, hangup, send_text, text_status, status, promote_memory");
+  assert.equal(state.tools.length, 8, "expected 8 tools: batch_call, call, clear_calls, hangup, send_text, text_status, status, promote_memory");
   assert.equal(state.cli.length, 10, "expected 10 CLI commands: setup, call, clear, sms, inbox, status, promote, history, test, profile");
   assert.equal(state.routes.length, 5);
   assert.equal(state.hooks.length, 4);
@@ -135,6 +135,7 @@ test("plugin init registers expected tool names", async () => {
 
   const toolNames = state.tools.map((t) => t.name).sort();
   assert.deepEqual(toolNames, [
+    "clawvoice_batch_call",
     "clawvoice_call",
     "clawvoice_clear_calls",
     "clawvoice_hangup",
@@ -212,9 +213,10 @@ test("plugin init registers tools via modern registerTool when legacy tools is a
 
   await plugin.init(api);
 
-  assert.equal(state.modernTools.length, 7, "expected 7 tools via modern registerTool");
+  assert.equal(state.modernTools.length, 8, "expected 8 tools via modern registerTool");
   const toolNames = state.modernTools.map((t) => t.tool.name).sort();
   assert.deepEqual(toolNames, [
+    "clawvoice_batch_call",
     "clawvoice_call",
     "clawvoice_clear_calls",
     "clawvoice_hangup",

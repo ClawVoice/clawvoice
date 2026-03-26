@@ -654,6 +654,36 @@ export class ClawVoiceService {
     }
   }
 
+  /**
+   * Wait for a call to complete (status changes from in-progress to completed).
+   * Resolves with the call summary, or null if the call wasn't found.
+   * Times out after maxWaitMs (default: maxCallDuration + 30s buffer).
+   */
+  public waitForCallCompletion(callId: string, maxWaitMs?: number): Promise<CallSummary | null> {
+    const timeout = maxWaitMs ?? (this.config.maxCallDuration * 1000 + 30_000);
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const check = (): void => {
+        const call = this.activeCalls.get(callId);
+        // Call no longer active — it completed
+        if (!call) {
+          const summary = this.getCallSummary(callId);
+          resolve(summary);
+          return;
+        }
+        if (Date.now() - startedAt > timeout) {
+          resolve(null);
+          return;
+        }
+        const timer = setTimeout(check, 2000);
+        timer.unref?.();
+      };
+      // First check after 5s (calls need time to connect)
+      const timer = setTimeout(check, 5000);
+      timer.unref?.();
+    });
+  }
+
   public getRecentTexts(): TextMessageRecord[] {
     return [...this.textMessages];
   }

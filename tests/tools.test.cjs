@@ -118,6 +118,7 @@ test("registerTools registers expected tool names", () => {
   const names = tools.map((tool) => tool.name).sort();
 
   assert.deepEqual(names, [
+    "clawvoice_batch_call",
     "clawvoice_call",
     "clawvoice_clear_calls",
     "clawvoice_hangup",
