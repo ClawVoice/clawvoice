@@ -460,7 +460,7 @@ function initPlugin(api: PluginAPI): void {
     throw new Error(validation.errors.join("; "));
   }
 
-  const diagnostics = runDiagnostics(config);
+  const diagnostics = runDiagnostics(config, rawCfg);
   for (const check of diagnostics.checks) {
     if (check.status === "fail" || check.status === "warn") {
       logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {

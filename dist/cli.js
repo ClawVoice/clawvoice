@@ -279,7 +279,8 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     try {
         console.log("Running setup diagnostics...\n");
         const diagConfig = (0, config_1.resolveConfig)(values);
-        const report = await (0, health_1.runDiagnostics)(diagConfig);
+        const openclawCfg = api.config;
+        const report = await (0, health_1.runDiagnostics)(diagConfig, openclawCfg);
         const failures = report.checks.filter((c) => c.status === "fail");
         const warnings = report.checks.filter((c) => c.status === "warn");
         if (failures.length === 0 && warnings.length === 0) {
