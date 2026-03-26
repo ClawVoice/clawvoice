@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as fsp from "fs/promises";
+import * as path from "path";
 import { Plugin, PluginAPI } from "@openclaw/plugin-sdk";
 import { registerCLI } from "./cli";
 import { resolveConfig, validateConfig } from "./config";
@@ -79,6 +82,10 @@ function registerModernCliBridge(
   modernApi.registerCli(
     ({ program }) => {
       const root = program.command("clawvoice").description("ClawVoice commands");
+      // Allow unknown options on the parent so they pass through to subcommands
+      if (typeof (root as Record<string, unknown>).allowUnknownOption === "function") {
+        (root as unknown as { allowUnknownOption(): CommanderLike }).allowUnknownOption();
+      }
       for (const definition of legacyCommands) {
         if (!definition.name.startsWith("clawvoice ")) {
           continue;
@@ -87,10 +94,23 @@ function registerModernCliBridge(
         if (!commandName) {
           continue;
         }
-        root
+        const cmd = root
           .command(`${commandName} [args...]`)
-          .description(definition.description)
-          .action(async (...actionArgs: unknown[]) => {
+          .description(definition.description);
+        // Allow flags like --purpose, --greeting to pass through to the
+        // plugin's own parseFlag() handler instead of Commander rejecting them.
+        if (typeof (cmd as Record<string, unknown>).allowUnknownOption === "function") {
+          (cmd as unknown as { allowUnknownOption(): CommanderLike }).allowUnknownOption();
+        }
+        // enablePositionalOptions tells Commander to stop parsing options after
+        // the variadic argument, letting --purpose etc. arrive in the args array.
+        if (typeof (cmd as Record<string, unknown>).enablePositionalOptions === "function") {
+          (cmd as unknown as { enablePositionalOptions(): CommanderLike }).enablePositionalOptions();
+        }
+        if (typeof (cmd as Record<string, unknown>).passThroughOptions === "function") {
+          (cmd as unknown as { passThroughOptions(): CommanderLike }).passThroughOptions();
+        }
+        cmd.action(async (...actionArgs: unknown[]) => {
             const args = normalizeCliArgs(actionArgs[0]);
             await definition.run(args);
           });
@@ -120,6 +140,7 @@ function registerModernToolsBridge(
   config: ReturnType<typeof resolveConfig>,
   callService: ClawVoiceService,
   memoryService: MemoryExtractionService,
+  skipNames?: Set<string>,
 ): void {
   const modernApi = api as unknown as ModernPluginApi;
   if (typeof modernApi.registerTool !== "function") {
@@ -138,7 +159,14 @@ function registerModernToolsBridge(
 
   registerTools(shimApi, config, callService, memoryService);
 
+  const registeredNames = new Set<string>();
   for (const tool of capturedTools) {
+    // Skip tools already registered via the legacy api.tools.register path
+    // to avoid duplicate tool entries in the OpenClaw runtime.
+    if (skipNames?.has(tool.name)) continue;
+    if (registeredNames.has(tool.name)) continue;
+    registeredNames.add(tool.name);
+
     const handler = tool.handler;
     modernApi.registerTool(
       {
@@ -170,7 +198,10 @@ function wrapExpressHandler(
       return;
     }
     const chunks: Buffer[] = [];
-    for await (const chunk of req) chunks.push(chunk as Buffer);
+    for await (const chunk of req) {
+      // Ensure Buffer for safety — some Node versions may yield non-Buffer chunks
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+    }
     const rawBody = Buffer.concat(chunks).toString("utf8");
     let parsedBody: Record<string, unknown> = {};
     const ct = req.headers["content-type"] || "";
@@ -181,7 +212,9 @@ function wrapExpressHandler(
     }
     const expressReq = Object.assign(req, {
       body: parsedBody,
-      protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "http",
+      // Default to https — Twilio webhook signature validation requires the correct protocol,
+      // and behind a reverse proxy/tunnel the connection is typically https.
+      protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "https",
     });
     const expressRes = {
       _statusCode: 200,
@@ -211,12 +244,24 @@ function wrapExpressHandler(
 }
 
 /**
- * Try to locate OpenClaw's internal registerPluginHttpRoute function.
+ * !! FRAGILE — INTERNAL MODULE PROBING !!
+ *
+ * This function probes OpenClaw's minified/bundled internal modules to locate
+ * the `registerPluginHttpRoute` function. It is inherently fragile and may
+ * break on new OpenClaw versions if the bundler renames exports or restructures
+ * the dist output.
+ *
+ * Fallback chain:
+ *   1. Try `mod.l` — the known minified export name in current versions.
+ *   2. Search all single-letter exports for a function whose source contains
+ *      "httpRoutes" and "pluginId" (heuristic signature match).
+ *   3. If both fail, return null — the caller falls back to
+ *      `api.registerHttpRoute` (which may not work in all runtimes) and the
+ *      standalone webhook server on port 3101 handles webhooks regardless.
+ *
  * This registers routes in the shared gateway HTTP registry (which the gateway
  * HTTP server actually dispatches from), unlike api.registerHttpRoute which
  * stores routes in a Pi-scoped registry that the gateway server never reads.
- *
- * Falls back to api.registerHttpRoute if the internal function can't be found.
  */
 async function resolveInternalRouteRegistrar(
   api: PluginAPI,
@@ -244,7 +289,8 @@ async function resolveInternalRouteRegistrar(
       (f: string) => f.startsWith("webhook-ingress-") && f.endsWith(".js"),
     );
     if (webhookFiles.length === 0) return null;
-    const chunkUrl = "file://" + path.join(openclawDist, webhookFiles[0]).replace(/\\/g, "/");
+    const { pathToFileURL } = require("url") as typeof import("url");
+    const chunkUrl = pathToFileURL(path.join(openclawDist, webhookFiles[0])).href;
     const mod = await import(chunkUrl);
     // registerPluginHttpRoute is exported as 'l' in the bundled chunk
     if (typeof mod.l === "function") return mod.l;
@@ -298,7 +344,8 @@ async function resolveSystemEventEmitter(
       (f: string) => f.startsWith("system-events-") && f.endsWith(".js"),
     );
     if (sysEventFiles.length === 0) return null;
-    const chunkUrl = "file://" + path.join(openclawDist, sysEventFiles[0]).replace(/\\/g, "/");
+    const { pathToFileURL } = require("url") as typeof import("url");
+    const chunkUrl = pathToFileURL(path.join(openclawDist, sysEventFiles[0])).href;
     const mod = await import(chunkUrl);
     // Look for enqueueSystemEvent export
     if (typeof mod.enqueueSystemEvent === "function") return mod.enqueueSystemEvent;
@@ -345,10 +392,10 @@ function registerModernRoutesBridge(
     shimApi,
     config,
     (record) => {
-      callService.trackInboundCall(record);
+      callService.notifyInboundCall(record);
     },
     (from, to, body, messageId) => {
-      callService.trackInboundText(from, to, body, messageId);
+      void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
     },
     (providerCallId, recordingUrl) => {
       callService.setRecordingUrl(providerCallId, recordingUrl);
@@ -368,6 +415,7 @@ function registerModernRoutesBridge(
 
       for (const route of capturedRoutes) {
         registerFn({
+          method: route.method,
           path: route.path,
           handler: wrapExpressHandler(route.handler, route.method),
           auth: "plugin",
@@ -439,14 +487,116 @@ function initPlugin(api: PluginAPI): void {
   const callService = new ClawVoiceService(config, undefined, workspacePath);
   const memoryService = new MemoryExtractionService(config);
 
+  // Wire filesystem-based memory writer for post-call transcript persistence
+  if (workspacePath) {
+    callService.postCall.setMemoryWriter(async (namespace, key, value) => {
+      // Sanitize key to prevent path traversal
+      if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+        throw new Error(`Invalid memory key: ${key}`);
+      }
+      const resolvedDir = path.resolve(workspacePath, namespace, path.dirname(key));
+      const resolvedBase = path.resolve(workspacePath);
+      if (!resolvedDir.startsWith(resolvedBase + path.sep) && resolvedDir !== resolvedBase) {
+        throw new Error(`Memory key escapes workspace: ${key}`);
+      }
+
+      await fsp.mkdir(resolvedDir, { recursive: true });
+      const filePath = path.join(workspacePath, namespace, `${key}.json`);
+      await fsp.writeFile(filePath, JSON.stringify(value, null, 2));
+      // Also write latest summary as markdown for easy agent access
+      if (key.startsWith("calls/") && typeof value === "object" && value !== null) {
+        const record = value as Record<string, unknown>;
+        const summaryPath = path.join(workspacePath, namespace, "latest-summary.md");
+        const lines: string[] = [];
+        lines.push(`# Latest Call Summary`);
+        lines.push(`- **Call ID:** ${record.callId ?? "unknown"}`);
+        lines.push(`- **Outcome:** ${record.outcome ?? "unknown"}`);
+        lines.push(`- **Duration:** ${Math.round((record.durationMs as number ?? 0) / 1000)}s`);
+        lines.push(`- **Completed:** ${record.completedAt ?? "unknown"}`);
+        const transcript = record.transcript as Array<{ speaker: string; text: string }> | undefined;
+        if (transcript && transcript.length > 0) {
+          lines.push(`\n## Transcript (${transcript.length} turns)`);
+          for (const entry of transcript) {
+            const role = entry.speaker === "agent" ? "Agent" : "Callee";
+            lines.push(`> **${role}:** ${entry.text}`);
+          }
+        }
+        await fsp.writeFile(summaryPath, lines.join("\n") + "\n");
+      }
+    });
+  }
+
   // Wire system event emitter for immediate post-call summary delivery
+  // and inbound call/SMS notifications
   resolveSystemEventEmitter(api)
     .then((emitter) => {
       if (emitter) {
         callService.postCall.setSystemEventEmitter(emitter);
+        callService.setSystemEventEmitter(emitter);
       }
     })
     .catch(() => undefined);
+
+  // Wire Telegram notification sender for post-call summaries.
+  // Reads bot token and owner chat ID from the OpenClaw config (channels.telegram).
+  const channelsCfg = (rawApiConfig?.channels as Record<string, unknown> | undefined);
+  const telegramCfg = channelsCfg?.telegram as Record<string, unknown> | undefined;
+  const botToken = typeof telegramCfg?.botToken === "string" ? telegramCfg.botToken : undefined;
+  // Resolve owner chat ID from telegram-default-allowFrom.json (paired DM users)
+  if (botToken && config.notifyTelegram) {
+    let ownerChatId: string | undefined;
+    try {
+      const allowFromPath = path.join(
+        process.env.OPENCLAW_STATE_DIR || path.dirname(process.env.OPENCLAW_CONFIG_PATH || ""),
+        "credentials",
+        "telegram-default-allowFrom.json",
+      );
+      const allowFromData = JSON.parse(fs.readFileSync(allowFromPath, "utf8")) as { allowFrom?: string[] };
+      ownerChatId = allowFromData.allowFrom?.[0];
+    } catch { /* ignore — file may not exist */ }
+
+    if (ownerChatId) {
+      callService.postCall.setNotificationSender(async (notification) => {
+        const botUrl = `https://api.telegram.org/bot${botToken}`;
+        try {
+          // Send the summary message
+          await globalThis.fetch(`${botUrl}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: ownerChatId,
+              text: `\u{1F4DE} ${notification.text}`,
+              parse_mode: "HTML",
+            }),
+          });
+
+          // Send transcript file attachment if available
+          if (notification.file) {
+            const boundary = `----ClawVoice${(await import("crypto")).randomUUID()}`;
+            const fileBuf = Buffer.from(notification.file.content, "utf8");
+            const body = Buffer.concat([
+              Buffer.from(
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="chat_id"\r\n\r\n${ownerChatId}\r\n` +
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="caption"\r\n\r\nCall transcript\r\n` +
+                `--${boundary}\r\n` +
+                `Content-Disposition: form-data; name="document"; filename="${notification.file.name.replace(/["\r\n]/g, "")}"\r\n` +
+                `Content-Type: ${notification.file.mimeType}\r\n\r\n`,
+              ),
+              fileBuf,
+              Buffer.from(`\r\n--${boundary}--\r\n`),
+            ]);
+            await globalThis.fetch(`${botUrl}/sendDocument`, {
+              method: "POST",
+              headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
+              body,
+            });
+          }
+        } catch { /* best-effort delivery */ }
+      });
+    }
+  }
 
   void callService.start().catch((error) => {
     logger.error?.("ClawVoice call service failed to start", {
@@ -454,12 +604,23 @@ function initPlugin(api: PluginAPI): void {
     });
   });
 
+  // Register tools via BOTH legacy and modern paths to ensure visibility.
+  // The legacy api.tools.register may exist but not actually expose tools to the
+  // agent session in modern OpenClaw runtimes. The modern registerTool bridge
+  // ensures tools appear in the agent's tool list.
+  const legacyToolNames = new Set<string>();
   const toolsRegister = (api as unknown as { tools?: { register?: unknown } }).tools?.register;
   if (typeof toolsRegister === "function") {
+    // Wrap register to capture tool names for dedup in the modern bridge
+    const origRegister = api.tools.register.bind(api.tools);
+    api.tools.register = ((def: Parameters<typeof origRegister>[0]) => {
+      legacyToolNames.add(def.name);
+      return origRegister(def);
+    }) as typeof api.tools.register;
     registerTools(api, config, callService, memoryService);
-  } else {
-    registerModernToolsBridge(api, config, callService, memoryService);
+    api.tools.register = origRegister; // restore
   }
+  registerModernToolsBridge(api, config, callService, memoryService, legacyToolNames);
 
   const cliRegister = (api as unknown as { cli?: { register?: unknown } }).cli?.register;
   if (typeof cliRegister === "function") {
@@ -474,10 +635,10 @@ function initPlugin(api: PluginAPI): void {
       api,
       config,
       (record) => {
-        callService.trackInboundCall(record);
+        callService.notifyInboundCall(record);
       },
       (from, to, body, messageId) => {
-        callService.trackInboundText(from, to, body, messageId);
+        void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
       },
       (providerCallId, recordingUrl) => {
         callService.setRecordingUrl(providerCallId, recordingUrl);

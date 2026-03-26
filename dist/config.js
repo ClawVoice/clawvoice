@@ -27,6 +27,7 @@ const DEFAULT_CONFIG = {
     mediaStreamBind: "0.0.0.0",
     mediaStreamPort: 3101,
     mediaStreamPath: "/media-stream",
+    smsAutoReply: true,
     restrictTools: true,
     deniedTools: [
         "exec",
@@ -152,6 +153,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
     const envDisclosureEnabled = envString(env, "CLAWVOICE_DISCLOSURE_ENABLED");
     const envDisclosureStatement = envString(env, "CLAWVOICE_DISCLOSURE_STATEMENT");
     const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
+    const envSmsAutoReply = envString(env, "CLAWVOICE_SMS_AUTO_REPLY");
     const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
     const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
     const envVoiceSystemPrompt = envString(env, "CLAWVOICE_VOICE_SYSTEM_PROMPT");
@@ -195,6 +197,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
         amdEnabled: parseBoolean(getValue(envAmdEnabled, typeof pluginConfig.amdEnabled === "undefined" ? undefined : String(pluginConfig.amdEnabled), String(DEFAULT_CONFIG.amdEnabled)), DEFAULT_CONFIG.amdEnabled),
         voiceSystemPrompt: getValue(envVoiceSystemPrompt, typeof pluginConfig.voiceSystemPrompt === "string" ? pluginConfig.voiceSystemPrompt : undefined, DEFAULT_CONFIG.voiceSystemPrompt),
         inboundEnabled: parseBoolean(getValue(envInboundEnabled, typeof pluginConfig.inboundEnabled === "undefined" ? undefined : String(pluginConfig.inboundEnabled), String(DEFAULT_CONFIG.inboundEnabled)), DEFAULT_CONFIG.inboundEnabled),
+        smsAutoReply: parseBoolean(getValue(envSmsAutoReply, typeof pluginConfig.smsAutoReply === "undefined" ? undefined : String(pluginConfig.smsAutoReply), String(DEFAULT_CONFIG.smsAutoReply)), DEFAULT_CONFIG.smsAutoReply),
         restrictTools: parseBoolean(getValue(envRestrictTools, typeof pluginConfig.restrictTools === "undefined" ? undefined : String(pluginConfig.restrictTools), String(DEFAULT_CONFIG.restrictTools)), DEFAULT_CONFIG.restrictTools),
         deniedTools: parseStringArray(getValue(envDeniedTools, pluginConfig.deniedTools, DEFAULT_CONFIG.deniedTools), DEFAULT_CONFIG.deniedTools),
         notifyTelegram: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_TELEGRAM"), typeof pluginConfig.notifyTelegram === "undefined" ? undefined : String(pluginConfig.notifyTelegram), String(DEFAULT_CONFIG.notifyTelegram)), DEFAULT_CONFIG.notifyTelegram),

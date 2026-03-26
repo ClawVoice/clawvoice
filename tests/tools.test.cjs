@@ -118,7 +118,9 @@ test("registerTools registers expected tool names", () => {
   const names = tools.map((tool) => tool.name).sort();
 
   assert.deepEqual(names, [
+    "clawvoice_batch_call",
     "clawvoice_call",
+    "clawvoice_campaign_report",
     "clawvoice_clear_calls",
     "clawvoice_hangup",
     "clawvoice_promote_memory",
@@ -196,7 +198,7 @@ test("status handler reports active call count", async () => {
   const statusBefore = await statusTool.handler({});
   assert.equal(statusBefore.content, "No active calls.");
 
-  await callTool.handler({ phoneNumber: "5551112222" });
+  await callTool.handler({ phoneNumber: "5551112222", purpose: "Test call for status check" });
   const statusAfter = await statusTool.handler({});
   assert.match(statusAfter.content, /There are 1 active call\(s\)/);
   assert.equal(Array.isArray(statusAfter.data.activeCalls), true);

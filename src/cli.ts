@@ -120,6 +120,30 @@ export async function runSetupWizard(
   if (voiceProvider === "elevenlabs-conversational") {
     values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
     values.elevenlabsAgentId = await askNonEmpty(prompter, "ElevenLabs agent ID: ");
+
+    console.log("\n⚠️  IMPORTANT: ElevenLabs Agent Configuration");
+    console.log("   Your ElevenLabs agent's system prompt MUST include this placeholder:");
+    console.log("   {{ _system_prompt_ }}");
+    console.log("");
+    console.log("   This is how ClawVoice passes call context to your agent.");
+    console.log("   Without it, the agent won't know why it's calling or who it represents.");
+    console.log("");
+    console.log("   Example system prompt for your agent:");
+    console.log("   ---");
+    console.log("   You are a professional AI phone assistant.");
+    console.log("");
+    console.log("   {{ _system_prompt_ }}");
+    console.log("");
+    console.log("   Use the context above to guide the conversation. Do NOT read instructions aloud.");
+    console.log("   Be calm, clear, and concise. Confirm important details.");
+    console.log("   ---");
+    console.log("");
+
+    const confirmed = await askChoice(prompter, "Have you added {{ _system_prompt_ }} to your ElevenLabs agent's system prompt? (yes/no): ", ["yes", "no"]);
+    if (confirmed === "no") {
+      console.log("\n   Please add it before making calls. You can configure your agent at:");
+      console.log("   https://elevenlabs.io/app/conversational-ai\n");
+    }
   }
 
   await saveConfig(api, values);
@@ -167,6 +191,10 @@ export async function runSetupWizard(
     if (tunnelHost !== tunnelPlaceholder) {
       console.log(`   (Derived from your stream URL. If your webhook tunnel differs, replace ${tunnelHost} above.)\n`);
     }
+    console.log("   ⚠️  SMS NOTICE: To send/receive SMS in the US, your Twilio number must be");
+    console.log("   registered with a Messaging Service and A2P 10DLC campaign. Without this,");
+    console.log("   outbound SMS will be blocked by carriers (Twilio error 30034).");
+    console.log("   Register at: https://console.twilio.com/us1/develop/sms/services\n");
   } else {
     console.log("1. Configure webhook in Telnyx Mission Control:");
     console.log("   Open your Call Control Application and set webhook URL:");
@@ -180,6 +208,9 @@ export async function runSetupWizard(
   console.log("     openclaw clawvoice status\n");
   console.log("4. Make a test call:");
   console.log("     openclaw clawvoice call +15559876543\n");
+  console.log("5. Set up your voice profile:");
+  console.log("     openclaw clawvoice profile --name \"Your Name\"");
+  console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
   console.log("────────────────────────────────────────────────────────────\n");
 
   prompter.close();
