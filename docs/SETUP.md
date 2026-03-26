@@ -58,7 +58,7 @@ If OpenClaw runs on your laptop or home server, Twilio/Telnyx still need a **pub
 
 Use this secure pattern:
 
-1. Keep OpenClaw bound to localhost (example: `127.0.0.1:3101`).
+1. Keep OpenClaw bound to localhost.
 2. Expose only webhook paths through a tunnel hostname.
 3. Keep provider signature verification enabled.
 4. Point provider webhooks to:
@@ -66,13 +66,26 @@ Use this secure pattern:
    - Twilio SMS: `https://<your-host>/clawvoice/webhooks/twilio/sms`
    - Telnyx: `https://<your-host>/clawvoice/webhooks/telnyx`
 
+#### Which port to tunnel
+
+The port you tunnel depends on your telephony provider:
+
+| Provider | Tunnel target | Why |
+|----------|--------------|-----|
+| **Twilio** | `3101` (standalone media stream server) | ClawVoice starts a dedicated server on port 3101 that handles Twilio webhooks and media streams |
+| **Telnyx** | Your **OpenClaw gateway port** (default varies by setup) | Telnyx webhooks are routed through the OpenClaw gateway — port 3101 is not used |
+
+> **Telnyx users:** Check your OpenClaw config for the gateway port. The standalone server on 3101 only starts for Twilio.
+
 #### Tunnel options
+
+Replace `<PORT>` below with the correct port for your provider (see table above).
 
 **Option A — ngrok (quickest to get started):**
 
 ```bash
 # Install: https://ngrok.com/download
-ngrok http 3101
+ngrok http <PORT>
 ```
 
 ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. The URL changes each time you restart ngrok (unless you have a paid plan with a stable domain).
@@ -81,7 +94,7 @@ ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. The URL 
 
 ```bash
 # Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:3101
+cloudflared tunnel --url http://localhost:<PORT>
 ```
 
 Prints a URL like `https://random-words.trycloudflare.com`. Stable hostname — IP changes don't matter. No inbound port-forwarding on your router needed.
@@ -92,7 +105,7 @@ Prints a URL like `https://random-words.trycloudflare.com`. Stable hostname — 
 
 ```bash
 # Requires Tailscale installed and logged in
-tailscale funnel 3101
+tailscale funnel <PORT>
 ```
 
 Gives you a stable `https://your-machine.tail1234.ts.net` URL. Still public at the Funnel URL, so treat it like any internet-facing endpoint.
