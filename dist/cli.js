@@ -107,11 +107,35 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         values.twilioAccountSid = await askNonEmpty(prompter, "Twilio Account SID: ");
         values.twilioAuthToken = await askNonEmpty(prompter, "Twilio auth token: ");
         values.twilioPhoneNumber = await askNonEmpty(prompter, "Twilio phone number (E.164): ");
-        values.twilioStreamUrl = await askNonEmpty(prompter, "Twilio media stream URL (wss://...)\n" +
-            "  Twilio needs a public WSS endpoint to stream call audio.\n" +
-            "  Use a tunnel (ngrok, Cloudflare Tunnel) to expose your local media stream server.\n" +
-            "  Example: wss://your-tunnel.ngrok-free.dev/media-stream\n" +
-            "  Stream URL: ");
+        // Auto-detect ngrok tunnel if running
+        let detectedTunnelUrl = "";
+        try {
+            const resp = await globalThis.fetch("http://localhost:4040/api/tunnels", { signal: AbortSignal.timeout(2000) });
+            const data = await resp.json();
+            const httpsTunnel = data.tunnels?.find((t) => t.proto === "https");
+            if (httpsTunnel?.public_url) {
+                detectedTunnelUrl = httpsTunnel.public_url.replace(/^https:/, "wss:") + "/media-stream";
+                console.log(`\n  ✓ Detected ngrok tunnel: ${httpsTunnel.public_url}`);
+                console.log(`    Stream URL will be: ${detectedTunnelUrl}\n`);
+            }
+        }
+        catch { /* ngrok not running or not accessible */ }
+        if (detectedTunnelUrl) {
+            const useDetected = await askChoice(prompter, `Use detected tunnel URL? (${detectedTunnelUrl}) (yes/no): `, ["yes", "no"]);
+            if (useDetected === "yes") {
+                values.twilioStreamUrl = detectedTunnelUrl;
+            }
+            else {
+                values.twilioStreamUrl = await askNonEmpty(prompter, "Twilio media stream URL (wss://...): ");
+            }
+        }
+        else {
+            values.twilioStreamUrl = await askNonEmpty(prompter, "Twilio media stream URL (wss://...)\n" +
+                "  Twilio needs a public WSS endpoint to stream call audio.\n" +
+                "  Use a tunnel (ngrok, Cloudflare Tunnel) to expose your local media stream server on port 3101.\n" +
+                "  Example: wss://your-tunnel.ngrok-free.dev/media-stream\n" +
+                "  Stream URL: ");
+        }
     }
     const voiceProvider = await askChoice(prompter, "Voice provider (deepgram-agent/elevenlabs-conversational): ", ["deepgram-agent", "elevenlabs-conversational"]);
     values.voiceProvider = voiceProvider;
@@ -173,15 +197,63 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     console.log("\n✅ ClawVoice config saved!\n");
     console.log("── Next steps ──────────────────────────────────────────────\n");
     if (telephonyProvider === "twilio") {
-        console.log("1. Configure webhooks in Twilio Console:");
-        console.log("   Open: https://console.twilio.com → Phone Numbers → Active Numbers");
-        console.log(`   Select your number (${values.twilioPhoneNumber || "..."}):\n`);
-        console.log("   Voice Configuration → A call comes in → Webhook:");
-        console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/voice  (HTTP POST)\n`);
-        console.log("   Messaging Configuration → A message comes in → Webhook:");
-        console.log(`     https://${tunnelHost}/clawvoice/webhooks/twilio/sms  (HTTP POST)\n`);
-        if (tunnelHost !== tunnelPlaceholder) {
-            console.log(`   (Derived from your stream URL. If your webhook tunnel differs, replace ${tunnelHost} above.)\n`);
+        const voiceWebhookUrl = `https://${tunnelHost}/clawvoice/webhooks/twilio/voice`;
+        const smsWebhookUrl = `https://${tunnelHost}/clawvoice/webhooks/twilio/sms`;
+        // Try to auto-configure Twilio webhooks via API
+        let webhooksConfigured = false;
+        if (tunnelHost !== tunnelPlaceholder && values.twilioAccountSid && values.twilioAuthToken && values.twilioPhoneNumber) {
+            const autoConfig = await askChoice(prompter, "Auto-configure Twilio webhooks for this number? (yes/no): ", ["yes", "no"]);
+            if (autoConfig === "yes") {
+                try {
+                    const sid = String(values.twilioAccountSid);
+                    const token = String(values.twilioAuthToken);
+                    const phone = String(values.twilioPhoneNumber);
+                    const auth = Buffer.from(`${sid}:${token}`).toString("base64");
+                    // Find the phone number SID
+                    const listResp = await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone)}`, { headers: { Authorization: `Basic ${auth}` } });
+                    const listData = await listResp.json();
+                    const phoneSid = listData.incoming_phone_numbers?.[0]?.sid;
+                    if (phoneSid) {
+                        // Update the phone number webhooks
+                        await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`, {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Basic ${auth}`,
+                                "Content-Type": "application/x-www-form-urlencoded",
+                            },
+                            body: new URLSearchParams({
+                                VoiceUrl: voiceWebhookUrl,
+                                VoiceMethod: "POST",
+                                SmsUrl: smsWebhookUrl,
+                                SmsMethod: "POST",
+                            }).toString(),
+                        });
+                        console.log(`\n  ✓ Twilio webhooks configured automatically!`);
+                        console.log(`    Voice: ${voiceWebhookUrl}`);
+                        console.log(`    SMS:   ${smsWebhookUrl}\n`);
+                        webhooksConfigured = true;
+                    }
+                    else {
+                        console.log(`\n  ✗ Could not find phone number ${phone} in your Twilio account.\n`);
+                    }
+                }
+                catch (err) {
+                    console.log(`\n  ✗ Auto-configuration failed: ${err instanceof Error ? err.message : String(err)}`);
+                    console.log("    You'll need to configure webhooks manually.\n");
+                }
+            }
+        }
+        if (!webhooksConfigured) {
+            console.log("1. Configure webhooks in Twilio Console:");
+            console.log("   Open: https://console.twilio.com → Phone Numbers → Active Numbers");
+            console.log(`   Select your number (${values.twilioPhoneNumber || "..."}):\n`);
+            console.log("   Voice Configuration → A call comes in → Webhook:");
+            console.log(`     ${voiceWebhookUrl}  (HTTP POST)\n`);
+            console.log("   Messaging Configuration → A message comes in → Webhook:");
+            console.log(`     ${smsWebhookUrl}  (HTTP POST)\n`);
+            if (tunnelHost !== tunnelPlaceholder) {
+                console.log(`   (Derived from your stream URL. If your webhook tunnel differs, replace ${tunnelHost} above.)\n`);
+            }
         }
         console.log("   ⚠️  SMS NOTICE: To send/receive SMS in the US, your Twilio number must be");
         console.log("   registered with a Messaging Service and A2P 10DLC campaign. Without this,");
@@ -354,18 +426,22 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         description: "Show active calls and configuration health diagnostics",
         run: async () => {
             const report = (0, health_1.runDiagnostics)(config);
-            log.info(`Diagnostics: ${report.overall.toUpperCase()}`, {});
+            console.log(`\nClawVoice Status: ${report.overall.toUpperCase()}\n`);
             for (const check of report.checks) {
                 const icon = check.status === "pass" ? "✓" : check.status === "warn" ? "⚠" : "✗";
-                log.info(`  ${icon} ${check.name}: ${check.detail}`, {});
+                console.log(`  ${icon} ${check.name}: ${check.detail}`);
                 if (check.remediation) {
-                    log.info(`    → ${check.remediation}`, {});
+                    console.log(`    → ${check.remediation}`);
                 }
             }
             const active = callService.getActiveCalls();
+            console.log(`\nActive calls: ${active.length}`);
             if (active.length > 0) {
-                log.info(`Active calls: ${active.length}`, {});
+                for (const call of active) {
+                    console.log(`  - ${call.callId}: ${call.to} (${call.status})`);
+                }
             }
+            console.log("");
         },
     });
     api.cli.register({
