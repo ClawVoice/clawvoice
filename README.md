@@ -15,7 +15,13 @@ Give your OpenClaw agent a phone number. It can make and receive calls, send tex
 
 > **⚠️ Legal Notice:** Automated calling is subject to federal and state regulations including the TCPA (Telephone Consumer Protection Act) and state-specific telemarketing laws. You are solely responsible for ensuring your use of ClawVoice complies with all applicable laws, including obtaining proper consent before placing automated calls. Batch calling features are provided as-is — **use at your own risk.** This software does not provide legal advice.
 
-## Quick Start
+## Getting Started
+
+There are two ways to set up ClawVoice:
+
+1. **Guided setup** (recommended) — Tell your OpenClaw agent: *"Set up ClawVoice for me"* or run `openclaw clawvoice setup`. The wizard walks you through every step including Twilio credentials, voice provider selection, ElevenLabs agent configuration, and webhook setup.
+
+2. **Manual setup** — Follow the steps below and configure each setting yourself.
 
 ### 1. Install
 
@@ -144,11 +150,19 @@ If using ElevenLabs Conversational AI (`voiceProvider: elevenlabs-conversational
    Be calm, clear, and concise. Confirm important details like names, phone numbers, and next steps.
    ```
 
-3. In **Security** settings, note that prompt overrides are typically locked. ClawVoice uses dynamic variables (not prompt overrides) to inject context, so this is fine.
+3. In **Audio** settings, set the input audio format to **ulaw 8000** (mu-law 8kHz). This matches Twilio's media stream format and is required for the voice agent to hear callers correctly. If this is not set, the agent will not be able to understand incoming speech.
 
-4. Copy your **Agent ID** (starts with `agent_`) — you'll need it for the setup wizard.
+4. In **Security** settings, note that prompt overrides are typically locked. ClawVoice uses dynamic variables (not prompt overrides) to inject context, so this is fine.
 
-5. Set your agent's **First Message** (e.g., "Hello, my name is Jessica.") — this is what callers hear first.
+5. Copy your **Agent ID** (starts with `agent_`) — you'll need it for the setup wizard.
+
+6. Set your agent's **First Message** (e.g., "Hello, my name is Jessica.") — this is what callers hear first.
+
+> **Summary of ElevenLabs requirements:**
+> - System prompt must include `{{ _system_prompt_ }}`
+> - Audio input format: **ulaw 8000**
+> - Agent ID copied for ClawVoice config
+> - First message set (the greeting callers hear)
 
 ### Set Up Your Voice Profile
 
@@ -301,30 +315,62 @@ Voice calls are riskier than text — callers can attempt social engineering. Cl
 - Voice agent can **only write** to `voice-memory/`
 - Promotion to main memory requires explicit review via `openclaw clawvoice promote`
 
-## CLI Commands
+## For Humans — CLI Commands
 
 ```bash
-openclaw clawvoice setup        # Interactive setup wizard
-openclaw clawvoice call <num>   # Place an outbound call
-openclaw clawvoice status       # Show active calls and config health
-openclaw clawvoice promote      # Review and promote voice memories
-openclaw clawvoice history      # Recent call history
-openclaw clawvoice test         # Test voice pipeline connectivity
+openclaw clawvoice setup            # Interactive setup wizard (walks through everything)
+openclaw clawvoice call <num>       # Place an outbound call
+  --purpose "..."                   #   What the call is about (required)
+  --greeting "..."                  #   Custom opening line (optional)
+openclaw clawvoice sms <num>        # Send an SMS
+  --message "..."                   #   Message body
+openclaw clawvoice status           # Show active calls and config health
+openclaw clawvoice profile          # View/edit your voice profile
+  --name "Your Name"                #   Set owner name
+  --style casual                    #   Communication style
+openclaw clawvoice history          # Recent call history
+openclaw clawvoice history <id>     # Detailed summary for a specific call
+openclaw clawvoice inbox            # Recent inbound/outbound SMS
+openclaw clawvoice promote          # Review and promote voice memories
+openclaw clawvoice test             # Test voice pipeline connectivity
+openclaw clawvoice clear            # Clear stuck call slots
 ```
 
-## Agent Tools
+Or just tell your agent what you need — it has access to all the tools below.
 
-These tools are available to your OpenClaw agent:
+## For AI Agents — Available Tools
+
+These tools are automatically available to your OpenClaw agent when ClawVoice is installed:
 
 | Tool | Description |
 |------|-------------|
-| `clawvoice_call` | Place an outbound phone call |
-| `clawvoice_hangup` | End an active call |
-| `clawvoice_send_text` | Send an SMS message |
-| `clawvoice_text_status` | Check SMS delivery status |
-| `clawvoice_status` | Get call status and diagnostics |
-| `clawvoice_promote_memory` | Promote a voice memory to main memory |
-| `clawvoice_clear_calls` | Clear completed call records |
+| `clawvoice_call` | Place an outbound phone call. **Requires `purpose`** — the voice agent only knows what you tell it. Include who you're calling on behalf of, why, and what information to gather. |
+| `clawvoice_batch_call` | Make multiple sequential calls from a list. Each call completes before the next starts. Returns a consolidated report. Max 20 calls per batch. |
+| `clawvoice_campaign_report` | Generate a CSV report from batch call results with columns: Phone, Name, Company, Purpose, Outcome, Duration, Turns, Summary, Transcript. |
+| `clawvoice_hangup` | End an active call (or the most recent one). |
+| `clawvoice_send_text` | Send an SMS text message. |
+| `clawvoice_text_status` | Show recent inbound and outbound text messages. |
+| `clawvoice_status` | Get active call status, diagnostics, or a specific call's post-call summary with retry context. |
+| `clawvoice_promote_memory` | Review and promote a voice memory to main MEMORY.md. |
+| `clawvoice_clear_calls` | Force-clear stuck call slots. |
+
+### How the voice agent works
+
+The voice agent (e.g., "Jessica" on ElevenLabs) is a **separate AI** that runs on the phone call. It does NOT have access to your conversation history. The only context it receives is what you pass via the `purpose` field.
+
+**Good purpose example:**
+> "Call Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental. Cody's callback number is 555-010-2468."
+
+**Bad purpose example:**
+> "Call the dentist" *(agent won't know who, why, or what to ask)*
+
+### Spreadsheet workflow
+
+1. User uploads a CSV/Google Sheet with phone numbers and call purposes
+2. Agent extracts contacts and confirms the list
+3. Agent calls `clawvoice_batch_call` with the list
+4. Each call completes → individual Telegram notification with summary + transcript file
+5. After all calls finish → agent calls `clawvoice_campaign_report` → delivers CSV report
 
 ## Architecture
 
