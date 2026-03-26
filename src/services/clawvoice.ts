@@ -125,9 +125,9 @@ export class ClawVoiceService {
           : config.deepgramVoice,
         voiceSystemPrompt: config.voiceSystemPrompt,
         allowAutoAccept: true,
-        onCallCompleted: (callId, summary, transcript) => {
+        onCallCompleted: (callId, summary, transcript, meta) => {
           if (!summary) return;
-          void this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
+          void this.postCall.processCompletedCall(summary, transcript, undefined, meta).catch(() => undefined);
         },
       })
       : null;

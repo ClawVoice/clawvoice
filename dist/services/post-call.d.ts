@@ -45,20 +45,33 @@ export declare class PostCallService {
      * Process a completed call: persist transcript and deliver summary.
      * Idempotent — skips calls already processed.
      */
-    processCompletedCall(summary: CallSummary, transcript: TranscriptEntry[], recordingUrl?: string): Promise<{
+    processCompletedCall(summary: CallSummary, transcript: TranscriptEntry[], recordingUrl?: string, meta?: {
+        callerPhone?: string;
+        direction?: "inbound" | "outbound";
+    }): Promise<{
         persisted: boolean;
         notified: boolean;
     }>;
     private persistCallRecord;
     private deliverSummary;
     /**
+     * Extract caller details (name, company, phone, reason) from transcript.
+     */
+    private extractCallerDetails;
+    /**
+     * Format a rich Telegram/Discord/Slack notification.
+     */
+    private formatNotificationText;
+    /**
      * Format a detailed summary for system event delivery (shown in-conversation).
+     * Includes a follow-up prompt for the agent to review and potentially act on.
      */
     private formatSystemEventText;
     /**
-     * Format a human-readable summary for notifications.
+     * Format a human-readable summary for notifications (legacy).
      */
     formatSummaryText(summary: CallSummary, transcript: TranscriptEntry[]): string;
+    private formatDuration;
     private getConfiguredChannels;
     isProcessed(callId: string): boolean;
     getProcessedCount(): number;

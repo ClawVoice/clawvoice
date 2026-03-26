@@ -21,7 +21,10 @@ interface TwilioMediaSessionHandlerOptions {
     /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
     allowAutoAccept?: boolean;
     /** Called when a media session closes (for post-call processing). */
-    onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[]) => void;
+    onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[], meta?: {
+        callerPhone?: string;
+        direction?: "inbound" | "outbound";
+    }) => void;
 }
 export declare class TwilioMediaSessionHandler {
     private readonly options;
