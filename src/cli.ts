@@ -204,7 +204,7 @@ export async function runSetupWizard(
 
   console.log("2. Start OpenClaw:");
   console.log("     openclaw start\n");
-  console.log("3. Verify your setup:");
+  console.log("3. Verify your setup (re-run anytime to check everything is working):");
   console.log("     openclaw clawvoice status\n");
   console.log("4. Make a test call:");
   console.log("     openclaw clawvoice call +15559876543\n");
@@ -220,7 +220,8 @@ export async function runSetupWizard(
     const failures = report.checks.filter((c) => c.status === "fail");
     const warnings = report.checks.filter((c) => c.status === "warn");
     if (failures.length === 0 && warnings.length === 0) {
-      console.log("✅ All checks passed — you're ready to go!\n");
+      console.log("✅ All checks passed — you're ready to go!");
+      console.log("   Tip: Run `openclaw clawvoice status` anytime to re-check your setup.\n");
     } else {
       if (failures.length > 0) {
         console.log(`❌ ${failures.length} issue(s) need attention:`);
