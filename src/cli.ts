@@ -1,5 +1,5 @@
 import { PluginAPI } from "@openclaw/plugin-sdk";
-import { ClawVoiceConfig } from "./config";
+import { ClawVoiceConfig, resolveConfig } from "./config";
 import { runDiagnostics } from "./diagnostics/health";
 
 import { MemoryExtractionService } from "./services/memory-extraction";
@@ -204,7 +204,7 @@ export async function runSetupWizard(
 
   console.log("2. Start OpenClaw:");
   console.log("     openclaw start\n");
-  console.log("3. Verify your setup:");
+  console.log("3. Verify your setup (re-run anytime to check everything is working):");
   console.log("     openclaw clawvoice status\n");
   console.log("4. Make a test call:");
   console.log("     openclaw clawvoice call +15559876543\n");
@@ -213,7 +213,33 @@ export async function runSetupWizard(
   console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
   console.log("────────────────────────────────────────────────────────────\n");
 
-  prompter.close();
+  try {
+    console.log("Running setup diagnostics...\n");
+    const diagConfig = resolveConfig(values);
+    const report = await runDiagnostics(diagConfig);
+    const failures = report.checks.filter((c) => c.status === "fail");
+    const warnings = report.checks.filter((c) => c.status === "warn");
+    if (failures.length === 0 && warnings.length === 0) {
+      console.log("✅ All checks passed — you're ready to go!");
+      console.log("   Tip: Run `openclaw clawvoice status` anytime to re-check your setup.\n");
+    } else {
+      if (failures.length > 0) {
+        console.log(`❌ ${failures.length} issue(s) need attention:`);
+        for (const f of failures) console.log(`   • ${f.name}: ${f.remediation ?? f.detail ?? "(no details)"}`);
+        console.log();
+      }
+      if (warnings.length > 0) {
+        console.log(`⚠️  ${warnings.length} warning(s):`);
+        for (const w of warnings) console.log(`   • ${w.name}: ${w.remediation ?? w.detail ?? "(no details)"}`);
+        console.log();
+      }
+    }
+  } catch (err) {
+    console.log(`Diagnostics could not be completed: ${err instanceof Error ? err.message : String(err)}`);
+    console.log("Run `openclaw clawvoice status` to check your setup.\n");
+  } finally {
+    prompter.close();
+  }
 }
 
 function parseFlag(args: string[], flag: string): string | undefined {
