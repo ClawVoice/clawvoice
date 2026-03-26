@@ -124,7 +124,7 @@ function extractParams(...executeArgs) {
     }
     return {};
 }
-function registerModernToolsBridge(api, config, callService, memoryService) {
+function registerModernToolsBridge(api, config, callService, memoryService, skipNames) {
     const modernApi = api;
     if (typeof modernApi.registerTool !== "function") {
         return;
@@ -139,7 +139,15 @@ function registerModernToolsBridge(api, config, callService, memoryService) {
         },
     };
     (0, tools_1.registerTools)(shimApi, config, callService, memoryService);
+    const registeredNames = new Set();
     for (const tool of capturedTools) {
+        // Skip tools already registered via the legacy api.tools.register path
+        // to avoid duplicate tool entries in the OpenClaw runtime.
+        if (skipNames?.has(tool.name))
+            continue;
+        if (registeredNames.has(tool.name))
+            continue;
+        registeredNames.add(tool.name);
         const handler = tool.handler;
         modernApi.registerTool({
             name: tool.name,
@@ -214,12 +222,24 @@ function wrapExpressHandler(expressHandler, method) {
     };
 }
 /**
- * Try to locate OpenClaw's internal registerPluginHttpRoute function.
+ * !! FRAGILE — INTERNAL MODULE PROBING !!
+ *
+ * This function probes OpenClaw's minified/bundled internal modules to locate
+ * the `registerPluginHttpRoute` function. It is inherently fragile and may
+ * break on new OpenClaw versions if the bundler renames exports or restructures
+ * the dist output.
+ *
+ * Fallback chain:
+ *   1. Try `mod.l` — the known minified export name in current versions.
+ *   2. Search all single-letter exports for a function whose source contains
+ *      "httpRoutes" and "pluginId" (heuristic signature match).
+ *   3. If both fail, return null — the caller falls back to
+ *      `api.registerHttpRoute` (which may not work in all runtimes) and the
+ *      standalone webhook server on port 3101 handles webhooks regardless.
+ *
  * This registers routes in the shared gateway HTTP registry (which the gateway
  * HTTP server actually dispatches from), unlike api.registerHttpRoute which
  * stores routes in a Pi-scoped registry that the gateway server never reads.
- *
- * Falls back to api.registerHttpRoute if the internal function can't be found.
  */
 async function resolveInternalRouteRegistrar(api) {
     try {
@@ -523,11 +543,19 @@ function initPlugin(api) {
     // The legacy api.tools.register may exist but not actually expose tools to the
     // agent session in modern OpenClaw runtimes. The modern registerTool bridge
     // ensures tools appear in the agent's tool list.
+    const legacyToolNames = new Set();
     const toolsRegister = api.tools?.register;
     if (typeof toolsRegister === "function") {
+        // Wrap register to capture tool names for dedup in the modern bridge
+        const origRegister = api.tools.register.bind(api.tools);
+        api.tools.register = ((def) => {
+            legacyToolNames.add(def.name);
+            return origRegister(def);
+        });
         (0, tools_1.registerTools)(api, config, callService, memoryService);
+        api.tools.register = origRegister; // restore
     }
-    registerModernToolsBridge(api, config, callService, memoryService);
+    registerModernToolsBridge(api, config, callService, memoryService, legacyToolNames);
     const cliRegister = api.cli?.register;
     if (typeof cliRegister === "function") {
         (0, cli_1.registerCLI)(api, config, callService, memoryService, workspacePath);
