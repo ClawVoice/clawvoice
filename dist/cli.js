@@ -204,29 +204,37 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     console.log("     openclaw clawvoice profile --name \"Your Name\"");
     console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
     console.log("────────────────────────────────────────────────────────────\n");
-    console.log("Running setup diagnostics...\n");
-    const diagConfig = (0, config_1.resolveConfig)(values);
-    const report = (0, health_1.runDiagnostics)(diagConfig);
-    const failures = report.checks.filter((c) => c.status === "fail");
-    const warnings = report.checks.filter((c) => c.status === "warn");
-    if (failures.length === 0 && warnings.length === 0) {
-        console.log("✅ All checks passed — you're ready to go!\n");
-    }
-    else {
-        if (failures.length > 0) {
-            console.log(`❌ ${failures.length} issue(s) need attention:`);
-            for (const f of failures)
-                console.log(`   • ${f.name}: ${f.remediation ?? f.detail}`);
-            console.log();
+    try {
+        console.log("Running setup diagnostics...\n");
+        const diagConfig = (0, config_1.resolveConfig)(values);
+        const report = await (0, health_1.runDiagnostics)(diagConfig);
+        const failures = report.checks.filter((c) => c.status === "fail");
+        const warnings = report.checks.filter((c) => c.status === "warn");
+        if (failures.length === 0 && warnings.length === 0) {
+            console.log("✅ All checks passed — you're ready to go!\n");
         }
-        if (warnings.length > 0) {
-            console.log(`⚠️  ${warnings.length} warning(s):`);
-            for (const w of warnings)
-                console.log(`   • ${w.name}: ${w.remediation ?? w.detail}`);
-            console.log();
+        else {
+            if (failures.length > 0) {
+                console.log(`❌ ${failures.length} issue(s) need attention:`);
+                for (const f of failures)
+                    console.log(`   • ${f.name}: ${f.remediation ?? f.detail ?? "(no details)"}`);
+                console.log();
+            }
+            if (warnings.length > 0) {
+                console.log(`⚠️  ${warnings.length} warning(s):`);
+                for (const w of warnings)
+                    console.log(`   • ${w.name}: ${w.remediation ?? w.detail ?? "(no details)"}`);
+                console.log();
+            }
         }
     }
-    prompter.close();
+    catch (err) {
+        console.log(`Diagnostics could not be completed: ${err instanceof Error ? err.message : String(err)}`);
+        console.log("Run `openclaw clawvoice status` to check your setup.\n");
+    }
+    finally {
+        prompter.close();
+    }
 }
 function parseFlag(args, flag) {
     const inline = args.find((a) => a.startsWith(`--${flag}=`));
