@@ -35,6 +35,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.register = register;
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
 const cli_1 = require("./cli");
 const config_1 = require("./config");
 const health_1 = require("./diagnostics/health");
@@ -72,6 +74,10 @@ function registerModernCliBridge(api, config, callService, memoryService, worksp
     }
     modernApi.registerCli(({ program }) => {
         const root = program.command("clawvoice").description("ClawVoice commands");
+        // Allow unknown options on the parent so they pass through to subcommands
+        if (typeof root.allowUnknownOption === "function") {
+            root.allowUnknownOption();
+        }
         for (const definition of legacyCommands) {
             if (!definition.name.startsWith("clawvoice ")) {
                 continue;
@@ -80,10 +86,23 @@ function registerModernCliBridge(api, config, callService, memoryService, worksp
             if (!commandName) {
                 continue;
             }
-            root
+            const cmd = root
                 .command(`${commandName} [args...]`)
-                .description(definition.description)
-                .action(async (...actionArgs) => {
+                .description(definition.description);
+            // Allow flags like --purpose, --greeting to pass through to the
+            // plugin's own parseFlag() handler instead of Commander rejecting them.
+            if (typeof cmd.allowUnknownOption === "function") {
+                cmd.allowUnknownOption();
+            }
+            // enablePositionalOptions tells Commander to stop parsing options after
+            // the variadic argument, letting --purpose etc. arrive in the args array.
+            if (typeof cmd.enablePositionalOptions === "function") {
+                cmd.enablePositionalOptions();
+            }
+            if (typeof cmd.passThroughOptions === "function") {
+                cmd.passThroughOptions();
+            }
+            cmd.action(async (...actionArgs) => {
                 const args = normalizeCliArgs(actionArgs[0]);
                 await definition.run(args);
             });
@@ -144,8 +163,10 @@ function wrapExpressHandler(expressHandler, method) {
             return;
         }
         const chunks = [];
-        for await (const chunk of req)
-            chunks.push(chunk);
+        for await (const chunk of req) {
+            // Ensure Buffer for safety — some Node versions may yield non-Buffer chunks
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
         const rawBody = Buffer.concat(chunks).toString("utf8");
         let parsedBody = {};
         const ct = req.headers["content-type"] || "";
@@ -160,7 +181,9 @@ function wrapExpressHandler(expressHandler, method) {
         }
         const expressReq = Object.assign(req, {
             body: parsedBody,
-            protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "http",
+            // Default to https — Twilio webhook signature validation requires the correct protocol,
+            // and behind a reverse proxy/tunnel the connection is typically https.
+            protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "https",
         });
         const expressRes = {
             _statusCode: 200,
@@ -222,7 +245,8 @@ async function resolveInternalRouteRegistrar(api) {
         const webhookFiles = fs.readdirSync(openclawDist).filter((f) => f.startsWith("webhook-ingress-") && f.endsWith(".js"));
         if (webhookFiles.length === 0)
             return null;
-        const chunkUrl = "file://" + path.join(openclawDist, webhookFiles[0]).replace(/\\/g, "/");
+        const { pathToFileURL } = require("url");
+        const chunkUrl = pathToFileURL(path.join(openclawDist, webhookFiles[0])).href;
         const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
         // registerPluginHttpRoute is exported as 'l' in the bundled chunk
         if (typeof mod.l === "function")
@@ -276,7 +300,8 @@ async function resolveSystemEventEmitter(api) {
         const sysEventFiles = fs.readdirSync(openclawDist).filter((f) => f.startsWith("system-events-") && f.endsWith(".js"));
         if (sysEventFiles.length === 0)
             return null;
-        const chunkUrl = "file://" + path.join(openclawDist, sysEventFiles[0]).replace(/\\/g, "/");
+        const { pathToFileURL } = require("url");
+        const chunkUrl = pathToFileURL(path.join(openclawDist, sysEventFiles[0])).href;
         const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
         // Look for enqueueSystemEvent export
         if (typeof mod.enqueueSystemEvent === "function")
@@ -328,6 +353,7 @@ function registerModernRoutesBridge(api, config, callService) {
             return;
         for (const route of capturedRoutes) {
             registerFn({
+                method: route.method,
                 path: route.path,
                 handler: wrapExpressHandler(route.handler, route.method),
                 auth: "plugin",
@@ -386,6 +412,35 @@ function initPlugin(api) {
             : undefined);
     const callService = new clawvoice_1.ClawVoiceService(config, undefined, workspacePath);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
+    // Wire filesystem-based memory writer for post-call transcript persistence
+    if (workspacePath) {
+        callService.postCall.setMemoryWriter(async (namespace, key, value) => {
+            const dir = path.join(workspacePath, namespace, path.dirname(key));
+            fs.mkdirSync(dir, { recursive: true });
+            const filePath = path.join(workspacePath, namespace, `${key}.json`);
+            fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+            // Also write latest summary as markdown for easy agent access
+            if (key.startsWith("calls/") && typeof value === "object" && value !== null) {
+                const record = value;
+                const summaryPath = path.join(workspacePath, namespace, "latest-summary.md");
+                const lines = [];
+                lines.push(`# Latest Call Summary`);
+                lines.push(`- **Call ID:** ${record.callId ?? "unknown"}`);
+                lines.push(`- **Outcome:** ${record.outcome ?? "unknown"}`);
+                lines.push(`- **Duration:** ${Math.round((record.durationMs ?? 0) / 1000)}s`);
+                lines.push(`- **Completed:** ${record.completedAt ?? "unknown"}`);
+                const transcript = record.transcript;
+                if (transcript && transcript.length > 0) {
+                    lines.push(`\n## Transcript (${transcript.length} turns)`);
+                    for (const entry of transcript) {
+                        const role = entry.speaker === "agent" ? "Agent" : "Callee";
+                        lines.push(`> **${role}:** ${entry.text}`);
+                    }
+                }
+                fs.writeFileSync(summaryPath, lines.join("\n") + "\n");
+            }
+        });
+    }
     // Wire system event emitter for immediate post-call summary delivery
     resolveSystemEventEmitter(api)
         .then((emitter) => {

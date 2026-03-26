@@ -69,12 +69,41 @@ export class ElevenLabsBridgeClient implements VoiceProviderClient {
 
       ws.on("open", () => {
         opened = true;
+
+        // MUST send conversation_initiation_client_data immediately after open.
+        // Without this, ElevenLabs ignores all incoming audio.
+        // NOTE: Do NOT include prompt overrides in conversation_config_override —
+        // the ElevenLabs agent config may disallow them. Instead, pass context
+        // via dynamic_variables which the agent prompt uses as {{ var_name }}.
+        const initMessage: Record<string, unknown> = {
+          type: "conversation_initiation_client_data",
+          conversation_config_override: {
+            stt: {
+              user_input_audio_format: "ulaw_8000",
+            },
+          },
+        };
+
+        // Pass call context as dynamic variables for the agent prompt to use.
+        // The ElevenLabs agent prompt uses {{ _system_prompt_ }} placeholder.
+        // All overrides (prompt, first_message, llm) are locked — only
+        // dynamic_variables can inject per-call context.
+        const dynamicVars: Record<string, string> = {};
+        if (sessionConfig.systemPrompt) {
+          dynamicVars._system_prompt_ = sessionConfig.systemPrompt;
+        }
+        if (Object.keys(dynamicVars).length > 0) {
+          initMessage.dynamic_variables = dynamicVars;
+        }
+
+        ws.send(JSON.stringify(initMessage));
+
         succeed({
           sendAudio(chunk: Buffer) {
             if (ws.readyState !== OPEN_SOCKET) return;
-            const pcm16k = twilioToElevenLabs(chunk);
+            // Send raw Twilio mulaw — we declare ulaw_8000 input format in the init message
             ws.send(JSON.stringify({
-              user_audio_chunk: pcm16k.toString("base64"),
+              user_audio_chunk: chunk.toString("base64"),
             }));
           },
 

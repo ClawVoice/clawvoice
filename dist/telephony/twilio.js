@@ -24,6 +24,15 @@ class TwilioTelephonyAdapter {
             throw new Error("Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint");
         }
         const callSidPlaceholder = "{CallSid}";
+        // Encode purpose/greeting as query params on the stream URL so the
+        // media-stream-server can pass context to the session handler even
+        // before the Twilio start message arrives.
+        const streamUrl = new URL(baseWebhookUrl);
+        if (input.purpose)
+            streamUrl.searchParams.set("purpose", input.purpose);
+        if (input.greeting)
+            streamUrl.searchParams.set("greeting", input.greeting);
+        const enrichedStreamUrl = streamUrl.toString();
         let recordAttr = "";
         if (this.config.recordCalls) {
             // Derive HTTPS webhook URL from the WSS stream URL for recording status callback
@@ -32,7 +41,12 @@ class TwilioTelephonyAdapter {
                 .replace(/\/media-stream\/?$/, "/clawvoice/webhooks/twilio/recording");
             recordAttr = ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackEvent="completed"`;
         }
-        const twiml = `<Response><Connect${recordAttr}><Stream url="${baseWebhookUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${input.purpose ?? ""}"/><Parameter name="greeting" value="${input.greeting ?? ""}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
+        // XML-escape values to prevent TwiML parse errors from special chars in purpose/greeting
+        const xmlEscape = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        const safeStreamUrl = xmlEscape(enrichedStreamUrl);
+        const safePurpose = xmlEscape(input.purpose ?? "");
+        const safeGreeting = xmlEscape(input.greeting ?? "");
+        const twiml = `<Response><Connect${recordAttr}><Stream url="${safeStreamUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${safePurpose}"/><Parameter name="greeting" value="${safeGreeting}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
         const body = new URLSearchParams({
             To: normalizedTo,
             From: from ?? "",

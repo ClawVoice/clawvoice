@@ -5,6 +5,8 @@ import * as path from "path";
 
 export type TwilioWebSocket = VoiceWebSocket & {
   close(code?: number, reason?: string): void;
+  /** Query params from the WebSocket upgrade request URL (set by media-stream-server). */
+  _queryParams?: Record<string, string>;
 };
 
 interface StreamSession {
@@ -18,12 +20,25 @@ interface TwilioMediaSessionHandlerOptions {
   voiceProviderClient: VoiceProviderClient;
   resolveCallIdByProviderCallId: (providerCallId: string) => string | null;
   workspacePath?: string;
+  /** Default voice provider WebSocket URL for auto-created bridge sessions. */
+  voiceProviderUrl?: string;
+  /** Default voice provider auth for auto-created bridge sessions. */
+  voiceProviderAuth?: string;
+  /** Default voice model for auto-created bridge sessions. */
+  voiceModel?: string;
+  /** Default voice system prompt for auto-created bridge sessions. */
+  voiceSystemPrompt?: string;
+  /** Called when a media session closes (for post-call processing). */
+  onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[]) => void;
 }
 
 interface TwilioStartMessage {
   event: "start";
   streamSid?: string;
-  start?: { callSid?: string };
+  start?: {
+    callSid?: string;
+    customParameters?: Record<string, string>;
+  };
 }
 
 interface TwilioMediaMessage {
@@ -77,6 +92,15 @@ export class TwilioMediaSessionHandler {
     this.localCloses.add(socket);
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
+
+    // Trigger post-call processing (transcript extraction, summary)
+    if (this.options.onCallCompleted) {
+      const transcript = this.options.bridge.getTranscript(session.callId);
+      const summary = this.options.bridge.generateCallSummary(session.callId);
+      try {
+        this.options.onCallCompleted(session.callId, summary, transcript);
+      } catch { /* post-call is best-effort */ }
+    }
   }
 
   private async handleStart(socket: TwilioWebSocket, message: TwilioStartMessage): Promise<void> {
@@ -86,35 +110,94 @@ export class TwilioMediaSessionHandler {
     }
 
     const providerCallId = message.start?.callSid;
+
     if (!providerCallId) {
       socket.close(1008, "Missing callSid");
       return;
     }
 
-    const callId = this.options.resolveCallIdByProviderCallId(providerCallId);
+    // Read purpose/greeting from Twilio start message customParameters
+    // (set via <Parameter> elements in TwiML) or URL query params as fallback.
+    const cp = message.start?.customParameters ?? {};
+    const qp = socket._queryParams ?? {};
+    const urlPurpose = cp.purpose || qp.purpose || "";
+    const urlGreeting = cp.greeting || qp.greeting || "";
+
+    // Auto-accept unknown callSids: the call may have been placed by one
+    // plugin instance while the media stream arrives at another.
+    let callId = this.options.resolveCallIdByProviderCallId(providerCallId);
     if (!callId) {
-      socket.close(1008, "Unknown callSid");
-      return;
+      callId = `auto-${Date.now()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
     }
 
-    const sessionConfig = this.options.bridge.getSessionConfig(callId);
+    let sessionConfig = this.options.bridge.getSessionConfig(callId);
+    if (!sessionConfig) {
+      // Auto-create a bridge session with default config for auto-accepted calls.
+      // Read voice provider URL/auth/model from handler options.
+      const defaultGreeting = urlGreeting || "Hello, this is an AI assistant.";
+      let systemPrompt = this.options.voiceSystemPrompt || "";
+      if (urlPurpose) {
+        systemPrompt = systemPrompt
+          ? `${systemPrompt}\n\nCall purpose: ${urlPurpose}`
+          : `Call purpose: ${urlPurpose}`;
+      }
+
+      // Enrich with user profile before creating session
+      if (this.options.workspacePath) {
+        const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
+        const profile = readUserProfile(voiceMemoryDir);
+        if (profile.ownerName || profile.contextBlock) {
+          const profilePrompt = buildCallPrompt(profile, urlPurpose || undefined);
+          systemPrompt = systemPrompt
+            ? `${profilePrompt}\n\n${systemPrompt}`
+            : profilePrompt;
+        }
+      }
+
+      const autoConfig = {
+        callId,
+        providerCallId,
+        voiceProviderUrl: this.options.voiceProviderUrl ?? "",
+        voiceProviderAuth: this.options.voiceProviderAuth ?? "",
+        telephonyCodec: "mulaw" as const,
+        voiceProviderCodec: "mulaw" as const,
+        sampleRate: 8000,
+        greeting: defaultGreeting,
+        systemPrompt,
+        voiceModel: this.options.voiceModel ?? "",
+        keepAliveIntervalMs: 5000,
+        greetingGracePeriodMs: 3000,
+      };
+      this.options.bridge.createSession(autoConfig);
+      this.options.bridge.startKeepAlive(callId, 5000);
+      setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000);
+      sessionConfig = this.options.bridge.getSessionConfig(callId);
+    }
+
     if (!sessionConfig) {
       socket.close(1011, "Missing bridge session");
       return;
     }
 
+    // Clone sessionConfig.systemPrompt before enriching to avoid mutating the
+    // shared config object (addresses review: systemPrompt mutation in-place).
+    let enrichedSystemPrompt = sessionConfig.systemPrompt || "";
+
     // Enrich systemPrompt with user profile context if workspace is available
-    if (this.options.workspacePath) {
+    // (for pre-existing sessions that weren't auto-created above)
+    if (this.options.workspacePath && !callId.startsWith("auto-")) {
       const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
       const profile = readUserProfile(voiceMemoryDir);
       if (profile.ownerName || profile.contextBlock) {
         const profilePrompt = buildCallPrompt(profile);
-        const existing = sessionConfig.systemPrompt || "";
-        sessionConfig.systemPrompt = existing
-          ? `${profilePrompt}\n\n${existing}`
+        enrichedSystemPrompt = enrichedSystemPrompt
+          ? `${profilePrompt}\n\n${enrichedSystemPrompt}`
           : profilePrompt;
       }
     }
+
+    // Create a shallow clone with the enriched prompt so we don't mutate the original config
+    const effectiveConfig = { ...sessionConfig, systemPrompt: enrichedSystemPrompt };
 
     let teardownTriggered = false;
     const teardownFromVoiceProvider = (detail: string): void => {
@@ -131,7 +214,7 @@ export class TwilioMediaSessionHandler {
     try {
       voiceSession = await this.options.voiceProviderClient.connect({
         callId,
-        sessionConfig,
+        sessionConfig: effectiveConfig,
         buildSettings: (cfg) => this.options.bridge.buildSettingsMessage(cfg),
         onMessage: (voiceMessage) => {
           const action = this.options.bridge.handleVoiceAgentMessage(callId, voiceMessage);

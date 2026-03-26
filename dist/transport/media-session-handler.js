@@ -70,6 +70,15 @@ class TwilioMediaSessionHandler {
         this.localCloses.add(socket);
         session.voiceSession.close();
         this.sessionsBySocket.delete(socket);
+        // Trigger post-call processing (transcript extraction, summary)
+        if (this.options.onCallCompleted) {
+            const transcript = this.options.bridge.getTranscript(session.callId);
+            const summary = this.options.bridge.generateCallSummary(session.callId);
+            try {
+                this.options.onCallCompleted(session.callId, summary, transcript);
+            }
+            catch { /* post-call is best-effort */ }
+        }
     }
     async handleStart(socket, message) {
         const existingSession = this.sessionsBySocket.get(socket);
@@ -81,28 +90,80 @@ class TwilioMediaSessionHandler {
             socket.close(1008, "Missing callSid");
             return;
         }
-        const callId = this.options.resolveCallIdByProviderCallId(providerCallId);
+        // Read purpose/greeting from Twilio start message customParameters
+        // (set via <Parameter> elements in TwiML) or URL query params as fallback.
+        const cp = message.start?.customParameters ?? {};
+        const qp = socket._queryParams ?? {};
+        const urlPurpose = cp.purpose || qp.purpose || "";
+        const urlGreeting = cp.greeting || qp.greeting || "";
+        // Auto-accept unknown callSids: the call may have been placed by one
+        // plugin instance while the media stream arrives at another.
+        let callId = this.options.resolveCallIdByProviderCallId(providerCallId);
         if (!callId) {
-            socket.close(1008, "Unknown callSid");
-            return;
+            callId = `auto-${Date.now()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
         }
-        const sessionConfig = this.options.bridge.getSessionConfig(callId);
+        let sessionConfig = this.options.bridge.getSessionConfig(callId);
+        if (!sessionConfig) {
+            // Auto-create a bridge session with default config for auto-accepted calls.
+            // Read voice provider URL/auth/model from handler options.
+            const defaultGreeting = urlGreeting || "Hello, this is an AI assistant.";
+            let systemPrompt = this.options.voiceSystemPrompt || "";
+            if (urlPurpose) {
+                systemPrompt = systemPrompt
+                    ? `${systemPrompt}\n\nCall purpose: ${urlPurpose}`
+                    : `Call purpose: ${urlPurpose}`;
+            }
+            // Enrich with user profile before creating session
+            if (this.options.workspacePath) {
+                const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
+                const profile = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
+                if (profile.ownerName || profile.contextBlock) {
+                    const profilePrompt = (0, user_profile_1.buildCallPrompt)(profile, urlPurpose || undefined);
+                    systemPrompt = systemPrompt
+                        ? `${profilePrompt}\n\n${systemPrompt}`
+                        : profilePrompt;
+                }
+            }
+            const autoConfig = {
+                callId,
+                providerCallId,
+                voiceProviderUrl: this.options.voiceProviderUrl ?? "",
+                voiceProviderAuth: this.options.voiceProviderAuth ?? "",
+                telephonyCodec: "mulaw",
+                voiceProviderCodec: "mulaw",
+                sampleRate: 8000,
+                greeting: defaultGreeting,
+                systemPrompt,
+                voiceModel: this.options.voiceModel ?? "",
+                keepAliveIntervalMs: 5000,
+                greetingGracePeriodMs: 3000,
+            };
+            this.options.bridge.createSession(autoConfig);
+            this.options.bridge.startKeepAlive(callId, 5000);
+            setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000);
+            sessionConfig = this.options.bridge.getSessionConfig(callId);
+        }
         if (!sessionConfig) {
             socket.close(1011, "Missing bridge session");
             return;
         }
+        // Clone sessionConfig.systemPrompt before enriching to avoid mutating the
+        // shared config object (addresses review: systemPrompt mutation in-place).
+        let enrichedSystemPrompt = sessionConfig.systemPrompt || "";
         // Enrich systemPrompt with user profile context if workspace is available
-        if (this.options.workspacePath) {
+        // (for pre-existing sessions that weren't auto-created above)
+        if (this.options.workspacePath && !callId.startsWith("auto-")) {
             const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
             const profile = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
             if (profile.ownerName || profile.contextBlock) {
                 const profilePrompt = (0, user_profile_1.buildCallPrompt)(profile);
-                const existing = sessionConfig.systemPrompt || "";
-                sessionConfig.systemPrompt = existing
-                    ? `${profilePrompt}\n\n${existing}`
+                enrichedSystemPrompt = enrichedSystemPrompt
+                    ? `${profilePrompt}\n\n${enrichedSystemPrompt}`
                     : profilePrompt;
             }
         }
+        // Create a shallow clone with the enriched prompt so we don't mutate the original config
+        const effectiveConfig = { ...sessionConfig, systemPrompt: enrichedSystemPrompt };
         let teardownTriggered = false;
         const teardownFromVoiceProvider = (detail) => {
             if (teardownTriggered) {
@@ -117,7 +178,7 @@ class TwilioMediaSessionHandler {
         try {
             voiceSession = await this.options.voiceProviderClient.connect({
                 callId,
-                sessionConfig,
+                sessionConfig: effectiveConfig,
                 buildSettings: (cfg) => this.options.bridge.buildSettingsMessage(cfg),
                 onMessage: (voiceMessage) => {
                     const action = this.options.bridge.handleVoiceAgentMessage(callId, voiceMessage);

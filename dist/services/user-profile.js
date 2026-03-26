@@ -75,9 +75,21 @@ function buildCallPrompt(profile, purpose) {
     }
     return parts.join("\n");
 }
+/**
+ * Escape a string for safe inclusion as a YAML value.
+ * Wraps in double quotes if it contains characters that could cause YAML injection.
+ */
+function yamlSafeValue(value) {
+    if (/[:\n\r"'#{}[\],&*?|><!%@`]/.test(value) || value.trim() !== value) {
+        return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+    }
+    return value;
+}
 function writeDefaultProfile(voiceMemoryDir, ownerName, style, context) {
     fs.mkdirSync(voiceMemoryDir, { recursive: true });
     const filePath = path.join(voiceMemoryDir, "user-profile.md");
-    const content = `---\nownerName: ${ownerName}\ncommunicationStyle: ${style || "casual"}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
+    const safeName = yamlSafeValue(ownerName);
+    const safeStyle = yamlSafeValue(style || "casual");
+    const content = `---\nownerName: ${safeName}\ncommunicationStyle: ${safeStyle}\n---\n\n## About the owner\n${context || "(not yet configured — run clawvoice profile or tell your agent to update this)"}\n`;
     fs.writeFileSync(filePath, content);
 }

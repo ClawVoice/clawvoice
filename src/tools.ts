@@ -17,7 +17,8 @@ export function registerTools(
 ): void {
   api.tools.register({
     name: "clawvoice_call",
-    description: "Initiate an outbound voice call",
+    description:
+      "Initiate an outbound voice call. The voice agent on the call is a separate AI — it only knows what you tell it via the `purpose` field. You MUST provide a detailed purpose so the voice agent knows why it is calling, who it represents, and what to accomplish. Without purpose, the agent will not know what to say.",
     parameters: {
       type: "object",
       properties: {
@@ -27,14 +28,16 @@ export function registerTools(
         },
         purpose: {
           type: "string",
-          description: "Call context and objectives for the voice agent. Include relevant details gathered from research — availability, preferences, account info, prior interactions, or specific questions to ask. The more context provided, the more effective the call.",
+          description:
+            "REQUIRED. The voice agent's instructions for this call. This is the ONLY context the agent receives — it has no access to your conversation history. Include: (1) why you are calling, (2) who you are calling on behalf of, (3) specific questions to ask or information to convey, (4) any relevant details like account numbers, appointment preferences, prior interactions. Example: 'Calling Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental.'",
         },
         greeting: {
           type: "string",
-          description: "Custom greeting spoken at call start (overrides default)",
+          description:
+            "Custom opening line spoken at the start of the call. If omitted, a default disclosure greeting is used.",
         },
       },
-      required: ["phoneNumber"],
+      required: ["phoneNumber", "purpose"],
     },
     handler: async (input) => {
       const phoneNumber = readString(input.phoneNumber);
