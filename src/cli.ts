@@ -191,6 +191,10 @@ export async function runSetupWizard(
     if (tunnelHost !== tunnelPlaceholder) {
       console.log(`   (Derived from your stream URL. If your webhook tunnel differs, replace ${tunnelHost} above.)\n`);
     }
+    console.log("   ⚠️  SMS NOTICE: To send/receive SMS in the US, your Twilio number must be");
+    console.log("   registered with a Messaging Service and A2P 10DLC campaign. Without this,");
+    console.log("   outbound SMS will be blocked by carriers (Twilio error 30034).");
+    console.log("   Register at: https://console.twilio.com/us1/develop/sms/services\n");
   } else {
     console.log("1. Configure webhook in Telnyx Mission Control:");
     console.log("   Open your Call Control Application and set webhook URL:");

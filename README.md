@@ -5,11 +5,15 @@ Give your OpenClaw agent a phone number. It can make and receive calls, send tex
 ## What You Get
 
 - **Phone calls**: Your agent answers inbound calls and can place outbound calls
+- **Batch calling**: Give your agent a list of numbers — it calls each one sequentially and delivers a consolidated report
 - **Two voice engines**: Deepgram Voice Agent (low latency) or ElevenLabs Conversational AI (premium voices)
 - **SMS**: Send and receive text messages through the same phone number
+- **Post-call notifications**: Rich summaries with caller details, transcripts, and file attachments delivered to Telegram/Discord/Slack
+- **Campaign reports**: Generate CSV spreadsheets from batch call results with transcripts and extracted details
 - **Memory isolation**: Voice calls write to a separate sandbox so callers can't corrupt your agent's main memory
-- **Post-call summaries**: Transcripts, action items, and call outcomes after every call
 - **Safety guardrails**: Tool restrictions, call duration limits, AI disclosure, and answering machine detection
+
+> **⚠️ Legal Notice:** Automated calling is subject to federal and state regulations including the TCPA (Telephone Consumer Protection Act) and state-specific telemarketing laws. You are solely responsible for ensuring your use of ClawVoice complies with all applicable laws, including obtaining proper consent before placing automated calls. Batch calling features are provided as-is — **use at your own risk.** This software does not provide legal advice.
 
 ## Quick Start
 
