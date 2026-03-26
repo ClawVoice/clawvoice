@@ -226,7 +226,7 @@ export class PostCallService {
     const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
     const duration = this.formatDuration(summary.durationMs);
     const time = new Date(summary.completedAt).toLocaleString("en-US", {
-      timeZone: "America/Chicago",
+      timeZone: this.config.notificationTimezone,
       month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
     });
 
@@ -351,7 +351,7 @@ export class PostCallService {
   ): { name: string; content: string; mimeType: string } {
     const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
     const time = new Date(summary.completedAt).toLocaleString("en-US", {
-      timeZone: "America/Chicago",
+      timeZone: this.config.notificationTimezone,
       weekday: "short", month: "short", day: "numeric", year: "numeric",
       hour: "numeric", minute: "2-digit",
     });
@@ -374,7 +374,7 @@ export class PostCallService {
     for (const entry of transcript) {
       const role = entry.speaker === "agent" ? "Agent" : "Caller";
       const ts = new Date(entry.timestamp).toLocaleTimeString("en-US", {
-        timeZone: "America/Chicago",
+        timeZone: this.config.notificationTimezone,
         hour: "numeric", minute: "2-digit", second: "2-digit",
       });
       lines.push(`[${ts}] ${role}:`);

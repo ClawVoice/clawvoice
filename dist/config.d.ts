@@ -45,6 +45,7 @@ export interface ClawVoiceConfig {
     notifyTelegram: boolean;
     notifyDiscord: boolean;
     notifySlack: boolean;
+    notificationTimezone: string;
 }
 export interface ValidationResult {
     ok: boolean;

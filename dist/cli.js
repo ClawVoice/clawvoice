@@ -138,7 +138,9 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     }
     const voiceProvider = await askChoice(prompter, "Voice provider (deepgram-agent/elevenlabs-conversational): ", ["deepgram-agent", "elevenlabs-conversational"]);
     values.voiceProvider = voiceProvider;
-    values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+    if (voiceProvider === "deepgram-agent") {
+        values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+    }
     if (voiceProvider === "elevenlabs-conversational") {
         values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
         values.elevenlabsAgentId = await askNonEmpty(prompter, "ElevenLabs agent ID: ");

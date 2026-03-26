@@ -46,7 +46,6 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "no",                  // use detected ngrok tunnel? (or this is the stream URL if ngrok not detected)
     "wss://my-tunnel.ngrok-free.dev/media-stream",  // manual stream URL
     "elevenlabs-conversational",  // voice provider
-    "dg-key",              // deepgram API key
     "el-key",              // elevenlabs API key
     "agent-1",             // elevenlabs agent ID
     "yes",                 // confirmed ElevenLabs agent setup?
@@ -61,11 +60,10 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   assert.equal(state.saved.twilioPhoneNumber, "+15551112222");
   assert.equal(state.saved.twilioStreamUrl, "wss://my-tunnel.ngrok-free.dev/media-stream");
   assert.equal(state.saved.voiceProvider, "elevenlabs-conversational");
-  assert.equal(state.saved.deepgramApiKey, "dg-key");
+  assert.equal(state.saved.deepgramApiKey, undefined);
   assert.equal(state.saved.elevenlabsApiKey, "el-key");
   assert.equal(state.saved.elevenlabsAgentId, "agent-1");
   assert.equal(state.logs.length, 1);
-  assert.equal(state.logs[0].metadata.deepgramApiKey, "dg-k...");
 });
 
 // --- Story 4.1: CLI Call Initiation ---
