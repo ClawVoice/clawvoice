@@ -72,6 +72,7 @@ export class PostCallService {
     summary: CallSummary,
     transcript: TranscriptEntry[],
     recordingUrl?: string,
+    meta?: { callerPhone?: string; direction?: "inbound" | "outbound" },
   ): Promise<{ persisted: boolean; notified: boolean }> {
     if (this.processedCalls.has(summary.callId)) {
       return { persisted: false, notified: false };
@@ -87,7 +88,7 @@ export class PostCallService {
     }
 
     const persisted = await this.persistCallRecord(summary, transcript);
-    const notified = await this.deliverSummary(summary, transcript, recordingUrl);
+    const notified = await this.deliverSummary(summary, transcript, recordingUrl, meta);
 
     return { persisted, notified };
   }
@@ -125,14 +126,16 @@ export class PostCallService {
     summary: CallSummary,
     transcript: TranscriptEntry[],
     recordingUrl?: string,
+    meta?: { callerPhone?: string; direction?: "inbound" | "outbound" },
   ): Promise<boolean> {
-    const text = this.formatSummaryText(summary, transcript);
+    const extracted = this.extractCallerDetails(transcript);
     let delivered = false;
 
-    // Deliver via system event (immediate in-conversation delivery)
+    // Deliver via system event (immediate in-conversation delivery) —
+    // includes a follow-up prompt for the agent to review and act on
     if (this.systemEventEmitter) {
       try {
-        const systemText = this.formatSystemEventText(summary, transcript, recordingUrl);
+        const systemText = this.formatSystemEventText(summary, transcript, recordingUrl, meta, extracted);
         this.systemEventEmitter(systemText, { source: "clawvoice" });
         delivered = true;
       } catch {
@@ -142,6 +145,7 @@ export class PostCallService {
 
     // Deliver via notification channels (Telegram, Discord, Slack)
     if (this.notificationSender) {
+      const text = this.formatNotificationText(summary, transcript, recordingUrl, meta, extracted);
       const channels = this.getConfiguredChannels();
       for (const channel of channels) {
         await this.notificationSender({
@@ -157,71 +161,171 @@ export class PostCallService {
   }
 
   /**
-   * Format a detailed summary for system event delivery (shown in-conversation).
+   * Extract caller details (name, company, phone, reason) from transcript.
    */
-  private formatSystemEventText(
+  private extractCallerDetails(transcript: TranscriptEntry[]): {
+    callerName?: string;
+    company?: string;
+    callbackNumber?: string;
+    reason?: string;
+  } {
+    const callerText = transcript
+      .filter((e) => e.speaker === "user")
+      .map((e) => e.text)
+      .join(" ");
+    const agentText = transcript
+      .filter((e) => e.speaker === "agent")
+      .map((e) => e.text)
+      .join(" ");
+    const allText = callerText + " " + agentText;
+
+    // Extract name — look for "my name is X" or agent confirming "your name is X"
+    const nameMatch =
+      callerText.match(/(?:my name is|this is|I'm|I am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i) ??
+      agentText.match(/(?:your name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+    const callerName = nameMatch?.[1]?.trim();
+
+    // Extract company
+    const companyMatch =
+      allText.match(/(?:company is|from|with|at)\s+([A-Z][A-Za-z\s]+?(?:Inc|LLC|Corp|Co|Ltd|Incorporated|Services)?)\b/i);
+    const company = companyMatch?.[1]?.trim();
+
+    // Extract callback number — look for digit sequences
+    const phoneMatch = allText.match(/(?:call\s*(?:me\s*)?(?:back\s*)?(?:at|on)?|number\s*(?:is)?|reach\s*(?:me\s*)?(?:at)?)\s*[,:]?\s*([\d\s\-().]{7,})/i);
+    const callbackNumber = phoneMatch?.[1]?.replace(/[\s\-().]/g, "").trim();
+
+    // Extract reason — from agent's summary or caller's first substantive turn
+    const reasonMatch =
+      agentText.match(/(?:calling about|regarding|about)\s+(.{10,80}?)(?:\.|,|\?|$)/i) ??
+      callerText.match(/(?:I(?:'m| am) calling|I need|I want|looking for|about)\s+(.{10,80}?)(?:\.|,|\?|$)/i);
+    const reason = reasonMatch?.[1]?.trim();
+
+    return { callerName, company, callbackNumber, reason };
+  }
+
+  /**
+   * Format a rich Telegram/Discord/Slack notification.
+   */
+  private formatNotificationText(
     summary: CallSummary,
     transcript: TranscriptEntry[],
     recordingUrl?: string,
+    meta?: { callerPhone?: string; direction?: "inbound" | "outbound" },
+    extracted?: { callerName?: string; company?: string; callbackNumber?: string; reason?: string },
   ): string {
-    const lines: string[] = [];
-    lines.push(`📞 Call Summary — ${summary.callId}`);
-    lines.push(`Duration: ${Math.round(summary.durationMs / 1000)}s | Turns: ${transcript.length}`);
-    lines.push(`Outcome: ${summary.outcome}`);
+    const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
+    const duration = this.formatDuration(summary.durationMs);
+    const time = new Date(summary.completedAt).toLocaleString("en-US", {
+      timeZone: "America/Chicago",
+      month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+    });
 
-    if (transcript.length > 0) {
+    const lines: string[] = [];
+    lines.push(`*${dir} Call Summary*`);
+    lines.push("");
+
+    if (meta?.callerPhone) {
+      lines.push(`*Phone:* ${meta.callerPhone}`);
+    }
+    if (extracted?.callerName) {
+      lines.push(`*Caller:* ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
+    } else if (extracted?.company) {
+      lines.push(`*Company:* ${extracted.company}`);
+    }
+    if (extracted?.callbackNumber && extracted.callbackNumber !== meta?.callerPhone?.replace(/\D/g, "")) {
+      lines.push(`*Callback #:* ${extracted.callbackNumber}`);
+    }
+    lines.push(`*Time:* ${time}`);
+    lines.push(`*Duration:* ${duration} | ${transcript.length} turns`);
+
+    if (extracted?.reason) {
+      lines.push(`*Reason:* ${extracted.reason}`);
+    }
+
+    // Brief conversation summary (last 3 agent turns)
+    const agentTurns = transcript.filter((e) => e.speaker === "agent");
+    const lastAgent = agentTurns.slice(-2);
+    if (lastAgent.length > 0) {
       lines.push("");
-      lines.push("Transcript:");
-      for (const entry of transcript.slice(0, 20)) {
-        const role = entry.speaker === "agent" ? "Agent" : "Callee";
-        lines.push(`> ${role}: ${entry.text}`);
-      }
-      if (transcript.length > 20) {
-        lines.push(`> ... (${transcript.length - 20} more turns)`);
+      lines.push("*Key points:*");
+      for (const turn of lastAgent) {
+        const text = turn.text.length > 120 ? turn.text.slice(0, 117) + "..." : turn.text;
+        lines.push(`- ${text}`);
       }
     }
 
     if (summary.failures.length > 0) {
-      lines.push("");
-      lines.push(`Failures: ${summary.failures.map((f) => f.description).join("; ")}`);
-    }
-
-    if (summary.pendingActions.length > 0) {
-      lines.push(`Pending: ${summary.pendingActions.join(", ")}`);
+      lines.push(`\n*Issues:* ${summary.failures.map((f) => f.description).join("; ")}`);
     }
 
     if (recordingUrl) {
-      lines.push(`Recording: ${recordingUrl}`);
+      lines.push(`\n[Recording](${recordingUrl})`);
     }
+
+    // Transcript file reference
+    lines.push(`\n_Transcript: voice-memory/calls/${summary.callId}.json_`);
 
     return lines.join("\n");
   }
 
   /**
-   * Format a human-readable summary for notifications.
+   * Format a detailed summary for system event delivery (shown in-conversation).
+   * Includes a follow-up prompt for the agent to review and potentially act on.
+   */
+  private formatSystemEventText(
+    summary: CallSummary,
+    transcript: TranscriptEntry[],
+    recordingUrl?: string,
+    meta?: { callerPhone?: string; direction?: "inbound" | "outbound" },
+    extracted?: { callerName?: string; company?: string; callbackNumber?: string; reason?: string },
+  ): string {
+    const lines: string[] = [];
+    const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
+    lines.push(`--- CALL COMPLETED (${dir}) ---`);
+    if (meta?.callerPhone) lines.push(`Phone: ${meta.callerPhone}`);
+    if (extracted?.callerName) lines.push(`Caller: ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
+    if (extracted?.callbackNumber) lines.push(`Callback: ${extracted.callbackNumber}`);
+    if (extracted?.reason) lines.push(`Reason: ${extracted.reason}`);
+    lines.push(`Duration: ${this.formatDuration(summary.durationMs)} | Turns: ${transcript.length}`);
+    lines.push(`Outcome: ${summary.outcome}`);
+
+    if (transcript.length > 0) {
+      lines.push("\nTranscript:");
+      for (const entry of transcript.slice(0, 20)) {
+        const role = entry.speaker === "agent" ? "Jessica" : "Caller";
+        lines.push(`${role}: ${entry.text}`);
+      }
+      if (transcript.length > 20) {
+        lines.push(`... (${transcript.length - 20} more turns)`);
+      }
+    }
+
+    if (recordingUrl) {
+      lines.push(`\nRecording: ${recordingUrl}`);
+    }
+
+    // Follow-up prompt for the OpenClaw agent
+    lines.push("\n--- ACTION REQUIRED ---");
+    lines.push("Review the transcript above. If there is a follow-up needed (callback, scheduling, information to relay to the owner, etc.), take appropriate action or notify the owner with a clear summary and recommended next steps.");
+
+    return lines.join("\n");
+  }
+
+  /**
+   * Format a human-readable summary for notifications (legacy).
    */
   public formatSummaryText(
     summary: CallSummary,
     transcript: TranscriptEntry[],
   ): string {
-    const lines: string[] = [];
-    lines.push(`Call ${summary.callId} — ${summary.outcome}`);
-    lines.push(`Duration: ${Math.round(summary.durationMs / 1000)}s`);
-    lines.push(`Transcript: ${transcript.length} turns`);
+    return this.formatNotificationText(summary, transcript);
+  }
 
-    if (summary.failures.length > 0) {
-      lines.push(`Failures: ${summary.failures.map((f) => f.description).join("; ")}`);
-    }
-
-    if (summary.pendingActions.length > 0) {
-      lines.push(`Pending: ${summary.pendingActions.join(", ")}`);
-    }
-
-    if (summary.retryContext) {
-      lines.push(`Retry: ${summary.retryContext.suggestedApproach}`);
-    }
-
-    return lines.join("\n");
+  private formatDuration(ms: number): string {
+    const totalSec = Math.round(ms / 1000);
+    const min = Math.floor(totalSec / 60);
+    const sec = totalSec % 60;
+    return min > 0 ? `${min}m ${sec}s` : `${sec}s`;
   }
 
   private getConfiguredChannels(): Array<"telegram" | "discord" | "slack"> {

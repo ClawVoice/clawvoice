@@ -14,6 +14,8 @@ interface StreamSession {
   callId: string;
   streamSid: string;
   voiceSession: VoiceProviderSession;
+  callerPhone?: string;
+  direction: "inbound" | "outbound";
 }
 
 interface TwilioMediaSessionHandlerOptions {
@@ -32,7 +34,7 @@ interface TwilioMediaSessionHandlerOptions {
   /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
   allowAutoAccept?: boolean;
   /** Called when a media session closes (for post-call processing). */
-  onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[]) => void;
+  onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[], meta?: { callerPhone?: string; direction?: "inbound" | "outbound" }) => void;
 }
 
 interface TwilioStartMessage {
@@ -103,7 +105,10 @@ export class TwilioMediaSessionHandler {
       const transcript = this.options.bridge.getTranscript(session.callId);
       const summary = this.options.bridge.generateCallSummary(session.callId);
       try {
-        this.options.onCallCompleted(session.callId, summary, transcript);
+        this.options.onCallCompleted(session.callId, summary, transcript, {
+          callerPhone: session.callerPhone,
+          direction: session.direction,
+        });
       } catch { /* post-call is best-effort */ }
     }
   }
@@ -127,6 +132,8 @@ export class TwilioMediaSessionHandler {
     const qp = socket._queryParams ?? {};
     const urlPurpose = cp.purpose || qp.purpose || "";
     const urlGreeting = cp.greeting || qp.greeting || "";
+    const callerPhone = cp.to || qp.to || "";  // "to" in customParameters = the number being called for outbound
+    const isInbound = !urlPurpose && !callerPhone;  // no purpose and no "to" param = inbound call
 
     // Auto-accept unknown callSids: the call may have been placed by one
     // plugin instance while the media stream arrives at another.
@@ -300,6 +307,8 @@ export class TwilioMediaSessionHandler {
       callId,
       streamSid: message.streamSid ?? "",
       voiceSession,
+      callerPhone: callerPhone || providerCallId,
+      direction: isInbound ? "inbound" : "outbound",
     });
 
     this.options.bridge.startHeartbeatMonitor(callId);
