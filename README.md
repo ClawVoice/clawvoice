@@ -226,6 +226,8 @@ openclaw clawvoice status
 
 All checks should show **pass**. If any fail, the output tells you exactly what to fix.
 
+> **Tip:** Run `openclaw clawvoice status` anytime to re-check your setup — after config changes, provider swaps, or if calls stop working.
+
 ### 8. Test Connectivity
 
 Before spending money on a real call, verify the voice pipeline is wired up correctly:
