@@ -39,16 +39,18 @@ function createApi() {
 test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   const { api, state } = createApi();
   const prompter = createPrompter([
-    "twilio",
-    "AC123",
-    "auth123",
-    "+15551112222",
-    "wss://my-tunnel.ngrok-free.dev/media-stream",
-    "elevenlabs-conversational",
-    "dg-key",
-    "el-key",
-    "agent-1",
-    "yes"
+    "twilio",              // telephony provider
+    "AC123",               // twilio account SID
+    "auth123",             // twilio auth token
+    "+15551112222",        // twilio phone number
+    "no",                  // use detected ngrok tunnel? (or this is the stream URL if ngrok not detected)
+    "wss://my-tunnel.ngrok-free.dev/media-stream",  // manual stream URL
+    "elevenlabs-conversational",  // voice provider
+    "dg-key",              // deepgram API key
+    "el-key",              // elevenlabs API key
+    "agent-1",             // elevenlabs agent ID
+    "yes",                 // confirmed ElevenLabs agent setup?
+    "no",                  // auto-configure Twilio webhooks?
   ]);
 
   await runSetupWizard(api, [], prompter);
