@@ -231,7 +231,7 @@ export class PostCallService {
     });
 
     const lines: string[] = [];
-    lines.push(`*${dir} Call Summary*`);
+    lines.push(`<b>${dir} Call Summary</b>`);
     lines.push("");
 
     // Caller identification — name if extracted, phone number always shown
@@ -239,26 +239,26 @@ export class PostCallService {
       const nameLine = extracted.company
         ? `${extracted.callerName} (${extracted.company})`
         : extracted.callerName;
-      lines.push(`*Caller:* ${nameLine}`);
+      lines.push(`<b>Caller:</b> ${nameLine}`);
     }
     if (meta?.callerPhone) {
-      lines.push(`*Phone:* ${meta.callerPhone}`);
+      lines.push(`<b>Phone:</b> ${meta.callerPhone}`);
     } else {
-      lines.push(`*Phone:* Unknown`);
+      lines.push(`<b>Phone:</b> Unknown`);
     }
     if (extracted?.callbackNumber && extracted.callbackNumber !== meta?.callerPhone?.replace(/\D/g, "")) {
-      lines.push(`*Callback #:* ${extracted.callbackNumber}`);
+      lines.push(`<b>Callback #:</b> ${extracted.callbackNumber}`);
     }
-    lines.push(`*Time:* ${time}`);
-    lines.push(`*Duration:* ${duration} | ${transcript.length} turns`);
+    lines.push(`<b>Time:</b> ${time}`);
+    lines.push(`<b>Duration:</b> ${duration} | ${transcript.length} turns`);
 
     // Agent details
     const voiceProvider = this.config.voiceProvider === "elevenlabs-conversational" ? "ElevenLabs" : "Deepgram";
     const agentName = transcript.find((e) => e.speaker === "agent")?.text.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]+)/i)?.[1] ?? "Voice Agent";
-    lines.push(`*Agent:* ${agentName} (${voiceProvider})`);
+    lines.push(`<b>Agent:</b> ${agentName} (${voiceProvider})`);
 
     if (extracted?.reason) {
-      lines.push(`*Reason:* ${extracted.reason}`);
+      lines.push(`<b>Reason:</b> ${extracted.reason}`);
     }
 
     // Brief conversation summary (last 3 agent turns)
@@ -266,7 +266,7 @@ export class PostCallService {
     const lastAgent = agentTurns.slice(-2);
     if (lastAgent.length > 0) {
       lines.push("");
-      lines.push("*Key points:*");
+      lines.push("<b>Key points:</b>");
       for (const turn of lastAgent) {
         const text = turn.text.length > 120 ? turn.text.slice(0, 117) + "..." : turn.text;
         lines.push(`- ${text}`);
@@ -274,15 +274,15 @@ export class PostCallService {
     }
 
     if (summary.failures.length > 0) {
-      lines.push(`\n*Issues:* ${summary.failures.map((f) => f.description).join("; ")}`);
+      lines.push(`\n<b>Issues:</b> ${summary.failures.map((f) => f.description).join("; ")}`);
     }
 
     if (recordingUrl) {
-      lines.push(`\n[Recording](${recordingUrl})`);
+      lines.push(`\n<a href="${recordingUrl}">Recording</a>`);
     }
 
     // Transcript file reference
-    lines.push(`\n_Transcript: voice-memory/calls/${summary.callId}.json_`);
+    lines.push(`\n<i>Transcript: voice-memory/calls/${summary.callId}.json</i>`);
 
     return lines.join("\n");
   }

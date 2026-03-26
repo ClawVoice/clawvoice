@@ -546,13 +546,13 @@ function initPlugin(api: PluginAPI): void {
             body: JSON.stringify({
               chat_id: ownerChatId,
               text: `\u{1F4DE} ${notification.text}`,
-              parse_mode: "Markdown",
+              parse_mode: "HTML",
             }),
           });
 
           // Send transcript file attachment if available
           if (notification.file) {
-            const boundary = `----ClawVoice${Date.now()}`;
+            const boundary = `----ClawVoice${(await import("crypto")).randomUUID()}`;
             const fileBuf = Buffer.from(notification.file.content, "utf8");
             const body = Buffer.concat([
               Buffer.from(
