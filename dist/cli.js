@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.registerCLI = registerCLI;
+const config_1 = require("./config");
 const health_1 = require("./diagnostics/health");
 const user_profile_1 = require("./services/user-profile");
 const path = __importStar(require("path"));
@@ -203,6 +204,28 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     console.log("     openclaw clawvoice profile --name \"Your Name\"");
     console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
     console.log("────────────────────────────────────────────────────────────\n");
+    console.log("Running setup diagnostics...\n");
+    const diagConfig = (0, config_1.resolveConfig)(values);
+    const report = (0, health_1.runDiagnostics)(diagConfig);
+    const failures = report.checks.filter((c) => c.status === "fail");
+    const warnings = report.checks.filter((c) => c.status === "warn");
+    if (failures.length === 0 && warnings.length === 0) {
+        console.log("✅ All checks passed — you're ready to go!\n");
+    }
+    else {
+        if (failures.length > 0) {
+            console.log(`❌ ${failures.length} issue(s) need attention:`);
+            for (const f of failures)
+                console.log(`   • ${f.name}: ${f.remediation ?? f.detail}`);
+            console.log();
+        }
+        if (warnings.length > 0) {
+            console.log(`⚠️  ${warnings.length} warning(s):`);
+            for (const w of warnings)
+                console.log(`   • ${w.name}: ${w.remediation ?? w.detail}`);
+            console.log();
+        }
+    }
     prompter.close();
 }
 function parseFlag(args, flag) {
