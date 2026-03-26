@@ -114,6 +114,7 @@ export class ClawVoiceService {
           ? (config.elevenlabsVoiceId ?? "")
           : config.deepgramVoice,
         voiceSystemPrompt: config.voiceSystemPrompt,
+        allowAutoAccept: true,
         onCallCompleted: (callId, summary, transcript) => {
           if (!summary) return;
           void this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
