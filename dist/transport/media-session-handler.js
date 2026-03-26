@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.TwilioMediaSessionHandler = void 0;
+const crypto_1 = require("crypto");
 const user_profile_1 = require("../services/user-profile");
 const path = __importStar(require("path"));
 class TwilioMediaSessionHandler {
@@ -41,6 +42,7 @@ class TwilioMediaSessionHandler {
         this.options = options;
         this.sessionsBySocket = new Map();
         this.localCloses = new Set();
+        this.completedCallIds = new Set();
     }
     async handleMessage(socket, payload) {
         let message;
@@ -70,8 +72,9 @@ class TwilioMediaSessionHandler {
         this.localCloses.add(socket);
         session.voiceSession.close();
         this.sessionsBySocket.delete(socket);
-        // Trigger post-call processing (transcript extraction, summary)
-        if (this.options.onCallCompleted) {
+        // Trigger post-call processing only once per callId (idempotent)
+        if (this.options.onCallCompleted && !this.completedCallIds.has(session.callId)) {
+            this.completedCallIds.add(session.callId);
             const transcript = this.options.bridge.getTranscript(session.callId);
             const summary = this.options.bridge.generateCallSummary(session.callId);
             try {
@@ -100,30 +103,42 @@ class TwilioMediaSessionHandler {
         // plugin instance while the media stream arrives at another.
         let callId = this.options.resolveCallIdByProviderCallId(providerCallId);
         if (!callId) {
-            callId = `auto-${Date.now()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
+            const allowAutoAccept = this.options.allowAutoAccept ?? true;
+            if (!allowAutoAccept || !this.options.voiceProviderUrl) {
+                socket.close(1008, "Unknown callSid and auto-accept is disabled or misconfigured");
+                return;
+            }
+            callId = `auto-${(0, crypto_1.randomUUID)()}`;
         }
         let sessionConfig = this.options.bridge.getSessionConfig(callId);
         if (!sessionConfig) {
             // Auto-create a bridge session with default config for auto-accepted calls.
             // Read voice provider URL/auth/model from handler options.
             const defaultGreeting = urlGreeting || "Hello, this is an AI assistant.";
-            let systemPrompt = this.options.voiceSystemPrompt || "";
-            if (urlPurpose) {
-                systemPrompt = systemPrompt
-                    ? `${systemPrompt}\n\nCall purpose: ${urlPurpose}`
-                    : `Call purpose: ${urlPurpose}`;
+            // Build system prompt from user profile + purpose (stated once, not duplicated).
+            // buildCallPrompt already includes "Call purpose: ..." when purpose is provided.
+            const parts = [];
+            // For inbound calls (no purpose specified), prepend inbound-specific instructions
+            if (!urlPurpose) {
+                parts.push("You are answering an inbound phone call. The caller dialed your number.\n" +
+                    "Greet them warmly, determine who they are and what they need, and handle\n" +
+                    "the conversation according to your context and instructions below.");
             }
-            // Enrich with user profile before creating session
             if (this.options.workspacePath) {
                 const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
                 const profile = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
                 if (profile.ownerName || profile.contextBlock) {
-                    const profilePrompt = (0, user_profile_1.buildCallPrompt)(profile, urlPurpose || undefined);
-                    systemPrompt = systemPrompt
-                        ? `${profilePrompt}\n\n${systemPrompt}`
-                        : profilePrompt;
+                    parts.push((0, user_profile_1.buildCallPrompt)(profile, urlPurpose || undefined));
                 }
             }
+            // Only add purpose separately if user profile didn't already include it
+            if (urlPurpose && parts.length === 0) {
+                parts.push(`Call purpose: ${urlPurpose}`);
+            }
+            if (this.options.voiceSystemPrompt) {
+                parts.push(this.options.voiceSystemPrompt);
+            }
+            const systemPrompt = parts.join("\n\n");
             const autoConfig = {
                 callId,
                 providerCallId,
@@ -140,7 +155,7 @@ class TwilioMediaSessionHandler {
             };
             this.options.bridge.createSession(autoConfig);
             this.options.bridge.startKeepAlive(callId, 5000);
-            setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000);
+            setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000).unref?.();
             sessionConfig = this.options.bridge.getSessionConfig(callId);
         }
         if (!sessionConfig) {

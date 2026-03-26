@@ -1,6 +1,41 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClawVoiceService = void 0;
+const path = __importStar(require("path"));
+const routes_1 = require("../routes");
 const telnyx_1 = require("../telephony/telnyx");
 const twilio_1 = require("../telephony/twilio");
 const deepgram_bridge_1 = require("../transport/deepgram-bridge");
@@ -9,6 +44,7 @@ const media_session_handler_1 = require("../transport/media-session-handler");
 const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
 const post_call_1 = require("./post-call");
+const user_profile_1 = require("./user-profile");
 class ClawVoiceService {
     constructor(config, fetchFn, workspacePath) {
         this.config = config;
@@ -21,6 +57,8 @@ class ClawVoiceService {
         this.callTimers = new Map();
         this.dailyCallCount = 0;
         this.dailyResetDate = new Date().toISOString().slice(0, 10);
+        this.systemEventEmitter = null;
+        this.smsReplyTimestamps = new Map();
         this.mediaStreamServer = null;
         this.reaperTimer = null;
         this.workspacePath = workspacePath;
@@ -47,6 +85,7 @@ class ClawVoiceService {
                     ? (config.elevenlabsVoiceId ?? "")
                     : config.deepgramVoice,
                 voiceSystemPrompt: config.voiceSystemPrompt,
+                allowAutoAccept: true,
                 onCallCompleted: (callId, summary, transcript) => {
                     if (!summary)
                         return;
@@ -117,6 +156,19 @@ class ClawVoiceService {
             port: streamPort,
             path: streamPath,
             sessionHandler: this.mediaSessionHandler,
+        });
+        // Register webhook routes on the standalone server so they work
+        // even when the OpenClaw gateway doesn't dispatch plugin routes.
+        (0, routes_1.registerStandaloneWebhookRoutes)(this.mediaStreamServer, this.config, {
+            onInbound: (record) => this.notifyInboundCall(record),
+            onInboundText: (from, to, body, messageId) => {
+                void this.handleInboundSms(from, to, body, messageId).catch((e) => {
+                    console.error("[clawvoice] handleInboundSms error:", e instanceof Error ? e.message : String(e));
+                });
+            },
+            onRecording: (providerCallId, recordingUrl) => {
+                this.setRecordingUrl(providerCallId, recordingUrl);
+            },
         });
         await this.mediaStreamServer.start();
     }
@@ -419,6 +471,78 @@ class ClawVoiceService {
             createdAt: new Date().toISOString(),
         });
         this.textMessages.splice(100);
+    }
+    setSystemEventEmitter(emitter) {
+        this.systemEventEmitter = emitter;
+    }
+    /**
+     * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
+     */
+    async handleInboundSms(from, to, body, messageId) {
+        // Record the inbound text
+        this.trackInboundText(from, to, body, messageId);
+        // Don't auto-reply to own number (prevent loops)
+        const ownNumber = this.config.telephonyProvider === "twilio"
+            ? this.config.twilioPhoneNumber
+            : this.config.telnyxPhoneNumber;
+        if (ownNumber && from === ownNumber) {
+            return;
+        }
+        // Load user profile for the owner name
+        let ownerName = "the owner";
+        if (this.workspacePath) {
+            try {
+                const voiceMemoryDir = path.join(this.workspacePath, "voice-memory");
+                const profile = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
+                if (profile.ownerName) {
+                    ownerName = profile.ownerName;
+                }
+            }
+            catch { /* best-effort */ }
+        }
+        // Send auto-reply with rate limiting (1 reply per number per 60 seconds)
+        if (this.config.smsAutoReply) {
+            const now = Date.now();
+            const lastReply = this.smsReplyTimestamps.get(from) ?? 0;
+            if (now - lastReply >= 60000) {
+                try {
+                    const replyBody = `Hi, this is ${ownerName}'s assistant. I've received your message and will relay it.`;
+                    await this.telephonyAdapter.sendSms({
+                        to: from,
+                        from: ownNumber || "",
+                        body: replyBody,
+                    });
+                    this.smsReplyTimestamps.set(from, now);
+                    // Clean up old timestamps (keep map bounded)
+                    if (this.smsReplyTimestamps.size > 500) {
+                        const cutoff = now - 120000;
+                        for (const [key, ts] of this.smsReplyTimestamps) {
+                            if (ts < cutoff)
+                                this.smsReplyTimestamps.delete(key);
+                        }
+                    }
+                }
+                catch (e) {
+                    console.error("[clawvoice] SMS auto-reply failed:", e instanceof Error ? e.message : String(e));
+                }
+            }
+        }
+        // Notify owner agent via system event emitter
+        if (this.systemEventEmitter) {
+            const maskPhone = (num) => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+            const autoReplied = this.config.smsAutoReply ? " (auto-reply sent)" : "";
+            this.systemEventEmitter(`Inbound SMS from ${maskPhone(from)}: "${body}"${autoReplied}`, { source: "clawvoice" });
+        }
+    }
+    /**
+     * Emit a system event when an inbound call arrives.
+     */
+    notifyInboundCall(record) {
+        this.trackInboundCall(record);
+        if (this.systemEventEmitter) {
+            const maskPhone = (num) => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+            this.systemEventEmitter(`Incoming call from ${maskPhone(record.from)} to ${maskPhone(record.to)} (${record.provider}, action: ${record.decision.action})`, { source: "clawvoice" });
+        }
     }
     getRecentTexts() {
         return [...this.textMessages];

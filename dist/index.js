@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.register = register;
-const fs = __importStar(require("fs"));
+const fsp = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
 const cli_1 = require("./cli");
 const config_1 = require("./config");
@@ -336,9 +336,9 @@ function registerModernRoutesBridge(api, config, callService) {
         },
     };
     (0, routes_1.registerRoutes)(shimApi, config, (record) => {
-        callService.trackInboundCall(record);
+        callService.notifyInboundCall(record);
     }, (from, to, body, messageId) => {
-        callService.trackInboundText(from, to, body, messageId);
+        void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
     }, (providerCallId, recordingUrl) => {
         callService.setRecordingUrl(providerCallId, recordingUrl);
     });
@@ -415,10 +415,18 @@ function initPlugin(api) {
     // Wire filesystem-based memory writer for post-call transcript persistence
     if (workspacePath) {
         callService.postCall.setMemoryWriter(async (namespace, key, value) => {
-            const dir = path.join(workspacePath, namespace, path.dirname(key));
-            fs.mkdirSync(dir, { recursive: true });
+            // Sanitize key to prevent path traversal
+            if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
+                throw new Error(`Invalid memory key: ${key}`);
+            }
+            const resolvedDir = path.resolve(workspacePath, namespace, path.dirname(key));
+            const resolvedBase = path.resolve(workspacePath);
+            if (!resolvedDir.startsWith(resolvedBase + path.sep) && resolvedDir !== resolvedBase) {
+                throw new Error(`Memory key escapes workspace: ${key}`);
+            }
+            await fsp.mkdir(resolvedDir, { recursive: true });
             const filePath = path.join(workspacePath, namespace, `${key}.json`);
-            fs.writeFileSync(filePath, JSON.stringify(value, null, 2));
+            await fsp.writeFile(filePath, JSON.stringify(value, null, 2));
             // Also write latest summary as markdown for easy agent access
             if (key.startsWith("calls/") && typeof value === "object" && value !== null) {
                 const record = value;
@@ -437,15 +445,17 @@ function initPlugin(api) {
                         lines.push(`> **${role}:** ${entry.text}`);
                     }
                 }
-                fs.writeFileSync(summaryPath, lines.join("\n") + "\n");
+                await fsp.writeFile(summaryPath, lines.join("\n") + "\n");
             }
         });
     }
     // Wire system event emitter for immediate post-call summary delivery
+    // and inbound call/SMS notifications
     resolveSystemEventEmitter(api)
         .then((emitter) => {
         if (emitter) {
             callService.postCall.setSystemEventEmitter(emitter);
+            callService.setSystemEventEmitter(emitter);
         }
     })
         .catch(() => undefined);
@@ -471,9 +481,9 @@ function initPlugin(api) {
     const httpRouter = api.http?.router;
     if (typeof httpRouter === "function") {
         (0, routes_1.registerRoutes)(api, config, (record) => {
-            callService.trackInboundCall(record);
+            callService.notifyInboundCall(record);
         }, (from, to, body, messageId) => {
-            callService.trackInboundText(from, to, body, messageId);
+            void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
         }, (providerCallId, recordingUrl) => {
             callService.setRecordingUrl(providerCallId, recordingUrl);
         });

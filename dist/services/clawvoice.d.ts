@@ -3,6 +3,9 @@ import { InboundCallRecord } from "../inbound/types";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
+export type SystemEventEmitter = (text: string, options?: {
+    source?: string;
+}) => void;
 export interface CallRecord {
     callId: string;
     providerCallId: string;
@@ -61,6 +64,8 @@ export declare class ClawVoiceService {
     private readonly telephonyAdapter;
     private dailyCallCount;
     private dailyResetDate;
+    private systemEventEmitter;
+    private readonly smsReplyTimestamps;
     readonly bridge: VoiceBridgeService;
     readonly postCall: PostCallService;
     private readonly voiceProviderClient;
@@ -102,6 +107,15 @@ export declare class ClawVoiceService {
     getCallSummary(callId: string): CallSummary | null;
     sendText(request: SendTextRequest): Promise<SendTextResponse>;
     trackInboundText(from: string, to: string, body: string, providerMessageId?: string): void;
+    setSystemEventEmitter(emitter: SystemEventEmitter): void;
+    /**
+     * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
+     */
+    handleInboundSms(from: string, to: string, body: string, messageId?: string): Promise<void>;
+    /**
+     * Emit a system event when an inbound call arrives.
+     */
+    notifyInboundCall(record: InboundCallRecord): void;
     getRecentTexts(): TextMessageRecord[];
     private completeCall;
 }
