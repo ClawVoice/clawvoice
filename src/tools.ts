@@ -48,6 +48,11 @@ export function registerTools(
       }
 
       const purpose = readString(input.purpose);
+      if (!purpose) {
+        throw new Error(
+          "purpose is required and must be a non-empty string. The voice agent needs detailed instructions to know what to say on the call.",
+        );
+      }
       const greeting = readString(input.greeting);
       const result = await callService.startCall({
         phoneNumber,

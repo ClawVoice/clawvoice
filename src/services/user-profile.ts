@@ -55,10 +55,7 @@ export function buildCallPrompt(profile: UserProfile, purpose?: string): string 
  * Wraps in double quotes if it contains characters that could cause YAML injection.
  */
 function yamlSafeValue(value: string): string {
-  if (/[:\n\r"'#{}[\],&*?|><!%@`]/.test(value) || value.trim() !== value) {
-    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
-  }
-  return value;
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
 }
 
 export function writeDefaultProfile(voiceMemoryDir: string, ownerName: string, style?: string, context?: string): void {

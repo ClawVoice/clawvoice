@@ -66,7 +66,7 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
       recordAttr = ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackEvent="completed"`;
     }
     // XML-escape values to prevent TwiML parse errors from special chars in purpose/greeting
-    const xmlEscape = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    const xmlEscape = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;").replace(/\t/g, "&#9;");
     const safeStreamUrl = xmlEscape(enrichedStreamUrl);
     const safePurpose = xmlEscape(input.purpose ?? "");
     const safeGreeting = xmlEscape(input.greeting ?? "");

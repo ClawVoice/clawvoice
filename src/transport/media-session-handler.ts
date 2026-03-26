@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { VoiceProviderClient, VoiceProviderSession } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
 import { readUserProfile, buildCallPrompt } from "../services/user-profile";
@@ -28,6 +29,8 @@ interface TwilioMediaSessionHandlerOptions {
   voiceModel?: string;
   /** Default voice system prompt for auto-created bridge sessions. */
   voiceSystemPrompt?: string;
+  /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
+  allowAutoAccept?: boolean;
   /** Called when a media session closes (for post-call processing). */
   onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[]) => void;
 }
@@ -57,6 +60,7 @@ type TwilioMessage = TwilioStartMessage | TwilioMediaMessage | TwilioStopMessage
 export class TwilioMediaSessionHandler {
   private readonly sessionsBySocket = new Map<TwilioWebSocket, StreamSession>();
   private readonly localCloses = new Set<TwilioWebSocket>();
+  private readonly completedCallIds = new Set<string>();
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
 
@@ -93,8 +97,9 @@ export class TwilioMediaSessionHandler {
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
 
-    // Trigger post-call processing (transcript extraction, summary)
-    if (this.options.onCallCompleted) {
+    // Trigger post-call processing only once per callId (idempotent)
+    if (this.options.onCallCompleted && !this.completedCallIds.has(session.callId)) {
+      this.completedCallIds.add(session.callId);
       const transcript = this.options.bridge.getTranscript(session.callId);
       const summary = this.options.bridge.generateCallSummary(session.callId);
       try {
@@ -127,7 +132,12 @@ export class TwilioMediaSessionHandler {
     // plugin instance while the media stream arrives at another.
     let callId = this.options.resolveCallIdByProviderCallId(providerCallId);
     if (!callId) {
-      callId = `auto-${Date.now()}-${Math.floor(Math.random() * 1000000).toString().padStart(6, "0")}`;
+      const allowAutoAccept = this.options.allowAutoAccept ?? true;
+      if (!allowAutoAccept || !this.options.voiceProviderUrl) {
+        socket.close(1008, "Unknown callSid and auto-accept is disabled or misconfigured");
+        return;
+      }
+      callId = `auto-${randomUUID()}`;
     }
 
     let sessionConfig = this.options.bridge.getSessionConfig(callId);
@@ -170,7 +180,7 @@ export class TwilioMediaSessionHandler {
       };
       this.options.bridge.createSession(autoConfig);
       this.options.bridge.startKeepAlive(callId, 5000);
-      setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000);
+      setTimeout(() => this.options.bridge.endGreetingGrace(callId), 3000).unref?.();
       sessionConfig = this.options.bridge.getSessionConfig(callId);
     }
 
