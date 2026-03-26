@@ -1,4 +1,5 @@
 import { WebSocketServer } from "ws";
+import { URL } from "url";
 import { TwilioMediaSessionHandler, TwilioWebSocket } from "./media-session-handler";
 
 interface MediaStreamServerOptions {
@@ -24,8 +25,17 @@ export class MediaStreamServer {
       path: this.options.path,
     });
 
-    this.wss.on("connection", (socket) => {
+    this.wss.on("connection", (socket, req) => {
       const twilioSocket = socket as unknown as TwilioWebSocket;
+
+      // Attach URL query params from the WebSocket upgrade request so the
+      // session handler can read purpose/greeting context set by the Twilio adapter.
+      if (req.url) {
+        try {
+          const parsed = new URL(req.url, "http://localhost");
+          twilioSocket._queryParams = Object.fromEntries(parsed.searchParams.entries());
+        } catch { /* ignore malformed URLs */ }
+      }
       socket.on("message", (payload) => {
         const text = typeof payload === "string" ? payload : payload.toString("utf8");
         void this.options.sessionHandler.handleMessage(twilioSocket, text).catch(() => {

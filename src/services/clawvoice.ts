@@ -104,6 +104,20 @@ export class ClawVoiceService {
         resolveCallIdByProviderCallId: (providerCallId: string) =>
           this.findInternalCallIdByProviderCallId(providerCallId),
         workspacePath: this.workspacePath,
+        voiceProviderUrl: config.voiceProvider === "deepgram-agent"
+          ? "wss://agent.deepgram.com/v1/agent/converse"
+          : `wss://api.elevenlabs.io/v1/convai/conversation?agent_id=${config.elevenlabsAgentId ?? ""}`,
+        voiceProviderAuth: config.voiceProvider === "elevenlabs-conversational"
+          ? (config.elevenlabsApiKey ?? "")
+          : (config.deepgramApiKey ?? ""),
+        voiceModel: config.voiceProvider === "elevenlabs-conversational"
+          ? (config.elevenlabsVoiceId ?? "")
+          : config.deepgramVoice,
+        voiceSystemPrompt: config.voiceSystemPrompt,
+        onCallCompleted: (callId, summary, transcript) => {
+          if (!summary) return;
+          void this.postCall.processCompletedCall(summary, transcript).catch(() => undefined);
+        },
       })
       : null;
   }
@@ -129,7 +143,11 @@ export class ClawVoiceService {
       // already owns the media stream port. Call placement still works via Twilio API;
       // only the media stream server is unavailable in this instance.
       const isPortConflict = error instanceof Error && (error as NodeJS.ErrnoException).code === "EADDRINUSE";
-      if (!isPortConflict) throw error;
+      if (isPortConflict) {
+        console.warn("[clawvoice] Media stream port already in use — media stream server not started. Call placement still works via Twilio API.");
+      } else {
+        throw error;
+      }
     }
     this.startReaper();
     this.running = true;
