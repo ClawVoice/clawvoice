@@ -517,6 +517,41 @@ function initPlugin(api: PluginAPI): void {
     })
     .catch(() => undefined);
 
+  // Wire Telegram notification sender for post-call summaries.
+  // Reads bot token and owner chat ID from the OpenClaw config (channels.telegram).
+  const channelsCfg = (rawApiConfig?.channels as Record<string, unknown> | undefined);
+  const telegramCfg = channelsCfg?.telegram as Record<string, unknown> | undefined;
+  const botToken = typeof telegramCfg?.botToken === "string" ? telegramCfg.botToken : undefined;
+  // Resolve owner chat ID from telegram-default-allowFrom.json (paired DM users)
+  if (botToken && config.notifyTelegram) {
+    let ownerChatId: string | undefined;
+    try {
+      const allowFromPath = path.join(
+        process.env.OPENCLAW_STATE_DIR || path.dirname(process.env.OPENCLAW_CONFIG_PATH || ""),
+        "credentials",
+        "telegram-default-allowFrom.json",
+      );
+      const allowFromData = JSON.parse(fs.readFileSync(allowFromPath, "utf8")) as { allowFrom?: string[] };
+      ownerChatId = allowFromData.allowFrom?.[0];
+    } catch { /* ignore — file may not exist */ }
+
+    if (ownerChatId) {
+      callService.postCall.setNotificationSender(async (notification) => {
+        try {
+          await globalThis.fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: ownerChatId,
+              text: `\u{1F4DE} ${notification.text}`,
+              parse_mode: "Markdown",
+            }),
+          });
+        } catch { /* best-effort delivery */ }
+      });
+    }
+  }
+
   void callService.start().catch((error) => {
     logger.error?.("ClawVoice call service failed to start", {
       error: error instanceof Error ? error.message : String(error),
