@@ -47,7 +47,8 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "elevenlabs-conversational",
     "dg-key",
     "el-key",
-    "agent-1"
+    "agent-1",
+    "yes"
   ]);
 
   await runSetupWizard(api, [], prompter);

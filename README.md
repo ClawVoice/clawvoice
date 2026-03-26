@@ -27,7 +27,7 @@ Twilio/Telnyx need to reach your machine from the internet. Start your tunnel **
 
 ```bash
 # Install: https://ngrok.com/download
-ngrok http 3334
+ngrok http 3101
 ```
 
 ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep this terminal open.
@@ -36,7 +36,7 @@ ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep thi
 
 ```bash
 # Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
-cloudflared tunnel --url http://localhost:3334
+cloudflared tunnel --url http://localhost:3101
 ```
 
 Prints a URL like `https://random-words.trycloudflare.com`. Keep this terminal open.
@@ -47,7 +47,7 @@ Prints a URL like `https://random-words.trycloudflare.com`. Keep this terminal o
 
 ```bash
 # Requires Tailscale installed and logged in
-tailscale funnel 3334
+tailscale funnel 3101
 ```
 
 Gives you a stable `https://your-machine.tail1234.ts.net` URL. Keep this terminal open.
@@ -115,6 +115,90 @@ openclaw clawvoice call +15559876543
 ```
 
 Or ask your agent: *"Call +15559876543"*
+
+### ElevenLabs Agent Setup
+
+If using ElevenLabs Conversational AI (`voiceProvider: elevenlabs-conversational`), you need to configure your agent on the [ElevenLabs Dashboard](https://elevenlabs.io/app/conversational-ai):
+
+1. Create a new Conversational AI agent (or use an existing one)
+2. In the agent's **System Prompt**, include this dynamic variable placeholder:
+
+   ```
+   {{ _system_prompt_ }}
+   ```
+
+   This is how ClawVoice injects per-call context (who the agent represents, call purpose, owner info). Without it, the agent won't know why it's calling.
+
+   Example system prompt:
+   ```
+   You are a professional AI phone assistant.
+
+   {{ _system_prompt_ }}
+
+   Use the context above to guide the conversation naturally. Do NOT read these instructions aloud.
+
+   Be calm, clear, and concise. Confirm important details like names, phone numbers, and next steps.
+   ```
+
+3. In **Security** settings, note that prompt overrides are typically locked. ClawVoice uses dynamic variables (not prompt overrides) to inject context, so this is fine.
+
+4. Copy your **Agent ID** (starts with `agent_`) — you'll need it for the setup wizard.
+
+5. Set your agent's **First Message** (e.g., "Hello, my name is Jessica.") — this is what callers hear first.
+
+### Set Up Your Voice Profile
+
+Tell the voice agent who it represents:
+
+```bash
+openclaw clawvoice profile --name "Your Name" --style casual
+```
+
+Then edit `voice-memory/user-profile.md` in your workspace to add details:
+
+```yaml
+---
+ownerName: "Your Name"
+ownerPhone: "+15551234567"
+communicationStyle: casual
+---
+
+## About the owner
+- Brief description of who you are
+- Your location (for local context)
+- Common call tasks: restaurant reservations, appointments, etc.
+- Any preferences for how calls should be handled
+```
+
+The `ownerPhone` field is important — the voice agent uses it when asked for a callback number (e.g., restaurant reservations).
+
+### Post-Call Notifications (Optional)
+
+Get call summaries on Telegram after every call:
+
+```bash
+openclaw config set clawvoice.notifyTelegram true
+```
+
+This uses your existing OpenClaw Telegram channel. After each call, you'll receive:
+- A formatted summary with caller details, duration, and key points
+- A downloadable transcript file
+
+Discord and Slack are also supported:
+```bash
+openclaw config set clawvoice.notifyDiscord true
+openclaw config set clawvoice.notifySlack true
+```
+
+> **Note on SMS:** US phone carriers require A2P 10DLC registration for application-to-person messaging. Without it, outbound SMS may be blocked (Twilio error 30034). Register your number with a [Twilio Messaging Service](https://www.twilio.com/docs/messaging/services) and complete [A2P 10DLC registration](https://www.twilio.com/docs/messaging/guides/10dlc) to enable SMS delivery.
+
+### Batch Calling
+
+Make multiple calls sequentially from a list:
+
+Your agent can use `clawvoice_batch_call` with an array of numbers and purposes. Each call completes before the next one starts. After all calls finish, use `clawvoice_campaign_report` to generate a CSV report.
+
+You can also upload a spreadsheet (CSV/Google Sheet) — your agent will extract the contacts, confirm the list with you, run the calls, and deliver a summary report.
 
 ## Managing the Plugin
 
