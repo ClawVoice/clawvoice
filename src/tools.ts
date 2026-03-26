@@ -359,7 +359,7 @@ export function registerTools(
       },
     },
     handler: async (input) => {
-      const fs = require("fs") as typeof import("fs");
+      const fsp = require("fs/promises") as typeof import("fs/promises");
       const path = require("path") as typeof import("path");
       const workspace = callService.getWorkspacePath();
       if (!workspace) {
@@ -389,12 +389,12 @@ export function registerTools(
       } else {
         // Find most recent batch report
         try {
-          const campaignFiles = fs.readdirSync(campaignsDir)
+          const campaignFiles = (await fsp.readdir(campaignsDir))
             .filter((f: string) => f.endsWith(".json"))
             .sort()
             .reverse();
           if (campaignFiles.length > 0) {
-            const latestBatch = JSON.parse(fs.readFileSync(path.join(campaignsDir, campaignFiles[0]), "utf8")) as {
+            const latestBatch = JSON.parse(await fsp.readFile(path.join(campaignsDir, campaignFiles[0]), "utf8")) as {
               results?: Array<{ callId?: string }>;
             };
             targetCallIds = (latestBatch.results ?? [])
@@ -406,7 +406,7 @@ export function registerTools(
         // Fallback: grab all call records
         if (targetCallIds.length === 0) {
           try {
-            targetCallIds = fs.readdirSync(callsDir)
+            targetCallIds = (await fsp.readdir(callsDir))
               .filter((f: string) => f.endsWith(".json"))
               .map((f: string) => f.replace(".json", ""))
               .slice(-20);
@@ -429,8 +429,8 @@ export function registerTools(
       for (const callId of targetCallIds) {
         try {
           const filePath = path.join(callsDir, `${callId}.json`);
-          if (!fs.existsSync(filePath)) continue;
-          const record = JSON.parse(fs.readFileSync(filePath, "utf8")) as {
+          try { await fsp.access(filePath); } catch { continue; }
+          const record = JSON.parse(await fsp.readFile(filePath, "utf8")) as {
             callId: string; outcome: string; durationMs: number;
             transcript: Array<{ speaker: string; text: string }>;
             completedAt: string;
@@ -495,8 +495,8 @@ export function registerTools(
 
       // Save CSV to voice-memory
       const csvPath = path.join(workspace, "voice-memory", "campaigns", `report-${Date.now()}.csv`);
-      fs.mkdirSync(path.dirname(csvPath), { recursive: true });
-      fs.writeFileSync(csvPath, csv);
+      await fsp.mkdir(path.dirname(csvPath), { recursive: true });
+      await fsp.writeFile(csvPath, csv);
 
       return {
         content: `Campaign report generated: ${rows.length} calls.\nSaved to: ${csvPath}\n\n${csvLines.slice(0, 6).join("\n")}${rows.length > 5 ? `\n... (${rows.length - 5} more rows)` : ""}`,
