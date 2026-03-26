@@ -584,12 +584,15 @@ function initPlugin(api: PluginAPI): void {
     });
   });
 
+  // Register tools via BOTH legacy and modern paths to ensure visibility.
+  // The legacy api.tools.register may exist but not actually expose tools to the
+  // agent session in modern OpenClaw runtimes. The modern registerTool bridge
+  // ensures tools appear in the agent's tool list.
   const toolsRegister = (api as unknown as { tools?: { register?: unknown } }).tools?.register;
   if (typeof toolsRegister === "function") {
     registerTools(api, config, callService, memoryService);
-  } else {
-    registerModernToolsBridge(api, config, callService, memoryService);
   }
+  registerModernToolsBridge(api, config, callService, memoryService);
 
   const cliRegister = (api as unknown as { cli?: { register?: unknown } }).cli?.register;
   if (typeof cliRegister === "function") {

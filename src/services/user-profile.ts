@@ -3,6 +3,7 @@ import * as path from "path";
 
 export interface UserProfile {
   ownerName: string;
+  ownerPhone: string;
   communicationStyle: string;
   contextBlock: string;
   raw: string;
@@ -10,6 +11,7 @@ export interface UserProfile {
 
 const DEFAULT_PROFILE: UserProfile = {
   ownerName: "",
+  ownerPhone: "",
   communicationStyle: "casual",
   contextBlock: "",
   raw: "",
@@ -26,9 +28,10 @@ export function readUserProfile(voiceMemoryDir: string): UserProfile {
   const yaml = frontmatterMatch[1];
   const body = frontmatterMatch[2].trim();
   const ownerName = extractYamlValue(yaml, "ownerName") || "";
+  const ownerPhone = extractYamlValue(yaml, "ownerPhone") || "";
   const communicationStyle = extractYamlValue(yaml, "communicationStyle") || "casual";
 
-  return { ownerName, communicationStyle, contextBlock: body, raw };
+  return { ownerName, ownerPhone, communicationStyle, contextBlock: body, raw };
 }
 
 function extractYamlValue(yaml: string, key: string): string | undefined {
@@ -41,6 +44,9 @@ export function buildCallPrompt(profile: UserProfile, purpose?: string): string 
   const parts: string[] = [];
   if (profile.ownerName) {
     parts.push(`You are calling on behalf of ${profile.ownerName}.`);
+  }
+  if (profile.ownerPhone) {
+    parts.push(`Owner's phone number: ${profile.ownerPhone}. Use this when asked for a callback number or contact number.`);
   }
   if (purpose) {
     parts.push(`Call purpose: ${purpose}`);
