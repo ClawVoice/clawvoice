@@ -300,7 +300,7 @@ export class PostCallService {
     if (transcript.length > 0) {
       lines.push("\nTranscript:");
       for (const entry of transcript.slice(0, 20)) {
-        const role = entry.speaker === "agent" ? "Jessica" : "Caller";
+        const role = entry.speaker === "agent" ? "Agent" : "Caller";
         lines.push(`${role}: ${entry.text}`);
       }
       if (transcript.length > 20) {
@@ -361,7 +361,7 @@ export class PostCallService {
     lines.push("");
 
     for (const entry of transcript) {
-      const role = entry.speaker === "agent" ? "Jessica" : "Caller";
+      const role = entry.speaker === "agent" ? "Agent" : "Caller";
       const ts = new Date(entry.timestamp).toLocaleTimeString("en-US", {
         timeZone: "America/Chicago",
         hour: "numeric", minute: "2-digit", second: "2-digit",

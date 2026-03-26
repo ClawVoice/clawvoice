@@ -30,6 +30,7 @@ export declare class TwilioMediaSessionHandler {
     private readonly options;
     private readonly sessionsBySocket;
     private readonly localCloses;
+    private static readonly MAX_COMPLETED;
     private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);
     handleMessage(socket: TwilioWebSocket, payload: string): Promise<void>;

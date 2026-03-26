@@ -75,6 +75,12 @@ class TwilioMediaSessionHandler {
         // Trigger post-call processing only once per callId (idempotent)
         if (this.options.onCallCompleted && !this.completedCallIds.has(session.callId)) {
             this.completedCallIds.add(session.callId);
+            if (this.completedCallIds.size > TwilioMediaSessionHandler.MAX_COMPLETED) {
+                const oldest = this.completedCallIds.values().next().value;
+                if (oldest) {
+                    this.completedCallIds.delete(oldest);
+                }
+            }
             const transcript = this.options.bridge.getTranscript(session.callId);
             const summary = this.options.bridge.generateCallSummary(session.callId);
             try {
@@ -255,7 +261,7 @@ class TwilioMediaSessionHandler {
             callId,
             streamSid: message.streamSid ?? "",
             voiceSession,
-            callerPhone: callerPhone || providerCallId,
+            callerPhone: callerPhone || undefined,
             direction: isInbound ? "inbound" : "outbound",
         });
         this.options.bridge.startHeartbeatMonitor(callId);
@@ -274,3 +280,4 @@ class TwilioMediaSessionHandler {
     }
 }
 exports.TwilioMediaSessionHandler = TwilioMediaSessionHandler;
+TwilioMediaSessionHandler.MAX_COMPLETED = 1000;

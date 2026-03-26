@@ -32,7 +32,8 @@ export function readUserProfile(voiceMemoryDir: string): UserProfile {
 }
 
 function extractYamlValue(yaml: string, key: string): string | undefined {
-  const match = yaml.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = yaml.match(new RegExp(`^${escapedKey}:\\s*(.+)$`, "m"));
   return match?.[1]?.trim().replace(/^["']|["']$/g, "");
 }
 

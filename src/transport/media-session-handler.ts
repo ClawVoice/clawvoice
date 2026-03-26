@@ -62,6 +62,7 @@ type TwilioMessage = TwilioStartMessage | TwilioMediaMessage | TwilioStopMessage
 export class TwilioMediaSessionHandler {
   private readonly sessionsBySocket = new Map<TwilioWebSocket, StreamSession>();
   private readonly localCloses = new Set<TwilioWebSocket>();
+  private static readonly MAX_COMPLETED = 1000;
   private readonly completedCallIds = new Set<string>();
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
@@ -102,6 +103,12 @@ export class TwilioMediaSessionHandler {
     // Trigger post-call processing only once per callId (idempotent)
     if (this.options.onCallCompleted && !this.completedCallIds.has(session.callId)) {
       this.completedCallIds.add(session.callId);
+      if (this.completedCallIds.size > TwilioMediaSessionHandler.MAX_COMPLETED) {
+        const oldest = this.completedCallIds.values().next().value;
+        if (oldest) {
+          this.completedCallIds.delete(oldest);
+        }
+      }
       const transcript = this.options.bridge.getTranscript(session.callId);
       const summary = this.options.bridge.generateCallSummary(session.callId);
       try {
@@ -307,7 +314,7 @@ export class TwilioMediaSessionHandler {
       callId,
       streamSid: message.streamSid ?? "",
       voiceSession,
-      callerPhone: callerPhone || providerCallId,
+      callerPhone: callerPhone || undefined,
       direction: isInbound ? "inbound" : "outbound",
     });
 

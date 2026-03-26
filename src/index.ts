@@ -561,7 +561,7 @@ function initPlugin(api: PluginAPI): void {
                 `--${boundary}\r\n` +
                 `Content-Disposition: form-data; name="caption"\r\n\r\nCall transcript\r\n` +
                 `--${boundary}\r\n` +
-                `Content-Disposition: form-data; name="document"; filename="${notification.file.name}"\r\n` +
+                `Content-Disposition: form-data; name="document"; filename="${notification.file.name.replace(/["\r\n]/g, "")}"\r\n` +
                 `Content-Type: ${notification.file.mimeType}\r\n\r\n`,
               ),
               fileBuf,
