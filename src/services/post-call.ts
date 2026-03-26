@@ -187,10 +187,12 @@ export class PostCallService {
       .join(" ");
     const allText = callerText + " " + agentText;
 
-    // Extract name — look for "my name is X" or agent confirming "your name is X"
+    // Extract caller's name from THEIR turns only (not agent turns, which contain
+    // the agent's own name like "my name is Jessica").
+    // Fallback: check agent turns for "your name is X" confirmations (agent repeating caller's name).
     const nameMatch =
       callerText.match(/(?:my name is|this is|I'm|I am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i) ??
-      agentText.match(/(?:your name is|name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+      agentText.match(/(?:your name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
     const callerName = nameMatch?.[1]?.trim();
 
     // Extract company
@@ -232,19 +234,28 @@ export class PostCallService {
     lines.push(`*${dir} Call Summary*`);
     lines.push("");
 
+    // Caller identification — name if extracted, phone number always shown
+    if (extracted?.callerName) {
+      const nameLine = extracted.company
+        ? `${extracted.callerName} (${extracted.company})`
+        : extracted.callerName;
+      lines.push(`*Caller:* ${nameLine}`);
+    }
     if (meta?.callerPhone) {
       lines.push(`*Phone:* ${meta.callerPhone}`);
-    }
-    if (extracted?.callerName) {
-      lines.push(`*Caller:* ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
-    } else if (extracted?.company) {
-      lines.push(`*Company:* ${extracted.company}`);
+    } else {
+      lines.push(`*Phone:* Unknown`);
     }
     if (extracted?.callbackNumber && extracted.callbackNumber !== meta?.callerPhone?.replace(/\D/g, "")) {
       lines.push(`*Callback #:* ${extracted.callbackNumber}`);
     }
     lines.push(`*Time:* ${time}`);
     lines.push(`*Duration:* ${duration} | ${transcript.length} turns`);
+
+    // Agent details
+    const voiceProvider = this.config.voiceProvider === "elevenlabs-conversational" ? "ElevenLabs" : "Deepgram";
+    const agentName = transcript.find((e) => e.speaker === "agent")?.text.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]+)/i)?.[1] ?? "Voice Agent";
+    lines.push(`*Agent:* ${agentName} (${voiceProvider})`);
 
     if (extracted?.reason) {
       lines.push(`*Reason:* ${extracted.reason}`);

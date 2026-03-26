@@ -62,7 +62,7 @@ function createWebhookHandlers(config, callbacks, logError) {
                     `The caller will hear a generic error. Set this to a public WSS endpoint ` +
                     `(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.`);
             }
-            sendTwiml(response, buildTwilioVoiceTwiml(config));
+            sendTwiml(response, buildTwilioVoiceTwiml(config, params["From"], params["To"]));
             return;
         }
         sendTwiml(response, "<Response><Reject/></Response>");
@@ -204,12 +204,21 @@ function sendTwiml(response, twiml) {
     }
     void statusResult;
 }
-function buildTwilioVoiceTwiml(config) {
+function buildTwilioVoiceTwiml(config, from, to) {
     const streamUrl = config.twilioStreamUrl?.trim();
     if (!streamUrl) {
         return "<Response><Say>We're sorry, this call cannot be completed at this time.</Say><Hangup/></Response>";
     }
-    return `<Response><Connect><Stream url="${streamUrl}" track="inbound_track" /></Connect></Response>`;
+    const xmlEscape = (s) => s
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;");
+    // Pass caller info as stream parameters so the media session handler can include
+    // the caller's phone number in post-call notifications
+    const params = [
+        from ? `<Parameter name="from" value="${xmlEscape(from)}"/>` : "",
+        to ? `<Parameter name="calledNumber" value="${xmlEscape(to)}"/>` : "",
+    ].filter(Boolean).join("");
+    return `<Response><Connect><Stream url="${streamUrl}" track="inbound_track">${params}</Stream></Connect></Response>`;
 }
 function parseWebhookBody(body) {
     if (typeof body !== "object" || body === null) {
