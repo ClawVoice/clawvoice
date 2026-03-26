@@ -46,6 +46,9 @@ const bridge_1 = require("../voice/bridge");
 const post_call_1 = require("./post-call");
 const user_profile_1 = require("./user-profile");
 class ClawVoiceService {
+    getWorkspacePath() {
+        return this.workspacePath;
+    }
     constructor(config, fetchFn, workspacePath) {
         this.config = config;
         this.running = false;

@@ -94,6 +94,10 @@ export class ClawVoiceService {
   private mediaStreamServer: MediaStreamServer | null = null;
   private readonly workspacePath: string | undefined;
 
+  public getWorkspacePath(): string | undefined {
+    return this.workspacePath;
+  }
+
   public constructor(
     private readonly config: ClawVoiceConfig,
     fetchFn?: typeof globalThis.fetch,

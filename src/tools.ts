@@ -315,9 +315,167 @@ export function registerTools(
         lines.push(`• ${r.phoneNumber}: ${status} | ${dur} | ${r.transcriptLength} turns | purpose: ${r.purpose.slice(0, 60)}`);
       }
 
+      // Save batch report to voice-memory for the campaign report tool
+      if (callService.getWorkspacePath()) {
+        const fs = require("fs") as typeof import("fs");
+        const path = require("path") as typeof import("path");
+        const reportDir = path.join(callService.getWorkspacePath()!, "voice-memory", "campaigns");
+        fs.mkdirSync(reportDir, { recursive: true });
+        const reportId = `batch-${Date.now()}`;
+        fs.writeFileSync(
+          path.join(reportDir, `${reportId}.json`),
+          JSON.stringify({ reportId, createdAt: new Date().toISOString(), results }, null, 2),
+        );
+      }
+
       return {
         content: lines.join("\n"),
         data: { results, completed, partial, failed, total: results.length },
+      };
+    },
+  });
+
+  api.tools.register({
+    name: "clawvoice_campaign_report",
+    description:
+      "Generate a CSV report from recent call campaigns (batch calls). Returns a downloadable " +
+      "CSV file with columns: Phone, Name, Company, Purpose, Outcome, Duration, Turns, Summary, Transcript. " +
+      "Use after batch calling to give the user a spreadsheet-style report of all calls made.",
+    parameters: {
+      type: "object",
+      properties: {
+        callIds: {
+          type: "array",
+          description: "Specific call IDs to include. If omitted, includes all calls from the most recent batch.",
+          items: { type: "string" },
+        },
+      },
+    },
+    handler: async (input) => {
+      const fs = require("fs") as typeof import("fs");
+      const path = require("path") as typeof import("path");
+      const workspace = callService.getWorkspacePath();
+      if (!workspace) {
+        throw new Error("Workspace path not configured — cannot read call records.");
+      }
+
+      const callsDir = path.join(workspace, "voice-memory", "calls");
+      const campaignsDir = path.join(workspace, "voice-memory", "campaigns");
+
+      // Determine which call IDs to include
+      let targetCallIds: string[] = [];
+      if (Array.isArray(input.callIds) && input.callIds.length > 0) {
+        targetCallIds = input.callIds.filter((id): id is string => typeof id === "string");
+      } else {
+        // Find most recent batch report
+        try {
+          const campaignFiles = fs.readdirSync(campaignsDir)
+            .filter((f: string) => f.endsWith(".json"))
+            .sort()
+            .reverse();
+          if (campaignFiles.length > 0) {
+            const latestBatch = JSON.parse(fs.readFileSync(path.join(campaignsDir, campaignFiles[0]), "utf8")) as {
+              results?: Array<{ callId?: string }>;
+            };
+            targetCallIds = (latestBatch.results ?? [])
+              .map((r) => r.callId)
+              .filter((id): id is string => typeof id === "string" && id.length > 0);
+          }
+        } catch { /* no campaigns */ }
+
+        // Fallback: grab all call records
+        if (targetCallIds.length === 0) {
+          try {
+            targetCallIds = fs.readdirSync(callsDir)
+              .filter((f: string) => f.endsWith(".json"))
+              .map((f: string) => f.replace(".json", ""))
+              .slice(-20);
+          } catch { /* no calls */ }
+        }
+      }
+
+      if (targetCallIds.length === 0) {
+        return { content: "No call records found.", data: { csv: "" } };
+      }
+
+      // Read each call record and build the CSV
+      interface CallRow {
+        phone: string; name: string; company: string; purpose: string;
+        outcome: string; duration: string; turns: number; summary: string;
+        transcript: string;
+      }
+      const rows: CallRow[] = [];
+
+      for (const callId of targetCallIds) {
+        try {
+          const filePath = path.join(callsDir, `${callId}.json`);
+          if (!fs.existsSync(filePath)) continue;
+          const record = JSON.parse(fs.readFileSync(filePath, "utf8")) as {
+            callId: string; outcome: string; durationMs: number;
+            transcript: Array<{ speaker: string; text: string }>;
+            completedAt: string;
+          };
+
+          // Extract details from transcript
+          const callerText = record.transcript.filter((e) => e.speaker === "user").map((e) => e.text).join(" ");
+          const agentText = record.transcript.filter((e) => e.speaker === "agent").map((e) => e.text).join(" ");
+          const nameMatch = callerText.match(/(?:my name is|this is|I'm|I am)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i)
+            ?? agentText.match(/(?:your name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i);
+          const companyMatch = (callerText + " " + agentText).match(/(?:company is|from|with)\s+([A-Z][A-Za-z\s]+?(?:Inc|LLC|Corp|Co|Ltd|Incorporated|Services)?)\b/i);
+
+          // Build summary from last 2 agent turns
+          const agentTurns = record.transcript.filter((e) => e.speaker === "agent");
+          const summaryText = agentTurns.slice(-2).map((t) => t.text).join(" ").slice(0, 200);
+
+          // Full transcript as readable text
+          const transcriptText = record.transcript
+            .map((e) => `${e.speaker === "agent" ? "Agent" : "Caller"}: ${e.text}`)
+            .join(" | ");
+
+          const dur = record.durationMs > 0
+            ? `${Math.floor(record.durationMs / 60000)}m ${Math.round((record.durationMs % 60000) / 1000)}s`
+            : "n/a";
+
+          rows.push({
+            phone: callId.startsWith("auto-") ? "(inbound)" : "",
+            name: nameMatch?.[1]?.trim() ?? "",
+            company: companyMatch?.[1]?.trim() ?? "",
+            purpose: "",
+            outcome: record.outcome,
+            duration: dur,
+            turns: record.transcript.length,
+            summary: summaryText,
+            transcript: transcriptText,
+          });
+        } catch { /* skip unreadable records */ }
+      }
+
+      // Generate CSV
+      const escapeCsv = (s: string): string => {
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const csvLines: string[] = [];
+      csvLines.push("Phone,Name,Company,Purpose,Outcome,Duration,Turns,Summary,Transcript");
+      for (const row of rows) {
+        csvLines.push([
+          row.phone, row.name, row.company, row.purpose, row.outcome,
+          row.duration, String(row.turns), row.summary, row.transcript,
+        ].map(escapeCsv).join(","));
+      }
+      const csv = csvLines.join("\n");
+
+      // Save CSV to voice-memory
+      const csvPath = path.join(workspace, "voice-memory", "campaigns", `report-${Date.now()}.csv`);
+      fs.mkdirSync(path.dirname(csvPath), { recursive: true });
+      fs.writeFileSync(csvPath, csv);
+
+      return {
+        content: `Campaign report generated: ${rows.length} calls.\nSaved to: ${csvPath}\n\n${csvLines.slice(0, 6).join("\n")}${rows.length > 5 ? `\n... (${rows.length - 5} more rows)` : ""}`,
+        data: { csv, csvPath, rowCount: rows.length },
       };
     },
   });
