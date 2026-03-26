@@ -232,10 +232,17 @@ export function registerTools(
             required: ["phoneNumber", "purpose"],
           },
         },
+        perCallTimeoutMs: {
+          type: "number",
+          description: "Maximum time in milliseconds to wait for each individual call to complete (default: 300000 = 5 minutes)",
+        },
       },
       required: ["calls"],
     },
     handler: async (input) => {
+      const perCallTimeoutMs: number = typeof input.perCallTimeoutMs === "number" && input.perCallTimeoutMs > 0
+        ? input.perCallTimeoutMs
+        : 300_000; // 5 minutes default
       const calls = input.calls;
       if (!Array.isArray(calls) || calls.length === 0) {
         throw new Error("calls must be a non-empty array.");
@@ -278,7 +285,7 @@ export function registerTools(
           const callResult = await callService.startCall({ phoneNumber, purpose, greeting });
 
           // Wait for the call to complete before starting the next one
-          const summary = await callService.waitForCallCompletion(callResult.callId);
+          const summary = await callService.waitForCallCompletion(callResult.callId, perCallTimeoutMs);
 
           results.push({
             phoneNumber,
@@ -317,12 +324,12 @@ export function registerTools(
 
       // Save batch report to voice-memory for the campaign report tool
       if (callService.getWorkspacePath()) {
-        const fs = require("fs") as typeof import("fs");
+        const fsp = require("fs/promises") as typeof import("fs/promises");
         const path = require("path") as typeof import("path");
         const reportDir = path.join(callService.getWorkspacePath()!, "voice-memory", "campaigns");
-        fs.mkdirSync(reportDir, { recursive: true });
+        await fsp.mkdir(reportDir, { recursive: true });
         const reportId = `batch-${Date.now()}`;
-        fs.writeFileSync(
+        await fsp.writeFile(
           path.join(reportDir, `${reportId}.json`),
           JSON.stringify({ reportId, createdAt: new Date().toISOString(), results }, null, 2),
         );
@@ -365,7 +372,20 @@ export function registerTools(
       // Determine which call IDs to include
       let targetCallIds: string[] = [];
       if (Array.isArray(input.callIds) && input.callIds.length > 0) {
-        targetCallIds = input.callIds.filter((id): id is string => typeof id === "string");
+        targetCallIds = input.callIds.filter((id): id is string => typeof id === "string").map((id) => {
+          // Sanitize call IDs to prevent path traversal
+          if (/[/\\]|\.\./.test(id)) {
+            throw new Error(`Invalid call ID: ${id}`);
+          }
+          return id;
+        });
+        // Verify resolved paths stay within callsDir
+        for (const id of targetCallIds) {
+          const resolved = path.resolve(callsDir, `${id}.json`);
+          if (!resolved.startsWith(path.resolve(callsDir) + path.sep)) {
+            throw new Error(`Invalid call ID: ${id}`);
+          }
+        }
       } else {
         // Find most recent batch report
         try {
@@ -452,10 +472,15 @@ export function registerTools(
 
       // Generate CSV
       const escapeCsv = (s: string): string => {
-        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
-          return `"${s.replace(/"/g, '""')}"`;
+        // Prevent CSV formula injection — prefix dangerous leading characters
+        let safe = s;
+        if (/^[=+\-@\t\r]/.test(safe)) {
+          safe = "'" + safe;
         }
-        return s;
+        if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+          return `"${safe.replace(/"/g, '""')}"`;
+        }
+        return safe;
       };
 
       const csvLines: string[] = [];
