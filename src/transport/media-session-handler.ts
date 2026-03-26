@@ -139,8 +139,11 @@ export class TwilioMediaSessionHandler {
     const qp = socket._queryParams ?? {};
     const urlPurpose = cp.purpose || qp.purpose || "";
     const urlGreeting = cp.greeting || qp.greeting || "";
-    const callerPhone = cp.to || qp.to || "";  // "to" in customParameters = the number being called for outbound
-    const isInbound = !urlPurpose && !callerPhone;  // no purpose and no "to" param = inbound call
+    // For outbound: "to" = the number being called. For inbound: "from" = the caller's number.
+    const outboundTo = cp.to || qp.to || "";
+    const inboundFrom = cp.from || qp.from || "";
+    const callerPhone = inboundFrom || outboundTo;
+    const isInbound = !!inboundFrom || (!urlPurpose && !outboundTo);
 
     // Auto-accept unknown callSids: the call may have been placed by one
     // plugin instance while the media stream arrives at another.
