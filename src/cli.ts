@@ -140,7 +140,10 @@ export async function runSetupWizard(
     ["deepgram-agent", "elevenlabs-conversational"]
   );
   values.voiceProvider = voiceProvider;
-  values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+
+  if (voiceProvider === "deepgram-agent") {
+    values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+  }
 
   if (voiceProvider === "elevenlabs-conversational") {
     values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");

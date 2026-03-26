@@ -1,7 +1,9 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const plugin = require("../dist/index.js").default;
+const indexModule = require("../dist/index.js");
+const plugin = indexModule.default;
+const resetForTesting = indexModule._resetForTesting;
 
 function validSelfHostedConfig(overrides = {}) {
   return {
@@ -117,6 +119,7 @@ function createModernApi(config = {}) {
 test("plugin init registers core extension points", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.equal(state.tools.length, 9, "expected 9 tools: batch_call, call, campaign_report, clear_calls, hangup, send_text, text_status, status, promote_memory");
@@ -131,6 +134,7 @@ test("plugin init registers core extension points", async () => {
 test("plugin init registers expected tool names", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   const toolNames = state.tools.map((t) => t.name).sort();
@@ -150,6 +154,7 @@ test("plugin init registers expected tool names", async () => {
 test("plugin init registers expected CLI command names", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   const cliNames = state.cli.map((c) => c.name).sort();
@@ -170,6 +175,7 @@ test("plugin init registers expected CLI command names", async () => {
 test("plugin init registers only calls service", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   const names = state.services.map((service) => service.name);
@@ -179,6 +185,7 @@ test("plugin init registers only calls service", async () => {
 test("plugin init registers expected webhook routes", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.ok(state.routes.includes("/clawvoice/webhooks/telnyx"));
@@ -189,6 +196,7 @@ test("plugin init registers expected webhook routes", async () => {
 test("plugin init registers expected hooks", async () => {
   const { api, state } = createMockApi(validSelfHostedConfig());
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.ok(state.hooks.includes("before_tool_execute"));
@@ -200,6 +208,7 @@ test("plugin init registers modern registerCli bridge when legacy cli is absent"
     validSelfHostedConfig()
   );
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.equal(state.modernCli.length, 1);
@@ -212,6 +221,7 @@ test("plugin init registers tools via modern registerTool when legacy tools is a
     validSelfHostedConfig()
   );
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.equal(state.modernTools.length, 9, "expected 9 tools via modern registerTool");
@@ -234,6 +244,7 @@ test("plugin init registers routes via modern registerHttpRoute when legacy http
     validSelfHostedConfig()
   );
 
+  resetForTesting();
   await plugin.init(api);
 
   assert.ok(state.modernRoutes.length > 0, "expected routes via modern registerHttpRoute");

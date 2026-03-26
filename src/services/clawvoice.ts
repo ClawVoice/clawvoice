@@ -702,8 +702,10 @@ export class ClawVoiceService {
     const summary = this.bridge.generateCallSummary(callId);
     call.summary = summary ?? undefined;
 
-    this.bridge.destroySession(callId);
+    // Hang up first, then destroy session — ensures telephony provider
+    // receives the hangup before we tear down the local bridge session.
     await this.telephonyAdapter.hangup(providerCallId);
+    this.bridge.destroySession(callId);
     call.status = "completed";
     call.endedAt = new Date().toISOString();
     this.activeCalls.delete(callId);

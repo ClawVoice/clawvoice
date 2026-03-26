@@ -40,6 +40,7 @@ const DEFAULT_CONFIG = {
     notifyTelegram: false,
     notifyDiscord: false,
     notifySlack: false,
+    notificationTimezone: "America/Chicago",
 };
 function parseBoolean(value, fallback) {
     if (typeof value === "boolean") {
@@ -159,6 +160,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
     const envVoiceSystemPrompt = envString(env, "CLAWVOICE_VOICE_SYSTEM_PROMPT");
     const envInboundEnabled = envString(env, "CLAWVOICE_INBOUND_ENABLED");
     const envDailyCallLimit = envString(env, "CLAWVOICE_DAILY_CALL_LIMIT");
+    const envNotificationTimezone = envString(env, "CLAWVOICE_NOTIFICATION_TIMEZONE");
     const configTelephony = parseTelephonyProvider(pluginConfig.telephonyProvider);
     const configVoice = parseVoiceProvider(pluginConfig.voiceProvider);
     const configMainMemoryAccess = parseMainMemoryAccess(pluginConfig.mainMemoryAccess);
@@ -203,6 +205,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
         notifyTelegram: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_TELEGRAM"), typeof pluginConfig.notifyTelegram === "undefined" ? undefined : String(pluginConfig.notifyTelegram), String(DEFAULT_CONFIG.notifyTelegram)), DEFAULT_CONFIG.notifyTelegram),
         notifyDiscord: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_DISCORD"), typeof pluginConfig.notifyDiscord === "undefined" ? undefined : String(pluginConfig.notifyDiscord), String(DEFAULT_CONFIG.notifyDiscord)), DEFAULT_CONFIG.notifyDiscord),
         notifySlack: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_SLACK"), typeof pluginConfig.notifySlack === "undefined" ? undefined : String(pluginConfig.notifySlack), String(DEFAULT_CONFIG.notifySlack)), DEFAULT_CONFIG.notifySlack),
+        notificationTimezone: getValue(envNotificationTimezone, typeof pluginConfig.notificationTimezone === "string" ? pluginConfig.notificationTimezone : undefined, DEFAULT_CONFIG.notificationTimezone),
     };
 }
 function validateConfig(config) {

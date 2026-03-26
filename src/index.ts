@@ -297,8 +297,10 @@ async function resolveInternalRouteRegistrar(
     // Fallback: search all single-letter exports for the right signature
     for (const key of Object.keys(mod)) {
       if (typeof mod[key] === "function" && key.length === 1) {
-        const src = mod[key].toString();
-        if (src.includes("httpRoutes") && src.includes("pluginId")) return mod[key];
+        try {
+          const src = mod[key].toString();
+          if (src.includes("httpRoutes") && src.includes("pluginId")) return mod[key];
+        } catch { /* skip proxied/native functions */ }
       }
     }
   } catch { /* ignore */ }
@@ -352,8 +354,10 @@ async function resolveSystemEventEmitter(
     // Fallback: search single-letter exports
     for (const key of Object.keys(mod)) {
       if (typeof mod[key] === "function") {
-        const src = mod[key].toString();
-        if (src.includes("systemEvent") || src.includes("enqueueSystem")) return mod[key];
+        try {
+          const src = mod[key].toString();
+          if (src.includes("systemEvent") || src.includes("enqueueSystem")) return mod[key];
+        } catch { /* skip proxied/native functions */ }
       }
     }
   } catch { /* ignore */ }
@@ -402,7 +406,11 @@ function registerModernRoutesBridge(
     },
   );
 
-  // Try the internal gateway registry first; fall back to api.registerHttpRoute
+  // Try the internal gateway registry first; fall back to api.registerHttpRoute.
+  // NOTE: This async registration is intentionally fire-and-forget. The standalone
+  // webhook server on port 3101 is the primary webhook handler and works independently
+  // of gateway route registration. These gateway routes are a bonus for environments
+  // where the gateway dispatches plugin routes directly.
   resolveInternalRouteRegistrar(api)
     .then((internalRegister) => {
       const registerFn = internalRegister
@@ -443,7 +451,10 @@ function resolveLogger(api: PluginAPI): LoggerLike {
   return {};
 }
 
+let initialized = false;
 function initPlugin(api: PluginAPI): void {
+  if (initialized) return;
+  initialized = true;
   const logger = resolveLogger(api);
   // api.pluginConfig is the intended source, but some OpenClaw versions leave it
   // undefined and pass the full config as api.config.  Fall back through the
@@ -689,6 +700,11 @@ export function activate(api: PluginAPI): void {
 
 export function register(api: PluginAPI): void {
   initPlugin(api);
+}
+
+/** Reset initialization guard — for testing only. */
+export function _resetForTesting(): void {
+  initialized = false;
 }
 
 export default plugin;

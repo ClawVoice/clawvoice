@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { twilioToElevenLabs, elevenLabsToTwilio } from "./audio-convert";
+import { elevenLabsToTwilio } from "./audio-convert";
 import type { VoiceProviderClient, VoiceProviderConnectOptions, VoiceProviderSession } from "./voice-provider-bridge";
 
 type ElevenLabsSocket = {
