@@ -1,5 +1,6 @@
 export interface UserProfile {
     ownerName: string;
+    ownerPhone: string;
     communicationStyle: string;
     contextBlock: string;
     raw: string;
