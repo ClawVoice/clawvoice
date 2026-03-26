@@ -544,6 +544,35 @@ class ClawVoiceService {
             this.systemEventEmitter(`Incoming call from ${maskPhone(record.from)} to ${maskPhone(record.to)} (${record.provider}, action: ${record.decision.action})`, { source: "clawvoice" });
         }
     }
+    /**
+     * Wait for a call to complete (status changes from in-progress to completed).
+     * Resolves with the call summary, or null if the call wasn't found.
+     * Times out after maxWaitMs (default: maxCallDuration + 30s buffer).
+     */
+    waitForCallCompletion(callId, maxWaitMs) {
+        const timeout = maxWaitMs ?? (this.config.maxCallDuration * 1000 + 30000);
+        return new Promise((resolve) => {
+            const startedAt = Date.now();
+            const check = () => {
+                const call = this.activeCalls.get(callId);
+                // Call no longer active — it completed
+                if (!call) {
+                    const summary = this.getCallSummary(callId);
+                    resolve(summary);
+                    return;
+                }
+                if (Date.now() - startedAt > timeout) {
+                    resolve(null);
+                    return;
+                }
+                const timer = setTimeout(check, 2000);
+                timer.unref?.();
+            };
+            // First check after 5s (calls need time to connect)
+            const timer = setTimeout(check, 5000);
+            timer.unref?.();
+        });
+    }
     getRecentTexts() {
         return [...this.textMessages];
     }
