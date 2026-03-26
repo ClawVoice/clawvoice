@@ -1,21 +1,56 @@
 # ClawVoice
 
-Give your OpenClaw agent a phone number. It can make and receive calls, send texts, and remember conversations — all through your existing Twilio or Telnyx account.
+**Give your AI agent a real phone number.** It answers calls, makes calls, sends texts, takes messages, books appointments, and reports back to you — all autonomously.
 
-## What You Get
+ClawVoice turns your [OpenClaw](https://github.com/openclaw) agent into a phone-capable assistant. Say *"Call the dentist and schedule a cleaning for next week"* and your agent handles the entire call, then sends you a summary on Telegram with the full transcript.
 
-- **Phone calls**: Your agent answers inbound calls and can place outbound calls
-- **Batch calling**: Give your agent a list of numbers — it calls each one sequentially and delivers a consolidated report
-- **Two voice engines**: Deepgram Voice Agent (low latency) or ElevenLabs Conversational AI (premium voices)
-- **SMS**: Send and receive text messages through the same phone number
-- **Post-call notifications**: Rich summaries with caller details, transcripts, and file attachments delivered to Telegram/Discord/Slack
-- **Campaign reports**: Generate CSV spreadsheets from batch call results with transcripts and extracted details
-- **Memory isolation**: Voice calls write to a separate sandbox so callers can't corrupt your agent's main memory
-- **Safety guardrails**: Tool restrictions, call duration limits, AI disclosure, and answering machine detection
+## Why ClawVoice?
 
-> **⚠️ Legal Notice:** Automated calling is subject to federal and state regulations including the TCPA (Telephone Consumer Protection Act) and state-specific telemarketing laws. You are solely responsible for ensuring your use of ClawVoice complies with all applicable laws, including obtaining proper consent before placing automated calls. Batch calling features are provided as-is — **use at your own risk.** This software does not provide legal advice.
+OpenClaw agents are powerful over text, but the real world still runs on phone calls. ClawVoice bridges that gap:
 
-## Quick Start
+- **Your agent makes calls for you** — restaurant reservations, appointment scheduling, business inquiries, follow-ups. You give the purpose; the voice agent handles the conversation.
+- **Your agent answers calls for you** — takes messages, screens callers, gathers information, and relays everything back to you with a full transcript.
+- **Bulk outbound campaigns** — upload a spreadsheet of contacts with purposes, and your agent calls each one sequentially, then delivers a CSV report with outcomes and transcripts.
+- **SMS** — send and receive text messages through the same number. Inbound texts get auto-acknowledged and relayed to you.
+- **Post-call intelligence** — every call produces a structured summary with extracted details (caller name, company, callback number, reason), delivered to your Telegram/Discord/Slack with a downloadable transcript file.
+- **Two premium voice engines** — ElevenLabs Conversational AI (natural, expressive voices) or Deepgram Voice Agent (low latency, lower cost).
+
+> **How is this different from OpenClaw's built-in voice?** OpenClaw's built-in voice is for talking *to* your agent. ClawVoice is for your agent talking *to the world* — real phone calls over the PSTN to real phone numbers, with real-time voice AI conversations.
+
+## Features
+
+| Feature | Description |
+|---------|-------------|
+| Outbound calls | Agent places calls with full context about purpose, owner identity, and callback number |
+| Inbound calls | Agent answers your phone number, takes messages, screens callers |
+| Batch calling | Sequential calls from a list (up to 20), with consolidated reporting |
+| Campaign reports | CSV spreadsheets with extracted details, summaries, and full transcripts |
+| SMS send/receive | Text messaging with auto-reply for inbound texts |
+| Post-call notifications | Rich summaries to Telegram/Discord/Slack with transcript file attachments |
+| Voice profile | Owner identity, phone number, and preferences loaded into every call |
+| Memory isolation | Voice interactions sandboxed from main agent memory |
+| Safety guardrails | AI disclosure, call duration limits, tool restrictions, answering machine detection |
+| Dual voice engines | ElevenLabs Conversational AI or Deepgram Voice Agent |
+
+> **Legal Notice:** Automated calling is subject to the TCPA (Telephone Consumer Protection Act) and state telemarketing laws. You are responsible for compliance including obtaining proper consent. Batch calling features are provided as-is — **use at your own risk.** This software does not provide legal advice.
+
+---
+
+## Getting Started
+
+There are two ways to set up ClawVoice:
+
+| Method | Best for |
+|--------|----------|
+| **Guided setup** — Tell your agent *"Set up ClawVoice"* or run `openclaw clawvoice setup` | First-time users. The wizard walks through every step with explanations. |
+| **Manual setup** — Follow the steps below | Experienced users or automated deployments |
+
+### Prerequisites
+
+- An [OpenClaw](https://github.com/openclaw) instance running
+- A [Twilio](https://twilio.com) or [Telnyx](https://telnyx.com) account with a phone number
+- A voice provider account: [ElevenLabs](https://elevenlabs.io) (recommended) or [Deepgram](https://deepgram.com)
+- A public tunnel (ngrok, Cloudflare Tunnel, or Tailscale Funnel)
 
 ### 1. Install
 
@@ -25,113 +60,57 @@ openclaw plugins install clawvoice
 
 ### 2. Start a Public Tunnel
 
-Twilio/Telnyx need to reach your machine from the internet. Start your tunnel **before** running the setup wizard so you can paste the URL when prompted.
-
-**Option A — ngrok (quickest to get started):**
+Twilio/Telnyx need to reach your machine from the internet. ClawVoice runs a standalone server on **port 3101** that handles both webhooks and media streams.
 
 ```bash
-# Install: https://ngrok.com/download
+# Option A: ngrok (quickest)
 ngrok http 3101
-```
 
-ngrok prints a forwarding URL like `https://ab12-34-56.ngrok-free.app`. Keep this terminal open.
-
-**Option B — Cloudflare Tunnel (stable, free, no signup required):**
-
-```bash
-# Install: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/
+# Option B: Cloudflare Tunnel (stable URL, free)
 cloudflared tunnel --url http://localhost:3101
-```
 
-Prints a URL like `https://random-words.trycloudflare.com`. Keep this terminal open.
-
-> ⚠️ Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams WebSocket upgrades. If you get `Error 31920`, use ngrok instead, or use Cloudflare for webhooks only and ngrok for the stream URL.
-
-**Option C — Tailscale Funnel (if you already use Tailscale):**
-
-```bash
-# Requires Tailscale installed and logged in
+# Option C: Tailscale Funnel (if you use Tailscale)
 tailscale funnel 3101
 ```
 
-Gives you a stable `https://your-machine.tail1234.ts.net` URL. Keep this terminal open.
+> **Tunnel URL changes:** Free ngrok URLs change every restart. You'll need to update your Twilio webhooks and `twilioStreamUrl` each time. For a stable URL, use ngrok with a custom domain ($), Cloudflare Tunnel, or Tailscale Funnel.
 
-> **Which should I pick?** ngrok is the easiest for getting started. Cloudflare Tunnel and Tailscale Funnel give you a stable URL that doesn't change on restart — better for long-term use.
+> **Cloudflare + Twilio WebSocket:** Cloudflare Tunnel has a [known issue](https://github.com/cloudflare/cloudflared/issues/1465) with Twilio Media Streams. If you get `Error 31920`, use ngrok instead.
 
 ### 3. Run the Setup Wizard
-
-The wizard asks for your provider credentials and the tunnel URL:
 
 ```bash
 openclaw clawvoice setup
 ```
 
-When it asks for the **Twilio media stream URL**, enter your tunnel URL with the `/media-stream` path:
+The wizard walks you through:
+- Telephony provider selection (Twilio or Telnyx)
+- API credentials
+- Tunnel URL configuration
+- Voice provider selection (ElevenLabs or Deepgram)
+- Voice provider credentials
+- ElevenLabs agent configuration (if applicable)
+
+When asked for the **Twilio media stream URL**, enter your tunnel URL with `/media-stream`:
 ```
 wss://YOUR-TUNNEL-URL/media-stream
 ```
 
-Or configure manually — see [Configuration](#configuration) below.
+### 4. Configure ElevenLabs Agent (if using ElevenLabs)
 
-### 4. Configure Webhooks in Twilio/Telnyx
+This step is **critical** — without it, your voice agent won't know why it's calling or who it represents.
 
-The wizard sets up ClawVoice's config, but you also need to tell Twilio/Telnyx where to send incoming calls. This is a separate step in their dashboard.
+On the [ElevenLabs Dashboard](https://elevenlabs.io/app/conversational-ai):
 
-> **Why two URLs?** Twilio uses two different connections: an **HTTPS webhook** (tells ClawVoice about incoming calls) and a **WSS stream** (streams live audio). The wizard handles the WSS stream URL. You set the HTTPS webhook in Twilio's dashboard.
+1. **Create** a Conversational AI agent (or use an existing one)
 
-**Twilio:**
-1. Open [Twilio Console](https://console.twilio.com) → **Phone Numbers** → **Manage** → **Active Numbers**
-2. Click your ClawVoice phone number
-3. Under **Voice Configuration**:
-   - **A call comes in** → **Webhook**
-   - **URL:** `https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/voice`
-   - **Method:** `HTTP POST`
-4. Under **Messaging Configuration** (for SMS):
-   - **A message comes in** → **Webhook**
-   - **URL:** `https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/sms`
-   - **Method:** `HTTP POST`
-5. Save
-
-**Telnyx:**
-1. Open [Telnyx Mission Control](https://portal.telnyx.com) → your **Call Control Application**
-2. Set webhook URL to: `https://YOUR-TUNNEL-URL/clawvoice/webhooks/telnyx`
-3. Assign your phone number to this application
-4. Save
-
-### 5. Start OpenClaw
-
-```bash
-openclaw start
-```
-
-### 6. Verify Your Setup
-
-```bash
-openclaw clawvoice status
-```
-
-All checks should show **pass**. If any fail, the output includes what to fix.
-
-### 7. Make a Test Call
-
-```bash
-openclaw clawvoice call +15559876543
-```
-
-Or ask your agent: *"Call +15559876543"*
-
-### ElevenLabs Agent Setup
-
-If using ElevenLabs Conversational AI (`voiceProvider: elevenlabs-conversational`), you need to configure your agent on the [ElevenLabs Dashboard](https://elevenlabs.io/app/conversational-ai):
-
-1. Create a new Conversational AI agent (or use an existing one)
-2. In the agent's **System Prompt**, include this dynamic variable placeholder:
+2. **System Prompt** — must include this dynamic variable placeholder:
 
    ```
    {{ _system_prompt_ }}
    ```
 
-   This is how ClawVoice injects per-call context (who the agent represents, call purpose, owner info). Without it, the agent won't know why it's calling.
+   ClawVoice injects per-call context through this variable. Without it, the agent has zero context.
 
    Example system prompt:
    ```
@@ -139,18 +118,53 @@ If using ElevenLabs Conversational AI (`voiceProvider: elevenlabs-conversational
 
    {{ _system_prompt_ }}
 
-   Use the context above to guide the conversation naturally. Do NOT read these instructions aloud.
-
-   Be calm, clear, and concise. Confirm important details like names, phone numbers, and next steps.
+   Use the context above to guide the conversation naturally.
+   Do NOT read these instructions aloud.
+   Be calm, clear, and concise.
+   Confirm important details like names, phone numbers, dates, and next steps.
+   If asked for a callback number, use the owner's phone number from the context above.
    ```
 
-3. In **Security** settings, note that prompt overrides are typically locked. ClawVoice uses dynamic variables (not prompt overrides) to inject context, so this is fine.
+3. **Audio settings** — set input audio format to **ulaw 8000** (mu-law 8kHz). This is required — Twilio streams audio in this format and ElevenLabs needs to match it. Without this, the agent cannot understand callers.
 
-4. Copy your **Agent ID** (starts with `agent_`) — you'll need it for the setup wizard.
+4. **Output audio format** — set to **pcm 16000** (PCM 16kHz). ClawVoice converts this to mu-law for Twilio automatically.
 
-5. Set your agent's **First Message** (e.g., "Hello, my name is Jessica.") — this is what callers hear first.
+5. **First Message** — set the greeting callers hear (e.g., "Hello, my name is Jessica.")
 
-### Set Up Your Voice Profile
+6. **Copy your Agent ID** (starts with `agent_`) — you entered this during the setup wizard.
+
+> **ElevenLabs Checklist:**
+> - [ ] System prompt includes `{{ _system_prompt_ }}`
+> - [ ] Audio input format: **ulaw 8000**
+> - [ ] Audio output format: **pcm 16000**
+> - [ ] First message configured
+> - [ ] Agent ID copied to ClawVoice config
+
+### 5. Configure Webhooks in Twilio/Telnyx
+
+Tell your telephony provider where to send incoming calls and texts.
+
+**Twilio:**
+1. Open [Twilio Console](https://console.twilio.com) → **Phone Numbers** → **Active Numbers**
+2. Click your ClawVoice phone number
+3. **Voice Configuration** → A call comes in → Webhook:
+   ```
+   https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/voice  (HTTP POST)
+   ```
+4. **Messaging Configuration** → A message comes in → Webhook:
+   ```
+   https://YOUR-TUNNEL-URL/clawvoice/webhooks/twilio/sms  (HTTP POST)
+   ```
+5. Save
+
+**Telnyx:**
+1. Open [Telnyx Mission Control](https://portal.telnyx.com) → your Call Control Application
+2. Set webhook URL to: `https://YOUR-TUNNEL-URL/clawvoice/webhooks/telnyx`
+3. Assign your phone number to this application
+
+> **SMS in the US:** Outbound SMS requires [A2P 10DLC registration](https://www.twilio.com/docs/messaging/guides/10dlc) with Twilio. Without it, carriers block messages (error 30034). Register at: https://console.twilio.com/us1/develop/sms/services
+
+### 6. Set Up Your Voice Profile
 
 Tell the voice agent who it represents:
 
@@ -158,7 +172,7 @@ Tell the voice agent who it represents:
 openclaw clawvoice profile --name "Your Name" --style casual
 ```
 
-Then edit `voice-memory/user-profile.md` in your workspace to add details:
+Then edit `voice-memory/user-profile.md` in your workspace:
 
 ```yaml
 ---
@@ -168,88 +182,95 @@ communicationStyle: casual
 ---
 
 ## About the owner
-- Brief description of who you are
-- Your location (for local context)
+- Brief description of who you are and what you do
+- Your location (city/state for local context)
 - Common call tasks: restaurant reservations, appointments, etc.
-- Any preferences for how calls should be handled
+- When booking reservations or appointments, use the callback number above
 ```
 
-The `ownerPhone` field is important — the voice agent uses it when asked for a callback number (e.g., restaurant reservations).
+The `ownerPhone` is important — when a restaurant asks *"what number for the reservation?"*, the voice agent provides this number.
 
-### Post-Call Notifications (Optional)
+### 7. Start and Verify
 
-Get call summaries on Telegram after every call:
+```bash
+openclaw start
+openclaw clawvoice status    # All checks should pass
+openclaw clawvoice call +15559876543 --purpose "Test call"
+```
+
+### 8. Enable Post-Call Notifications (Optional)
+
+Get call summaries on Telegram/Discord/Slack after every call:
 
 ```bash
 openclaw config set clawvoice.notifyTelegram true
 ```
 
-This uses your existing OpenClaw Telegram channel. After each call, you'll receive:
-- A formatted summary with caller details, duration, and key points
-- A downloadable transcript file
+After each call you'll receive:
+- Formatted summary with extracted caller details, key points, and agent info
+- Downloadable transcript file (`.txt`)
 
-Discord and Slack are also supported:
-```bash
-openclaw config set clawvoice.notifyDiscord true
-openclaw config set clawvoice.notifySlack true
-```
+---
 
-> **Note on SMS:** US phone carriers require A2P 10DLC registration for application-to-person messaging. Without it, outbound SMS may be blocked (Twilio error 30034). Register your number with a [Twilio Messaging Service](https://www.twilio.com/docs/messaging/services) and complete [A2P 10DLC registration](https://www.twilio.com/docs/messaging/guides/10dlc) to enable SMS delivery.
-
-### Batch Calling
-
-Make multiple calls sequentially from a list:
-
-Your agent can use `clawvoice_batch_call` with an array of numbers and purposes. Each call completes before the next one starts. After all calls finish, use `clawvoice_campaign_report` to generate a CSV report.
-
-You can also upload a spreadsheet (CSV/Google Sheet) — your agent will extract the contacts, confirm the list with you, run the calls, and deliver a summary report.
-
-## Managing the Plugin
+## For Humans — CLI Reference
 
 ```bash
-# Update to latest version
-openclaw plugins update clawvoice
-
-# Reinstall (fixes corrupted installs or stale config)
-openclaw plugins uninstall clawvoice
-openclaw plugins install clawvoice
-
-# Uninstall
-openclaw plugins uninstall clawvoice
+openclaw clawvoice setup            # Interactive setup wizard
+openclaw clawvoice call <num>       # Place a call
+  --purpose "..."                   #   Call context (required)
+  --greeting "..."                  #   Custom opening line
+openclaw clawvoice sms <num>        # Send SMS
+  --message "..."                   #   Message body
+openclaw clawvoice status           # Active calls + diagnostics
+openclaw clawvoice profile          # View/edit voice profile
+  --name "Name" --style casual
+openclaw clawvoice history          # Recent calls
+openclaw clawvoice history <id>     # Specific call detail
+openclaw clawvoice inbox            # Recent SMS messages
+openclaw clawvoice promote          # Review voice memories
+openclaw clawvoice test             # Test connectivity
+openclaw clawvoice clear            # Clear stuck call slots
 ```
 
-> **Migrating from `voice-call`?** If you previously had the plugin under the old name, remove the stale config entry:
-> ```bash
-> openclaw config delete plugins.entries.voice-call
-> openclaw plugins install clawvoice
-> openclaw clawvoice setup
-> ```
+---
 
-## Configuration
+## For AI Agents — Tool Reference
 
-### Manual Setup (instead of wizard)
+These tools are automatically available when ClawVoice is installed:
 
-```bash
-# Telephony (Twilio)
-openclaw config set clawvoice.telephonyProvider twilio
-openclaw config set clawvoice.twilioAccountSid YOUR_SID
-openclaw config set clawvoice.twilioAuthToken YOUR_TOKEN
-openclaw config set clawvoice.twilioPhoneNumber +15551234567
-openclaw config set clawvoice.twilioStreamUrl wss://YOUR-TUNNEL-URL/media-stream
+| Tool | Description |
+|------|-------------|
+| `clawvoice_call` | Place an outbound call. **Requires `purpose`** — include who you're calling on behalf of, why, what to ask, and any relevant details. The voice agent only knows what you tell it. |
+| `clawvoice_batch_call` | Make multiple sequential calls from a list. Each call completes before the next. Returns consolidated report. Max 20 calls, configurable per-call timeout. |
+| `clawvoice_campaign_report` | Generate CSV from batch results: Phone, Name, Company, Purpose, Outcome, Duration, Summary, Transcript. |
+| `clawvoice_hangup` | End an active call. |
+| `clawvoice_send_text` | Send an SMS message. |
+| `clawvoice_text_status` | Show recent SMS messages. |
+| `clawvoice_status` | Call status, diagnostics, or post-call summary. |
+| `clawvoice_promote_memory` | Promote voice memory to main MEMORY.md. |
+| `clawvoice_clear_calls` | Clear stuck call slots. |
 
-# Voice — pick one:
+### Important: The voice agent is a separate AI
 
-# ElevenLabs (premium voices, most popular)
-openclaw config set clawvoice.voiceProvider elevenlabs-conversational
-openclaw config set clawvoice.elevenlabsApiKey YOUR_KEY
-openclaw config set clawvoice.elevenlabsAgentId YOUR_AGENT_ID
+The voice agent (e.g., "Jessica" on ElevenLabs) runs on the phone call as a **separate AI**. It has NO access to your conversation history. The `purpose` field is its ONLY source of context.
 
-# Deepgram (lower latency, lower cost)
-# openclaw config set clawvoice.voiceProvider deepgram-agent
-# openclaw config set clawvoice.deepgramApiKey YOUR_KEY
-```
+**Good purpose:**
+> "Call Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings next week. Insurance: Delta Dental. Cody's number: 555-010-2468."
 
-Or use environment variables — see [`.env.example`](.env.example).
+**Bad purpose:**
+> "Call the dentist" *(agent won't know who, why, what to ask, or what number to give)*
+
+### Spreadsheet workflow
+
+1. User uploads a CSV with phone numbers and call purposes
+2. Agent extracts contacts, confirms the list with user
+3. Agent runs `clawvoice_batch_call` with the list
+4. Each call → individual Telegram notification with summary + transcript
+5. All calls done → `clawvoice_campaign_report` → CSV report delivered
+
+---
+
+## Configuration Reference
 
 ### Key Settings
 
@@ -257,101 +278,104 @@ Or use environment variables — see [`.env.example`](.env.example).
 |---------|---------|-------------|
 | `telephonyProvider` | `twilio` | `twilio` or `telnyx` |
 | `voiceProvider` | `deepgram-agent` | `elevenlabs-conversational` or `deepgram-agent` |
-| `twilioStreamUrl` | — | Public `wss://` URL for Twilio media streams (required) |
-| `voiceSystemPrompt` | `""` | Instructions for how the agent behaves on calls |
-| `inboundEnabled` | `true` | Accept inbound calls |
-| `mainMemoryAccess` | `read` | Can voice agent read main MEMORY.md? (`read` or `none`) |
+| `twilioStreamUrl` | — | Public `wss://` URL for media streams **(required)** |
+| `inboundEnabled` | `true` | Accept inbound calls and SMS |
+| `smsAutoReply` | `true` | Auto-acknowledge inbound texts |
+| `maxCallDuration` | `1800` | Max call length in seconds (30 min) |
+| `dailyCallLimit` | `50` | Maximum outbound calls per day |
+| `disclosureEnabled` | `true` | Announce AI identity at call start |
+| `disclosureStatement` | `"Hello, this call is from an AI assistant..."` | What's announced |
+| `recordCalls` | `false` | Save Twilio call recordings |
+| `amdEnabled` | `true` | Answering machine detection |
+| `mainMemoryAccess` | `read` | Can voice agent read main MEMORY.md? (`read` / `none`) |
 | `restrictTools` | `true` | Block dangerous tools during voice sessions |
-| `maxCallDuration` | `1800` | Max call length in seconds (30 min default) |
-| `amdEnabled` | `true` | Answering machine detection for outbound calls |
-| `recordCalls` | `false` | Save call recordings |
+| `notifyTelegram` | `false` | Send post-call summaries to Telegram |
+| `notifyDiscord` | `false` | Send post-call summaries to Discord |
+| `notifySlack` | `false` | Send post-call summaries to Slack |
 
-## Voice Providers
+### Environment Variables
 
-### ElevenLabs Conversational AI (Most Popular)
-
-Premium voice quality. ElevenLabs handles the full voice pipeline.
-
-1. Create account at [elevenlabs.io](https://elevenlabs.io)
-2. Create a Conversational AI agent in the dashboard
-3. Get your API key (needs **ElevenAgents → Write** permission) and Agent ID
-4. Set `voiceProvider` to `elevenlabs-conversational`
-
-### Deepgram Voice Agent
-
-Single WebSocket handles speech-to-text, LLM, and text-to-speech. Lower latency, lower cost.
-
-1. Create account at [deepgram.com](https://deepgram.com)
-2. Get an API key with Speech + Voice Agent permissions
-3. Set `voiceProvider` to `deepgram-agent`
-
-## Voice Memory Isolation
-
-Voice calls are riskier than text — callers can attempt social engineering. ClawVoice sandboxes all voice interactions:
-
-```
-~/.openclaw/workspace/
-  MEMORY.md              # Main memory (text channels)
-  voice-memory/          # Voice-only sandbox
-    VOICE-MEMORY.md      # Voice long-term memory
-    2026-03-11.md        # Voice daily log
-```
-
-- Voice agent can **read** main memory (configurable)
-- Voice agent can **only write** to `voice-memory/`
-- Promotion to main memory requires explicit review via `openclaw clawvoice promote`
-
-## CLI Commands
+All settings can also be set via environment variables:
 
 ```bash
-openclaw clawvoice setup        # Interactive setup wizard
-openclaw clawvoice call <num>   # Place an outbound call
-openclaw clawvoice status       # Show active calls and config health
-openclaw clawvoice promote      # Review and promote voice memories
-openclaw clawvoice history      # Recent call history
-openclaw clawvoice test         # Test voice pipeline connectivity
+CLAWVOICE_TELEPHONY_PROVIDER=twilio
+TWILIO_ACCOUNT_SID=AC...
+TWILIO_AUTH_TOKEN=...
+TWILIO_PHONE_NUMBER=+15551234567
+CLAWVOICE_TWILIO_STREAM_URL=wss://your-tunnel.ngrok-free.dev/media-stream
+CLAWVOICE_VOICE_PROVIDER=elevenlabs-conversational
+ELEVENLABS_API_KEY=sk_...
+ELEVENLABS_AGENT_ID=agent_...
+DEEPGRAM_API_KEY=...
+CLAWVOICE_MAX_CALL_DURATION=1800
+CLAWVOICE_DAILY_CALL_LIMIT=50
+CLAWVOICE_NOTIFY_TELEGRAM=true
+CLAWVOICE_SMS_AUTO_REPLY=true
 ```
 
-## Agent Tools
+---
 
-These tools are available to your OpenClaw agent:
+## Troubleshooting
 
-| Tool | Description |
-|------|-------------|
-| `clawvoice_call` | Place an outbound phone call |
-| `clawvoice_hangup` | End an active call |
-| `clawvoice_send_text` | Send an SMS message |
-| `clawvoice_text_status` | Check SMS delivery status |
-| `clawvoice_status` | Get call status and diagnostics |
-| `clawvoice_promote_memory` | Promote a voice memory to main memory |
-| `clawvoice_clear_calls` | Clear completed call records |
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| Call disconnects immediately | ElevenLabs agent missing `{{ _system_prompt_ }}` or wrong audio format | Check ElevenLabs dashboard: system prompt has placeholder, audio input is ulaw 8000 |
+| Agent can't hear caller | Audio format mismatch | Set ElevenLabs input to **ulaw 8000**, output to **pcm 16000** |
+| Agent doesn't know why it's calling | Empty `purpose` parameter | Always include detailed purpose when placing calls |
+| Agent doesn't know owner's phone number | Missing `ownerPhone` in profile | Edit `voice-memory/user-profile.md` and add `ownerPhone` field |
+| Webhooks return 404 | Routes not reaching standalone server | Ensure tunnel points to port **3101**, not the gateway port |
+| SMS blocked (error 30034) | US A2P 10DLC not registered | Register with [Twilio Messaging Service](https://console.twilio.com/us1/develop/sms/services) |
+| `clawvoice status` shows failures | Missing credentials or tunnel down | Run `openclaw clawvoice setup` to reconfigure |
+| Tunnel URL changed | ngrok free tier rotates URLs | Update `twilioStreamUrl` and Twilio webhook URLs |
+| Agent repeats itself on calls | Duplicate purpose in system prompt | Ensure purpose is stated once (profile + purpose, not both saying the same thing) |
+
+---
 
 ## Architecture
 
 ```
 Phone ──PSTN──> Twilio/Telnyx
                   │
-                  ├──webhook──> ClawVoice (call control, SMS, safety)
-                  │               └──> OpenClaw Agent (tools, memory, personality)
+                  ├── webhook (HTTPS) ──> ClawVoice standalone server (:3101)
+                  │                         ├── call control + SMS handling
+                  │                         ├── inbound call routing
+                  │                         └── Twilio signature verification
                   │
-                  └──media stream──> ClawVoice (audio bridge)
-                                       └──> Deepgram or ElevenLabs (voice AI)
+                  └── media stream (WSS) ──> ClawVoice standalone server (:3101)
+                                              ├── audio bridge (mulaw ↔ PCM)
+                                              ├── ElevenLabs / Deepgram voice AI
+                                              ├── transcript collection
+                                              └── post-call: summary + notifications
 ```
 
-## Documentation
+## Voice Memory Isolation
 
-- [`docs/SETUP.md`](docs/SETUP.md) — Full setup guide with provider-specific instructions
-- [`docs/FEATURES.md`](docs/FEATURES.md) — Complete feature list
+Voice calls are riskier than text — callers can attempt social engineering. ClawVoice sandboxes all voice interactions:
+
+```
+workspace/
+  MEMORY.md              # Main memory (text channels only)
+  voice-memory/          # Voice-only sandbox
+    user-profile.md      # Owner identity and preferences
+    latest-summary.md    # Most recent call summary
+    calls/               # Individual call transcripts (JSON)
+    campaigns/           # Batch call reports
+```
+
+- Voice agent can **read** main memory (configurable via `mainMemoryAccess`)
+- Voice agent can **only write** to `voice-memory/`
+- Promotion to main memory requires explicit review via `clawvoice promote`
+
+---
 
 ## Development
 
 ```bash
 npm install        # Install dependencies
 npm run build      # Compile TypeScript
-npm test           # Run all tests
-npm run dev        # Watch mode
+npm test           # Run all tests (218 tests)
 
-# Local OpenClaw testing
+# Local testing
 npm run build && openclaw plugins install --link .
 ```
 
