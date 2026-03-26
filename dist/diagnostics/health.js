@@ -33,27 +33,38 @@ function runDiagnostics(config, openclawConfig) {
  */
 function checkPluginConflict(openclawConfig) {
     let conflictDetected = false;
+    let determinedFromConfig = false;
     if (openclawConfig) {
         const plugins = openclawConfig.plugins;
         const entries = plugins?.entries;
         const voiceCallEntry = entries?.["voice-call"];
-        if (voiceCallEntry && voiceCallEntry.enabled !== false) {
-            conflictDetected = true;
+        if (voiceCallEntry !== undefined && voiceCallEntry !== null) {
+            determinedFromConfig = true;
+            if (typeof voiceCallEntry === "object" && voiceCallEntry.enabled === false) {
+                conflictDetected = false;
+            }
+            else {
+                conflictDetected = true;
+            }
         }
     }
-    if (!conflictDetected) {
+    if (!determinedFromConfig) {
         try {
             require.resolve("@openclaw/voice-call");
             conflictDetected = true;
         }
-        catch { /* not installed */ }
+        catch (err) {
+            if (err instanceof Error && !err.message.includes("Cannot find module")) {
+                console.warn("[clawvoice] Unexpected error probing for @openclaw/voice-call:", err.message);
+            }
+        }
     }
     if (conflictDetected) {
         return {
             name: "plugin-conflict",
             status: "warn",
             detail: "@openclaw/voice-call is also active. The agent may route voice requests to the wrong plugin.",
-            remediation: "Disable it: set plugins.entries.voice-call.enabled = false in your OpenClaw config, or run `openclaw plugins disable voice-call`.",
+            remediation: 'Disable it: set plugins.entries["voice-call"].enabled = false in your OpenClaw config, or run `openclaw plugins disable voice-call`.',
         };
     }
     return {

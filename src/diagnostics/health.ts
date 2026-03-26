@@ -50,21 +50,32 @@ export function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<
  */
 export function checkPluginConflict(openclawConfig?: Record<string, unknown>): HealthCheck {
   let conflictDetected = false;
+  let determinedFromConfig = false;
 
   if (openclawConfig) {
     const plugins = openclawConfig.plugins as Record<string, unknown> | undefined;
     const entries = plugins?.entries as Record<string, unknown> | undefined;
-    const voiceCallEntry = entries?.["voice-call"] as Record<string, unknown> | undefined;
-    if (voiceCallEntry && voiceCallEntry.enabled !== false) {
-      conflictDetected = true;
+    const voiceCallEntry = entries?.["voice-call"];
+
+    if (voiceCallEntry !== undefined && voiceCallEntry !== null) {
+      determinedFromConfig = true;
+      if (typeof voiceCallEntry === "object" && (voiceCallEntry as Record<string, unknown>).enabled === false) {
+        conflictDetected = false;
+      } else {
+        conflictDetected = true;
+      }
     }
   }
 
-  if (!conflictDetected) {
+  if (!determinedFromConfig) {
     try {
       require.resolve("@openclaw/voice-call");
       conflictDetected = true;
-    } catch { /* not installed */ }
+    } catch (err: unknown) {
+      if (err instanceof Error && !err.message.includes("Cannot find module")) {
+        console.warn("[clawvoice] Unexpected error probing for @openclaw/voice-call:", err.message);
+      }
+    }
   }
 
   if (conflictDetected) {
@@ -72,7 +83,7 @@ export function checkPluginConflict(openclawConfig?: Record<string, unknown>): H
       name: "plugin-conflict",
       status: "warn",
       detail: "@openclaw/voice-call is also active. The agent may route voice requests to the wrong plugin.",
-      remediation: "Disable it: set plugins.entries.voice-call.enabled = false in your OpenClaw config, or run `openclaw plugins disable voice-call`.",
+      remediation: 'Disable it: set plugins.entries["voice-call"].enabled = false in your OpenClaw config, or run `openclaw plugins disable voice-call`.',
     };
   }
 

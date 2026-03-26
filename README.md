@@ -379,7 +379,7 @@ CLAWVOICE_SMS_AUTO_REPLY=true
 | `clawvoice status` shows failures | Missing credentials or tunnel down | Run `openclaw clawvoice setup` to reconfigure |
 | Tunnel URL changed | ngrok free tier rotates URLs | Update `twilioStreamUrl` and Twilio webhook URLs |
 | Agent repeats itself on calls | Duplicate purpose in system prompt | Ensure purpose is stated once (profile + purpose, not both saying the same thing) |
-| Agent uses wrong voice plugin | `@openclaw/voice-call` is also installed | Disable it: `openclaw plugins disable voice-call` or set `plugins.entries.voice-call.enabled = false` in config |
+| Agent uses wrong voice plugin | `@openclaw/voice-call` is also installed | Disable it: `openclaw plugins disable voice-call` or set `plugins.entries["voice-call"].enabled = false` in config |
 
 > **Compatibility note:** OpenClaw ships a built-in `@openclaw/voice-call` plugin. If both it and ClawVoice are active, the agent may route voice requests unpredictably. ClawVoice's setup wizard and `status` command will warn you if a conflict is detected. To resolve, disable one:
 >
