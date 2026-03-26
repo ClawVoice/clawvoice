@@ -120,7 +120,7 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         }
         catch { /* ngrok not running or not accessible */ }
         if (detectedTunnelUrl) {
-            const useDetected = await askChoice(prompter, `Use detected tunnel URL? (${detectedTunnelUrl}) (yes/no): `, ["yes", "no"]);
+            const useDetected = await askChoice(prompter, "Use detected tunnel URL? (yes/no): ", ["yes", "no"]);
             if (useDetected === "yes") {
                 values.twilioStreamUrl = detectedTunnelUrl;
             }
@@ -326,24 +326,22 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         run: async (args) => {
             const phoneNumber = args.find((a) => !a.startsWith("--"));
             if (!phoneNumber) {
-                log.info("Usage: clawvoice call <phone-number> [--greeting \"...\"] [--purpose \"...\"]");
+                console.log("Usage: clawvoice call <phone-number> [--greeting \"...\"] [--purpose \"...\"]");
                 return;
             }
             const greeting = parseFlag(args, "greeting");
             const purpose = parseFlag(args, "purpose");
-            log.info("Initiating call...", { to: phoneNumber });
+            console.log(`Initiating call to ${phoneNumber}...`);
             try {
                 const result = await callService.startCall({ phoneNumber, greeting, purpose });
-                log.info("Call started", {
-                    callId: result.callId,
-                    to: result.to,
-                    greeting: result.openingGreeting,
-                    status: result.message,
-                });
+                console.log(`Call started: ${result.callId} → ${result.to} (${result.message})`);
+                if (result.openingGreeting) {
+                    console.log(`  Greeting: ${result.openingGreeting}`);
+                }
             }
             catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
-                log.info("Call failed", { error: message });
+                console.log(`Call failed: ${message}`);
             }
         },
     });
@@ -354,25 +352,19 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             const phoneNumber = args.find((a) => !a.startsWith("--"));
             const message = parseFlag(args, "message") ?? parseFlag(args, "body");
             if (!phoneNumber || !message) {
-                log.info("Usage: clawvoice sms <phone-number> --message \"...\"");
+                console.log("Usage: clawvoice sms <phone-number> --message \"...\"");
                 return;
             }
             if (!isLikelyE164(phoneNumber)) {
-                log.info("Phone number must be in E.164 format (example: +15551234567).");
+                console.log("Phone number must be in E.164 format (example: +15551234567).");
                 return;
             }
             try {
                 const result = await callService.sendText({ phoneNumber, message });
-                log.info("Text sent", {
-                    messageId: result.messageId,
-                    to: result.to,
-                    status: result.message,
-                });
+                console.log(`Text sent: ${result.messageId} → ${result.to} (${result.message})`);
             }
             catch (err) {
-                log.info("Text send failed", {
-                    error: err instanceof Error ? err.message : String(err),
-                });
+                console.log(`Text send failed: ${err instanceof Error ? err.message : String(err)}`);
             }
         },
     });
@@ -382,18 +374,14 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         run: async () => {
             const texts = callService.getRecentTexts();
             if (texts.length === 0) {
-                log.info("No recent text messages.");
+                console.log("No recent text messages.");
                 return;
             }
+            console.log(`\n${texts.length} recent text message(s):\n`);
             for (const sms of texts) {
-                log.info("Text", {
-                    id: sms.id,
-                    direction: sms.direction,
-                    from: sms.from,
-                    to: sms.to,
-                    body: sms.body,
-                    createdAt: sms.createdAt,
-                });
+                const arrow = sms.direction === "inbound" ? "←" : "→";
+                console.log(`  ${arrow} ${sms.from} → ${sms.to} (${sms.createdAt})`);
+                console.log(`    ${sms.body}`);
             }
         },
     });
@@ -425,36 +413,36 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         description: "Review and promote voice memories to main MEMORY.md",
         run: async (args) => {
             if (!memoryService) {
-                log.info("Memory extraction service not available.");
+                console.log("Memory extraction service not available.");
                 return;
             }
             const memoryId = args.find((a) => !a.startsWith("--"));
             if (memoryId) {
                 const candidate = memoryService.getCandidate(memoryId);
                 if (!candidate) {
-                    log.info("Memory candidate not found", { memoryId });
+                    console.log(`Memory candidate not found: ${memoryId}`);
                     return;
                 }
                 if (parseFlag(args, "yes")) {
                     const result = await memoryService.approveAndPromote(memoryId);
-                    log.info(result.promoted ? "Promoted" : `Failed: ${result.reason}`, { memoryId });
+                    console.log(result.promoted ? `Promoted: ${memoryId}` : `Failed: ${result.reason} (${memoryId})`);
                 }
                 else {
-                    log.info(`[${candidate.status}] ${candidate.category}: "${candidate.content}" (confidence: ${candidate.confidence})`);
-                    log.info("Run again with --yes to promote.");
+                    console.log(`[${candidate.status}] ${candidate.category}: "${candidate.content}" (confidence: ${candidate.confidence})`);
+                    console.log("Run again with --yes to promote.");
                 }
                 return;
             }
             const pending = memoryService.getPendingCandidates();
             if (pending.length === 0) {
-                log.info("No pending memory candidates.");
+                console.log("No pending memory candidates.");
                 return;
             }
-            log.info(`${pending.length} pending memory candidate(s):`);
+            console.log(`\n${pending.length} pending memory candidate(s):\n`);
             for (const c of pending) {
-                log.info(`  ${c.id}: [${c.category}] "${c.content}" (confidence: ${c.confidence})`);
+                console.log(`  ${c.id}: [${c.category}] "${c.content}" (confidence: ${c.confidence})`);
             }
-            log.info("Run `clawvoice promote <memoryId> --yes` to promote.");
+            console.log("\nRun `clawvoice promote <memoryId> --yes` to promote.");
         },
     });
     api.cli.register({
@@ -465,43 +453,37 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             if (callId) {
                 const summary = callService.getCallSummary(callId);
                 if (!summary) {
-                    log.info("No summary found for call", { callId });
+                    console.log(`No summary found for call: ${callId}`);
                     return;
                 }
                 const transcript = summary.transcriptLength > 0
                     ? `${summary.transcriptLength} transcript entries`
                     : "No transcript";
-                log.info("Call detail", {
-                    callId: summary.callId,
-                    outcome: summary.outcome,
-                    duration: formatDuration(summary.durationMs),
-                    transcript,
-                    failures: summary.failures.length > 0
-                        ? summary.failures.map((f) => `${f.type}: ${f.description}`).join("; ")
-                        : "none",
-                    pendingActions: summary.pendingActions.length > 0
-                        ? summary.pendingActions.join(", ")
-                        : "none",
-                    retryContext: summary.retryContext
-                        ? summary.retryContext.suggestedApproach
-                        : "none",
-                });
+                console.log(`\nCall Detail: ${summary.callId}`);
+                console.log(`  Outcome:  ${summary.outcome}`);
+                console.log(`  Duration: ${formatDuration(summary.durationMs)}`);
+                console.log(`  Transcript: ${transcript}`);
+                if (summary.failures.length > 0) {
+                    console.log(`  Failures: ${summary.failures.map((f) => `${f.type}: ${f.description}`).join("; ")}`);
+                }
+                if (summary.pendingActions.length > 0) {
+                    console.log(`  Pending:  ${summary.pendingActions.join(", ")}`);
+                }
+                if (summary.retryContext) {
+                    console.log(`  Retry:    ${summary.retryContext.suggestedApproach}`);
+                }
+                console.log("");
                 return;
             }
             const active = callService.getActiveCalls();
             if (active.length === 0) {
-                log.info("No recent calls.");
+                console.log("No recent calls.");
                 return;
             }
+            console.log(`\n${active.length} call(s):\n`);
             for (const call of active) {
-                log.info("Call", {
-                    callId: call.callId,
-                    to: call.to,
-                    provider: call.provider,
-                    status: call.status,
-                    started: call.startedAt,
-                    ended: call.endedAt ?? "ongoing",
-                });
+                const ended = call.endedAt ?? "ongoing";
+                console.log(`  ${call.callId}: ${call.to} via ${call.provider} (${call.status}) started ${call.startedAt}, ended ${ended}`);
             }
         },
     });
@@ -512,22 +494,24 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             const report = (0, health_1.runDiagnostics)(config);
             const failures = report.checks.filter((c) => c.status === "fail");
             if (failures.length > 0) {
-                log.info("Connectivity test FAILED — fix these issues first:", {});
+                console.log("\nConnectivity test FAILED — fix these issues first:\n");
                 for (const f of failures) {
-                    log.info(`  ✗ ${f.name}: ${f.detail}`, {});
+                    console.log(`  ✗ ${f.name}: ${f.detail}`);
                     if (f.remediation) {
-                        log.info(`    → ${f.remediation}`, {});
+                        console.log(`    → ${f.remediation}`);
                     }
                 }
+                console.log("");
                 return;
             }
-            log.info("Connectivity test PASSED — all providers configured.", {});
+            console.log("\nConnectivity test PASSED — all providers configured.\n");
             const warnings = report.checks.filter((c) => c.status === "warn");
             if (warnings.length > 0) {
-                log.info("Warnings:", {});
+                console.log("Warnings:");
                 for (const w of warnings) {
-                    log.info(`  ⚠ ${w.name}: ${w.detail}`, {});
+                    console.log(`  ⚠ ${w.name}: ${w.detail}`);
                 }
+                console.log("");
             }
         },
     });
@@ -538,10 +522,10 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             const callId = args.find((a) => !a.startsWith("--"));
             const cleared = callService.forceClear(callId || undefined);
             if (cleared.length === 0) {
-                log.info("No active call slots to clear.", {});
+                console.log("No active call slots to clear.");
                 return;
             }
-            log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+            console.log(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`);
         },
     });
     api.cli.register({
@@ -568,22 +552,22 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
                 ? path.join(resolvedWorkspace, "voice-memory")
                 : null;
             if (!voiceMemoryDir) {
-                log.info("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or use --profile flag with openclaw CLI.");
+                console.log("Cannot determine workspace path. Set OPENCLAW_WORKSPACE or use --profile flag with openclaw CLI.");
                 return;
             }
             const existing = (0, user_profile_1.readUserProfile)(voiceMemoryDir);
             // Show current profile if no args or --show
             if (args.length === 0 || args.includes("--show")) {
                 if (existing.ownerName) {
-                    log.info(`Current profile:`);
-                    log.info(`  Owner: ${existing.ownerName}`);
-                    log.info(`  Style: ${existing.communicationStyle}`);
-                    log.info(`  Context: ${existing.contextBlock || "(empty)"}`);
-                    log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
+                    console.log(`\nCurrent profile:`);
+                    console.log(`  Owner:   ${existing.ownerName}`);
+                    console.log(`  Style:   ${existing.communicationStyle}`);
+                    console.log(`  Context: ${existing.contextBlock || "(empty)"}`);
+                    console.log(`  File:    ${path.join(voiceMemoryDir, "user-profile.md")}\n`);
                 }
                 else {
-                    log.info("No user profile found. Run with --name to create one.");
-                    log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+                    console.log("No user profile found. Run with --name to create one.");
+                    console.log("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
                 }
                 return;
             }
@@ -592,14 +576,14 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
             const style = parseFlag(args, "style") ?? existing.communicationStyle;
             const context = parseFlag(args, "context");
             if (!name) {
-                log.info("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
+                console.log("Usage: clawvoice profile --name \"Your Name\" [--style casual|professional] [--context \"About you...\"]");
                 return;
             }
             (0, user_profile_1.writeDefaultProfile)(voiceMemoryDir, name, style, context ?? (existing.contextBlock || undefined));
-            log.info(`Profile saved!`);
-            log.info(`  Owner: ${name}`);
-            log.info(`  Style: ${style}`);
-            log.info(`  File: ${path.join(voiceMemoryDir, "user-profile.md")}`);
+            console.log(`\nProfile saved!`);
+            console.log(`  Owner: ${name}`);
+            console.log(`  Style: ${style}`);
+            console.log(`  File:  ${path.join(voiceMemoryDir, "user-profile.md")}\n`);
         },
     });
 }
