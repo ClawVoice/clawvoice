@@ -21,6 +21,12 @@ export interface CallNotification {
     channel: "telegram" | "discord" | "slack";
     text: string;
     callId: string;
+    /** Optional file attachment (e.g., transcript). */
+    file?: {
+        name: string;
+        content: string;
+        mimeType: string;
+    };
 }
 export type MemoryWriter = (namespace: string, key: string, value: unknown) => Promise<void>;
 export type NotificationSender = (notification: CallNotification) => Promise<void>;
@@ -71,6 +77,10 @@ export declare class PostCallService {
      * Format a human-readable summary for notifications (legacy).
      */
     formatSummaryText(summary: CallSummary, transcript: TranscriptEntry[]): string;
+    /**
+     * Format a readable transcript file for attachment to notifications.
+     */
+    private formatTranscriptFile;
     private formatDuration;
     private getConfiguredChannels;
     isProcessed(callId: string): boolean;
