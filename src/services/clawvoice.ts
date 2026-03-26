@@ -676,7 +676,10 @@ export class ClawVoiceService {
     this.callIdByProviderCallId.delete(call.providerCallId);
 
     if (summary) {
-      await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl).catch(() => undefined);
+      await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl, {
+        callerPhone: call.to,
+        direction: "outbound",
+      }).catch(() => undefined);
     }
 
     const timer = this.callTimers.get(callId);
