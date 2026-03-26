@@ -302,7 +302,8 @@ export async function runSetupWizard(
   try {
     console.log("Running setup diagnostics...\n");
     const diagConfig = resolveConfig(values);
-    const report = await runDiagnostics(diagConfig);
+    const openclawCfg = api.config as Record<string, unknown> | undefined;
+    const report = await runDiagnostics(diagConfig, openclawCfg);
     const failures = report.checks.filter((c) => c.status === "fail");
     const warnings = report.checks.filter((c) => c.status === "warn");
     if (failures.length === 0 && warnings.length === 0) {
