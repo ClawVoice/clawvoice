@@ -1,11 +1,16 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.createWebhookHandlers = createWebhookHandlers;
 exports.registerRoutes = registerRoutes;
+exports.registerStandaloneWebhookRoutes = registerStandaloneWebhookRoutes;
 const classifier_1 = require("./inbound/classifier");
 const verify_1 = require("./webhooks/verify");
-function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
-    const router = api.http.router("/clawvoice");
-    router.post("/webhooks/telnyx", async (req, response) => {
+/**
+ * Core webhook handler logic, shared between OpenClaw API registration and standalone server.
+ */
+function createWebhookHandlers(config, callbacks, logError) {
+    const { onInbound, onInboundText, onRecording } = callbacks;
+    const handleTelnyxWebhook = async (req, response) => {
         const request = req;
         const body = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? "");
         const result = (0, verify_1.verifyTelnyxSignature)(body, request.headers?.["telnyx-signature-ed25519"], request.headers?.["telnyx-timestamp"], config.telnyxWebhookSecret);
@@ -29,8 +34,8 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             }
         }
         response.status(200).json({ ok: true });
-    });
-    router.post("/webhooks/twilio/voice", async (req, response) => {
+    };
+    const handleTwilioVoice = async (req, response) => {
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -48,15 +53,11 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
                 onInbound?.(record);
             }
             if (!config.twilioStreamUrl?.trim()) {
-                const routeRaw = api;
-                const routeLog = (api.log && typeof api.log.error === "function") ? api.log
-                    : (routeRaw.logger && typeof routeRaw.logger.error === "function") ? routeRaw.logger
-                        : undefined;
                 const maskPhone = (num) => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
                 const from = params["From"] ? maskPhone(params["From"]) : "unknown";
                 const to = params["To"] ? maskPhone(params["To"]) : "unknown";
                 const callSid = params["CallSid"] || "unknown";
-                routeLog?.error?.(`Inbound call received but CLAWVOICE_TWILIO_STREAM_URL is not configured. ` +
+                logError?.(`Inbound call received but CLAWVOICE_TWILIO_STREAM_URL is not configured. ` +
                     `From: ${from}, To: ${to}, CallSid: ${callSid}. ` +
                     `The caller will hear a generic error. Set this to a public WSS endpoint ` +
                     `(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.`);
@@ -65,8 +66,8 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             return;
         }
         sendTwiml(response, "<Response><Reject/></Response>");
-    });
-    router.post("/webhooks/twilio/amd", async (req, response) => {
+    };
+    const handleTwilioAmd = async (req, response) => {
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -88,8 +89,8 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             onInbound?.(record);
         }
         response.status(200).json({ ok: true });
-    });
-    router.post("/webhooks/twilio/sms", async (req, response) => {
+    };
+    const handleTwilioSms = async (req, response) => {
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -106,8 +107,8 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             onInboundText?.(from, to, body, messageId);
         }
         sendTwiml(response, "<Response></Response>");
-    });
-    router.post("/webhooks/twilio/recording", async (req, response) => {
+    };
+    const handleTwilioRecording = async (req, response) => {
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -122,6 +123,57 @@ function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
             onRecording(callSid, recordingUrl);
         }
         response.status(200).json({ ok: true });
+    };
+    return { handleTelnyxWebhook, handleTwilioVoice, handleTwilioAmd, handleTwilioSms, handleTwilioRecording };
+}
+/**
+ * Register webhook routes on the OpenClaw API router (legacy path).
+ */
+function registerRoutes(api, config, onInbound, onInboundText, onRecording) {
+    const router = api.http.router("/clawvoice");
+    // Resolve a logger for error reporting
+    const rawApi = api;
+    const routeLog = (api.log && typeof api.log.error === "function") ? api.log
+        : (rawApi.logger && typeof rawApi.logger.error === "function") ? rawApi.logger
+            : undefined;
+    const handlers = createWebhookHandlers(config, { onInbound, onInboundText, onRecording }, (msg) => routeLog?.error?.(msg));
+    router.post("/webhooks/telnyx", async (req, response) => {
+        await handlers.handleTelnyxWebhook(req, response);
+    });
+    router.post("/webhooks/twilio/voice", async (req, response) => {
+        await handlers.handleTwilioVoice(req, response);
+    });
+    router.post("/webhooks/twilio/amd", async (req, response) => {
+        await handlers.handleTwilioAmd(req, response);
+    });
+    router.post("/webhooks/twilio/sms", async (req, response) => {
+        await handlers.handleTwilioSms(req, response);
+    });
+    router.post("/webhooks/twilio/recording", async (req, response) => {
+        await handlers.handleTwilioRecording(req, response);
+    });
+}
+/**
+ * Register webhook routes on the standalone MediaStreamServer.
+ * This allows webhooks to work even when the OpenClaw gateway doesn't
+ * dispatch plugin-registered routes correctly.
+ */
+function registerStandaloneWebhookRoutes(server, config, callbacks) {
+    const handlers = createWebhookHandlers(config, callbacks, (msg) => console.error(`[clawvoice]`, msg));
+    server.registerHttpRoute("POST", "/clawvoice/webhooks/telnyx", async (req, res) => {
+        await handlers.handleTelnyxWebhook(req, res);
+    });
+    server.registerHttpRoute("POST", "/clawvoice/webhooks/twilio/voice", async (req, res) => {
+        await handlers.handleTwilioVoice(req, res);
+    });
+    server.registerHttpRoute("POST", "/clawvoice/webhooks/twilio/amd", async (req, res) => {
+        await handlers.handleTwilioAmd(req, res);
+    });
+    server.registerHttpRoute("POST", "/clawvoice/webhooks/twilio/sms", async (req, res) => {
+        await handlers.handleTwilioSms(req, res);
+    });
+    server.registerHttpRoute("POST", "/clawvoice/webhooks/twilio/recording", async (req, res) => {
+        await handlers.handleTwilioRecording(req, res);
     });
 }
 function buildPublicUrl(request) {

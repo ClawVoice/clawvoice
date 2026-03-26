@@ -18,6 +18,8 @@ interface TwilioMediaSessionHandlerOptions {
     voiceModel?: string;
     /** Default voice system prompt for auto-created bridge sessions. */
     voiceSystemPrompt?: string;
+    /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
+    allowAutoAccept?: boolean;
     /** Called when a media session closes (for post-call processing). */
     onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[]) => void;
 }
@@ -25,6 +27,7 @@ export declare class TwilioMediaSessionHandler {
     private readonly options;
     private readonly sessionsBySocket;
     private readonly localCloses;
+    private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);
     handleMessage(socket: TwilioWebSocket, payload: string): Promise<void>;
     handleClose(socket: TwilioWebSocket): void;

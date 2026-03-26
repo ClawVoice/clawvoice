@@ -1,21 +1,77 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MediaStreamServer = void 0;
+const http = __importStar(require("http"));
 const ws_1 = require("ws");
 const url_1 = require("url");
 class MediaStreamServer {
     constructor(options) {
         this.options = options;
+        this.httpServer = null;
         this.wss = null;
+        this.routes = [];
+    }
+    /**
+     * Register an HTTP route on the standalone server.
+     * Handlers receive Express-like req/res shims (req.body, res.status().json(), etc.).
+     */
+    registerHttpRoute(method, path, handler) {
+        this.routes.push({ method: method.toUpperCase(), path, handler });
     }
     async start() {
-        if (this.wss) {
+        if (this.httpServer) {
             return;
         }
+        this.httpServer = http.createServer(async (req, res) => {
+            await this.handleHttpRequest(req, res);
+        });
         this.wss = new ws_1.WebSocketServer({
-            host: this.options.host,
-            port: this.options.port,
-            path: this.options.path,
+            noServer: true,
+        });
+        // Handle WebSocket upgrades only for the media-stream path
+        this.httpServer.on("upgrade", (req, socket, head) => {
+            const pathname = parsePathname(req.url);
+            if (pathname === this.options.path || pathname.startsWith(this.options.path + "?")) {
+                this.wss.handleUpgrade(req, socket, head, (ws) => {
+                    this.wss.emit("connection", ws, req);
+                });
+            }
+            else {
+                socket.destroy();
+            }
         });
         this.wss.on("connection", (socket, req) => {
             const twilioSocket = socket;
@@ -39,19 +95,98 @@ class MediaStreamServer {
             });
         });
         await new Promise((resolve, reject) => {
-            this.wss?.once("listening", () => resolve());
-            this.wss?.once("error", (error) => reject(error));
+            this.httpServer.listen(this.options.port, this.options.host, () => resolve());
+            this.httpServer.once("error", (error) => reject(error));
         });
     }
     async stop() {
-        if (!this.wss) {
+        if (!this.httpServer) {
             return;
         }
-        const current = this.wss;
+        const server = this.httpServer;
+        const wss = this.wss;
+        this.httpServer = null;
         this.wss = null;
+        if (wss) {
+            await new Promise((resolve) => {
+                wss.close(() => resolve());
+            });
+        }
         await new Promise((resolve) => {
-            current.close(() => resolve());
+            server.close(() => resolve());
         });
+    }
+    async handleHttpRequest(req, res) {
+        const method = (req.method || "GET").toUpperCase();
+        const pathname = parsePathname(req.url);
+        // Find matching route
+        const route = this.routes.find((r) => r.method === method && r.path === pathname);
+        if (!route) {
+            res.writeHead(404, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Not Found" }));
+            return;
+        }
+        // Parse body
+        const chunks = [];
+        for await (const chunk of req) {
+            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        }
+        const rawBody = Buffer.concat(chunks).toString("utf8");
+        let parsedBody = {};
+        const ct = req.headers["content-type"] || "";
+        if (ct.includes("application/json")) {
+            try {
+                parsedBody = JSON.parse(rawBody);
+            }
+            catch { /* ignore */ }
+        }
+        else if (ct.includes("application/x-www-form-urlencoded")) {
+            parsedBody = Object.fromEntries(new URLSearchParams(rawBody));
+        }
+        // Build Express-like req shim
+        const expressReq = Object.assign(req, {
+            body: parsedBody,
+            protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "https",
+        });
+        // Build Express-like res shim
+        let headersSent = false;
+        const expressRes = {
+            _statusCode: 200,
+            _headers: {},
+            status(code) { this._statusCode = code; return this; },
+            type(t) { this._headers["Content-Type"] = t; return this; },
+            json(data) {
+                if (headersSent)
+                    return;
+                headersSent = true;
+                res.writeHead(this._statusCode, { ...this._headers, "Content-Type": "application/json" });
+                res.end(JSON.stringify(data));
+            },
+            send(data) {
+                if (headersSent)
+                    return;
+                headersSent = true;
+                res.writeHead(this._statusCode, this._headers);
+                res.end(data);
+            },
+        };
+        try {
+            await route.handler(expressReq, expressRes);
+        }
+        catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            console.error("[clawvoice] standalone route handler error:", msg);
+            if (!headersSent && !res.headersSent) {
+                res.writeHead(500, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Internal Server Error" }));
+            }
+        }
     }
 }
 exports.MediaStreamServer = MediaStreamServer;
+function parsePathname(url) {
+    if (!url)
+        return "/";
+    const qIdx = url.indexOf("?");
+    return qIdx >= 0 ? url.slice(0, qIdx) : url;
+}

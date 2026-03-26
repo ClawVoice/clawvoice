@@ -149,6 +149,16 @@ export class TwilioMediaSessionHandler {
       // Build system prompt from user profile + purpose (stated once, not duplicated).
       // buildCallPrompt already includes "Call purpose: ..." when purpose is provided.
       const parts: string[] = [];
+
+      // For inbound calls (no purpose specified), prepend inbound-specific instructions
+      if (!urlPurpose) {
+        parts.push(
+          "You are answering an inbound phone call. The caller dialed your number.\n" +
+          "Greet them warmly, determine who they are and what they need, and handle\n" +
+          "the conversation according to your context and instructions below."
+        );
+      }
+
       if (this.options.workspacePath) {
         const voiceMemoryDir = path.join(this.options.workspacePath, "voice-memory");
         const profile = readUserProfile(voiceMemoryDir);

@@ -80,10 +80,7 @@ function buildCallPrompt(profile, purpose) {
  * Wraps in double quotes if it contains characters that could cause YAML injection.
  */
 function yamlSafeValue(value) {
-    if (/[:\n\r"'#{}[\],&*?|><!%@`]/.test(value) || value.trim() !== value) {
-        return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
-    }
-    return value;
+    return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\r/g, "\\r").replace(/\n/g, "\\n")}"`;
 }
 function writeDefaultProfile(voiceMemoryDir, ownerName, style, context) {
     fs.mkdirSync(voiceMemoryDir, { recursive: true });

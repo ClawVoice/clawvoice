@@ -372,10 +372,10 @@ function registerModernRoutesBridge(
     shimApi,
     config,
     (record) => {
-      callService.trackInboundCall(record);
+      callService.notifyInboundCall(record);
     },
     (from, to, body, messageId) => {
-      callService.trackInboundText(from, to, body, messageId);
+      void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
     },
     (providerCallId, recordingUrl) => {
       callService.setRecordingUrl(providerCallId, recordingUrl);
@@ -507,10 +507,12 @@ function initPlugin(api: PluginAPI): void {
   }
 
   // Wire system event emitter for immediate post-call summary delivery
+  // and inbound call/SMS notifications
   resolveSystemEventEmitter(api)
     .then((emitter) => {
       if (emitter) {
         callService.postCall.setSystemEventEmitter(emitter);
+        callService.setSystemEventEmitter(emitter);
       }
     })
     .catch(() => undefined);
@@ -541,10 +543,10 @@ function initPlugin(api: PluginAPI): void {
       api,
       config,
       (record) => {
-        callService.trackInboundCall(record);
+        callService.notifyInboundCall(record);
       },
       (from, to, body, messageId) => {
-        callService.trackInboundText(from, to, body, messageId);
+        void callService.handleInboundSms(from, to, body, messageId).catch(() => undefined);
       },
       (providerCallId, recordingUrl) => {
         callService.setRecordingUrl(providerCallId, recordingUrl);

@@ -1,6 +1,8 @@
+import * as path from "path";
 import { ClawVoiceConfig } from "../config";
 
 import { InboundCallRecord } from "../inbound/types";
+import { registerStandaloneWebhookRoutes } from "../routes";
 import { TelnyxTelephonyAdapter } from "../telephony/telnyx";
 import { TelephonyProviderAdapter } from "../telephony/types";
 import { TwilioTelephonyAdapter } from "../telephony/twilio";
@@ -12,6 +14,12 @@ import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
 import { PostCallService } from "./post-call";
+import { readUserProfile } from "./user-profile";
+
+export type SystemEventEmitter = (
+  text: string,
+  options?: { source?: string },
+) => void;
 
 export interface CallRecord {
   callId: string;
@@ -77,6 +85,8 @@ export class ClawVoiceService {
   private readonly telephonyAdapter: TelephonyProviderAdapter;
   private dailyCallCount = 0;
   private dailyResetDate = new Date().toISOString().slice(0, 10);
+  private systemEventEmitter: SystemEventEmitter | null = null;
+  private readonly smsReplyTimestamps = new Map<string, number>();
   public readonly bridge: VoiceBridgeService;
   public readonly postCall: PostCallService;
   private readonly voiceProviderClient: VoiceProviderClient | null;
@@ -192,6 +202,21 @@ export class ClawVoiceService {
       path: streamPath,
       sessionHandler: this.mediaSessionHandler,
     });
+
+    // Register webhook routes on the standalone server so they work
+    // even when the OpenClaw gateway doesn't dispatch plugin routes.
+    registerStandaloneWebhookRoutes(this.mediaStreamServer, this.config, {
+      onInbound: (record) => this.notifyInboundCall(record),
+      onInboundText: (from, to, body, messageId) => {
+        void this.handleInboundSms(from, to, body, messageId).catch((e) => {
+          console.error("[clawvoice] handleInboundSms error:", e instanceof Error ? e.message : String(e));
+        });
+      },
+      onRecording: (providerCallId, recordingUrl) => {
+        this.setRecordingUrl(providerCallId, recordingUrl);
+      },
+    });
+
     await this.mediaStreamServer.start();
   }
 
@@ -543,6 +568,90 @@ export class ClawVoiceService {
       createdAt: new Date().toISOString(),
     });
     this.textMessages.splice(100);
+  }
+
+  public setSystemEventEmitter(emitter: SystemEventEmitter): void {
+    this.systemEventEmitter = emitter;
+  }
+
+  /**
+   * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
+   */
+  public async handleInboundSms(from: string, to: string, body: string, messageId?: string): Promise<void> {
+    // Record the inbound text
+    this.trackInboundText(from, to, body, messageId);
+
+    // Don't auto-reply to own number (prevent loops)
+    const ownNumber = this.config.telephonyProvider === "twilio"
+      ? this.config.twilioPhoneNumber
+      : this.config.telnyxPhoneNumber;
+    if (ownNumber && from === ownNumber) {
+      return;
+    }
+
+    // Load user profile for the owner name
+    let ownerName = "the owner";
+    if (this.workspacePath) {
+      try {
+        const voiceMemoryDir = path.join(this.workspacePath, "voice-memory");
+        const profile = readUserProfile(voiceMemoryDir);
+        if (profile.ownerName) {
+          ownerName = profile.ownerName;
+        }
+      } catch { /* best-effort */ }
+    }
+
+    // Send auto-reply with rate limiting (1 reply per number per 60 seconds)
+    if (this.config.smsAutoReply) {
+      const now = Date.now();
+      const lastReply = this.smsReplyTimestamps.get(from) ?? 0;
+      if (now - lastReply >= 60_000) {
+        try {
+          const replyBody = `Hi, this is ${ownerName}'s assistant. I've received your message and will relay it.`;
+          await this.telephonyAdapter.sendSms({
+            to: from,
+            from: ownNumber || "",
+            body: replyBody,
+          });
+          this.smsReplyTimestamps.set(from, now);
+
+          // Clean up old timestamps (keep map bounded)
+          if (this.smsReplyTimestamps.size > 500) {
+            const cutoff = now - 120_000;
+            for (const [key, ts] of this.smsReplyTimestamps) {
+              if (ts < cutoff) this.smsReplyTimestamps.delete(key);
+            }
+          }
+        } catch (e) {
+          console.error("[clawvoice] SMS auto-reply failed:", e instanceof Error ? e.message : String(e));
+        }
+      }
+    }
+
+    // Notify owner agent via system event emitter
+    if (this.systemEventEmitter) {
+      const maskPhone = (num: string): string => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+      const autoReplied = this.config.smsAutoReply ? " (auto-reply sent)" : "";
+      this.systemEventEmitter(
+        `Inbound SMS from ${maskPhone(from)}: "${body}"${autoReplied}`,
+        { source: "clawvoice" },
+      );
+    }
+  }
+
+  /**
+   * Emit a system event when an inbound call arrives.
+   */
+  public notifyInboundCall(record: InboundCallRecord): void {
+    this.trackInboundCall(record);
+
+    if (this.systemEventEmitter) {
+      const maskPhone = (num: string): string => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+      this.systemEventEmitter(
+        `Incoming call from ${maskPhone(record.from)} to ${maskPhone(record.to)} (${record.provider}, action: ${record.decision.action})`,
+        { source: "clawvoice" },
+      );
+    }
   }
 
   public getRecentTexts(): TextMessageRecord[] {
