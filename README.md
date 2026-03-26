@@ -70,9 +70,10 @@ A typical 5-minute call costs **$0.10** on Deepgram or **$0.65–0.80** on Eleve
 
 ### 1. Install
 
-ClawVoice is published on **npm**. Install it as an OpenClaw plugin:
+ClawVoice is published on [npm](https://www.npmjs.com/package/clawvoice). Install it with npm, then register it as an OpenClaw plugin:
 
 ```bash
+npm install -g clawvoice
 openclaw plugins install clawvoice
 ```
 
