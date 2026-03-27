@@ -43,8 +43,7 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "AC123",               // twilio account SID
     "auth123",             // twilio auth token
     "+15551112222",        // twilio phone number
-    "no",                  // use detected ngrok tunnel? (or this is the stream URL if ngrok not detected)
-    "wss://my-tunnel.ngrok-free.dev/media-stream",  // manual stream URL
+    "wss://my-tunnel.ngrok-free.dev/media-stream",  // stream URL (ngrok not running in test, so no detection prompt)
     "elevenlabs-conversational",  // voice provider
     "el-key",              // elevenlabs API key
     "agent-1",             // elevenlabs agent ID

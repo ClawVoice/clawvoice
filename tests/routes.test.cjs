@@ -324,7 +324,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
     assert.equal(res.getContentType(), "text/xml");
     assert.match(res.getSentBody(), /<Response>/);
     assert.match(res.getSentBody(), /<Connect>/);
-    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="inbound_track">/);
+    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream\?token=[a-f0-9]{32}" track="inbound_track">/);
     // Inbound TwiML now includes From/To as stream parameters
     assert.match(res.getSentBody(), /<Parameter name="from" value="\+15551234567"\/>/);
   });

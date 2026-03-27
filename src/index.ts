@@ -478,7 +478,6 @@ function resolveLogger(api: PluginAPI): LoggerLike {
 let initialized = false;
 function initPlugin(api: PluginAPI): void {
   if (initialized) return;
-  initialized = true;
   const logger = resolveLogger(api);
   // api.pluginConfig is the intended source, but some OpenClaw versions leave it
   // undefined and pass the full config as api.config.  Fall back through the
@@ -696,6 +695,7 @@ function initPlugin(api: PluginAPI): void {
     api.services.register("clawvoice-calls", callService);
   }
 
+  initialized = true;
   logger.info?.("ClawVoice initialized", {
     telephonyProvider: config.telephonyProvider,
     voiceProvider: config.voiceProvider,

@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { PluginAPI } from "@openclaw/plugin-sdk";
 import { ClawVoiceConfig } from "./config";
 import {
@@ -42,8 +43,7 @@ class WebhookRateLimiter {
 
   check(req: WebhookRequest): boolean {
     const rawReq = req as unknown as { socket?: { remoteAddress?: string }; connection?: { remoteAddress?: string } };
-    const forwarded = req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim();
-    const ip = forwarded || rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
+    const ip = rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
     const now = Date.now();
     const entry = this.map.get(ip);
     if (!entry || now >= entry.resetAt) {
@@ -80,6 +80,13 @@ export function createWebhookHandlers(
   const rateLimiter = new WebhookRateLimiter();
   // H1: Derive base URL from twilioStreamUrl for use in signature verification
   const webhookBaseUrl = deriveBaseUrl(config.twilioStreamUrl);
+  // Derive same auth token as ClawVoiceService so inbound TwiML includes it
+  const mediaStreamAuthToken = config.twilioAuthToken
+    ? createHash("sha256")
+        .update(`clawvoice-media-stream:${config.twilioAuthToken}`)
+        .digest("hex")
+        .slice(0, 32)
+    : undefined;
 
   const handleTelnyxWebhook = async (req: WebhookRequest, response: unknown): Promise<void> => {
     if (!rateLimiter.check(req)) {
@@ -175,7 +182,7 @@ export function createWebhookHandlers(
           `(e.g. wss://your-tunnel.ngrok-free.dev/media-stream) or run 'clawvoice setup'.`
         );
       }
-      sendTwiml(response, buildTwilioVoiceTwiml(config, params["From"], params["To"]));
+      sendTwiml(response, buildTwilioVoiceTwiml(config, mediaStreamAuthToken, params["From"], params["To"]));
       return;
     }
 
@@ -437,21 +444,25 @@ function sendTwiml(response: unknown, twiml: string): void {
   void statusResult;
 }
 
-function buildTwilioVoiceTwiml(config: ClawVoiceConfig, from?: string, to?: string): string {
-  const streamUrl = config.twilioStreamUrl?.trim();
-  if (!streamUrl) {
+function buildTwilioVoiceTwiml(config: ClawVoiceConfig, authToken?: string, from?: string, to?: string): string {
+  const rawStreamUrl = config.twilioStreamUrl?.trim();
+  if (!rawStreamUrl) {
     return "<Response><Say>We're sorry, this call cannot be completed at this time.</Say><Hangup/></Response>";
   }
   const xmlEscape = (s: string): string => s
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;");
-  // Pass caller info as stream parameters so the media session handler can include
-  // the caller's phone number in post-call notifications
+  let streamUrl = rawStreamUrl;
+  if (authToken) {
+    const parsed = new URL(rawStreamUrl);
+    parsed.searchParams.set("token", authToken);
+    streamUrl = parsed.toString();
+  }
   const params = [
     from ? `<Parameter name="from" value="${xmlEscape(from)}"/>` : "",
     to ? `<Parameter name="calledNumber" value="${xmlEscape(to)}"/>` : "",
   ].filter(Boolean).join("");
-  return `<Response><Connect><Stream url="${streamUrl}" track="inbound_track">${params}</Stream></Connect></Response>`;
+  return `<Response><Connect><Stream url="${xmlEscape(streamUrl)}" track="inbound_track">${params}</Stream></Connect></Response>`;
 }
 
 interface ParsedWebhookBody {
