@@ -24,16 +24,14 @@ class TwilioTelephonyAdapter {
             throw new Error("Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint");
         }
         const callSidPlaceholder = "{CallSid}";
-        // WORKAROUND: Encode purpose/greeting as query params on the stream URL.
-        // Twilio's <Parameter> elements (customParameters) are the correct mechanism,
-        // but they were arriving EMPTY in testing. URL query params are the fallback.
-        // SECURITY NOTE: purpose/greeting text should not contain sensitive PII since
-        // it will appear in the WebSocket URL (server logs, Twilio console, etc.).
+        // C2: Pass only a short reference ID in the stream URL instead of purpose/greeting.
+        // The media session handler resolves the full context via an in-memory lookup.
+        // C1: Include auth token in the stream URL for WebSocket authentication.
         const streamUrl = new URL(baseWebhookUrl);
-        if (input.purpose)
-            streamUrl.searchParams.set("purpose", input.purpose);
-        if (input.greeting)
-            streamUrl.searchParams.set("greeting", input.greeting);
+        if (input.refId)
+            streamUrl.searchParams.set("ref", input.refId);
+        if (input.mediaStreamAuthToken)
+            streamUrl.searchParams.set("token", input.mediaStreamAuthToken);
         const enrichedStreamUrl = streamUrl.toString();
         let recordAttr = "";
         if (this.config.recordCalls) {
@@ -65,7 +63,8 @@ class TwilioTelephonyAdapter {
         });
         if (!response.ok) {
             const errorText = await response.text().catch(() => "Unknown error");
-            throw new Error(`Twilio API error (${response.status}): ${errorText}`);
+            console.error(`[clawvoice] Twilio startCall API error (${response.status}):`, errorText);
+            throw new Error(`Twilio API error (${response.status}): Call initiation failed`);
         }
         const data = (await response.json());
         return {
@@ -98,7 +97,8 @@ class TwilioTelephonyAdapter {
         });
         if (!response.ok) {
             const errorText = await response.text().catch(() => "Unknown error");
-            throw new Error(`Twilio API error (${response.status}): ${errorText}`);
+            console.error(`[clawvoice] Twilio sendSms API error (${response.status}):`, errorText);
+            throw new Error(`Twilio API error (${response.status}): SMS send failed`);
         }
         const data = (await response.json());
         return {
@@ -108,6 +108,11 @@ class TwilioTelephonyAdapter {
     }
     async hangup(providerCallId) {
         if (!this.config.twilioAccountSid || !this.config.twilioAuthToken) {
+            return;
+        }
+        // H2: Validate providerCallId format to prevent URL injection
+        if (!/^CA[0-9a-f]{32}$/i.test(providerCallId)) {
+            console.error(`[clawvoice] Invalid Twilio call SID format: ${providerCallId}`);
             return;
         }
         const url = `https://api.twilio.com/2010-04-01/Accounts/${this.config.twilioAccountSid}/Calls/${providerCallId}.json`;

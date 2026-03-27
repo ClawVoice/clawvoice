@@ -5,6 +5,12 @@ export type TwilioWebSocket = VoiceWebSocket & {
     /** Query params from the WebSocket upgrade request URL (set by media-stream-server). */
     _queryParams?: Record<string, string>;
 };
+/** Resolved call context from the pending call context store (C2). */
+interface ResolvedCallContext {
+    purpose?: string;
+    greeting?: string;
+    callId?: string;
+}
 interface TwilioMediaSessionHandlerOptions {
     bridge: VoiceBridgeService;
     voiceProviderClient: VoiceProviderClient;
@@ -20,6 +26,8 @@ interface TwilioMediaSessionHandlerOptions {
     voiceSystemPrompt?: string;
     /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
     allowAutoAccept?: boolean;
+    /** Resolver for pending call context by reference ID (C2). */
+    resolveCallContext?: (refId: string) => ResolvedCallContext | null;
     /** Called when a media session closes (for post-call processing). */
     onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[], meta?: {
         callerPhone?: string;

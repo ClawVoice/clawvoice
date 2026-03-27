@@ -18,6 +18,13 @@ interface StreamSession {
   direction: "inbound" | "outbound";
 }
 
+/** Resolved call context from the pending call context store (C2). */
+interface ResolvedCallContext {
+  purpose?: string;
+  greeting?: string;
+  callId?: string;
+}
+
 interface TwilioMediaSessionHandlerOptions {
   bridge: VoiceBridgeService;
   voiceProviderClient: VoiceProviderClient;
@@ -33,6 +40,8 @@ interface TwilioMediaSessionHandlerOptions {
   voiceSystemPrompt?: string;
   /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
   allowAutoAccept?: boolean;
+  /** Resolver for pending call context by reference ID (C2). */
+  resolveCallContext?: (refId: string) => ResolvedCallContext | null;
   /** Called when a media session closes (for post-call processing). */
   onCallCompleted?: (callId: string, summary: import("../voice/types").CallSummary | null, transcript: import("../voice/types").TranscriptEntry[], meta?: { callerPhone?: string; direction?: "inbound" | "outbound" }) => void;
 }
@@ -133,15 +142,16 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
-    // Read purpose/greeting from Twilio start message customParameters
-    // (set via <Parameter> elements in TwiML) or URL query params as fallback.
-    // WORKAROUND: customParameters were arriving EMPTY in testing, so URL query
-    // params (_queryParams set by media-stream-server) serve as the reliable path.
-    // SECURITY NOTE: URL params should not contain sensitive PII (they appear in logs).
+    // C2: Resolve purpose/greeting from in-memory store via reference ID instead of URL params.
+    // Falls back to customParameters for backwards compatibility.
     const cp = message.start?.customParameters ?? {};
     const qp = socket._queryParams ?? {};
-    const urlPurpose = cp.purpose || qp.purpose || "";
-    const urlGreeting = cp.greeting || qp.greeting || "";
+    const refId = cp.ref || qp.ref || "";
+    const resolvedContext = refId && this.options.resolveCallContext
+      ? this.options.resolveCallContext(refId)
+      : null;
+    const urlPurpose = resolvedContext?.purpose || cp.purpose || "";
+    const urlGreeting = resolvedContext?.greeting || cp.greeting || "";
     // For outbound: "to" = the number being called. For inbound: "from" = the caller's number.
     const outboundTo = cp.to || qp.to || "";
     const inboundFrom = cp.from || qp.from || "";

@@ -35,7 +35,8 @@ class TelnyxTelephonyAdapter {
         });
         if (!response.ok) {
             const errorText = await response.text().catch(() => "Unknown error");
-            throw new Error(`Telnyx API error (${response.status}): ${errorText}`);
+            console.error(`[clawvoice] Telnyx startCall API error (${response.status}):`, errorText);
+            throw new Error(`Telnyx API error (${response.status}): Call initiation failed`);
         }
         const data = (await response.json());
         return {
@@ -63,7 +64,8 @@ class TelnyxTelephonyAdapter {
         });
         if (!response.ok) {
             const errorText = await response.text().catch(() => "Unknown error");
-            throw new Error(`Telnyx API error (${response.status}): ${errorText}`);
+            console.error(`[clawvoice] Telnyx sendSms API error (${response.status}):`, errorText);
+            throw new Error(`Telnyx API error (${response.status}): SMS send failed`);
         }
         const data = (await response.json());
         return {
@@ -75,7 +77,12 @@ class TelnyxTelephonyAdapter {
         if (!this.config.telnyxApiKey) {
             return;
         }
-        await this.fetchFn(`https://api.telnyx.com/v2/calls/${providerCallId}/actions/hangup`, {
+        // H3: Validate providerCallId is alphanumeric/UUID format to prevent URL injection
+        if (!/^[a-zA-Z0-9\-_]+$/.test(providerCallId)) {
+            console.error(`[clawvoice] Invalid Telnyx call control ID format: ${providerCallId}`);
+            return;
+        }
+        await this.fetchFn(`https://api.telnyx.com/v2/calls/${encodeURIComponent(providerCallId)}/actions/hangup`, {
             method: "POST",
             headers: {
                 Authorization: `Bearer ${this.config.telnyxApiKey}`,
