@@ -17,12 +17,18 @@ interface MediaStreamServerOptions {
     port: number;
     path: string;
     sessionHandler: TwilioMediaSessionHandler;
+    /** Optional auth token for WebSocket connections. If set, connections must provide it via ?token= query param or Authorization header. */
+    authToken?: string;
+    /** Maximum concurrent WebSocket connections (default: 20). */
+    maxConnections?: number;
 }
 export declare class MediaStreamServer {
     private readonly options;
     private httpServer;
     private wss;
     private readonly routes;
+    private activeConnections;
+    private readonly rateLimitMap;
     constructor(options: MediaStreamServerOptions);
     /**
      * Register an HTTP route on the standalone server.
@@ -31,6 +37,7 @@ export declare class MediaStreamServer {
     registerHttpRoute(method: string, path: string, handler: HttpHandler): void;
     start(): Promise<void>;
     stop(): Promise<void>;
+    private checkRateLimit;
     private handleHttpRequest;
 }
 export {};
