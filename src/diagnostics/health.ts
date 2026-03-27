@@ -1,4 +1,5 @@
 import { ClawVoiceConfig } from "../config";
+import { isTailscaleAvailable } from "../tunnel/tailscale";
 
 export type CheckStatus = "pass" | "warn" | "fail";
 
@@ -15,7 +16,7 @@ export interface DiagnosticReport {
   generatedAt: string;
 }
 
-export function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<string, unknown>): DiagnosticReport {
+export async function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<string, unknown>): Promise<DiagnosticReport> {
   const checks: HealthCheck[] = [];
 
   checks.push(checkPluginConflict(openclawConfig));
@@ -26,6 +27,7 @@ export function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<
   checks.push(checkVoiceCredentials(config));
   checks.push(checkWebhookConfig(config));
   checks.push(checkTwilioStreamConfig(config));
+  checks.push(await checkTailscale(config));
   checks.push(checkDisclosure(config));
   checks.push(checkCallDuration(config));
 
@@ -286,6 +288,32 @@ function checkTwilioStreamConfig(config: ClawVoiceConfig): HealthCheck {
     name: "twilio-stream-config",
     status: "pass",
     detail: "Twilio stream URL looks valid (public WSS endpoint).",
+  };
+}
+
+async function checkTailscale(config: ClawVoiceConfig): Promise<HealthCheck> {
+  if (config.tailscaleMode === "off") {
+    return {
+      name: "tailscale",
+      status: "pass",
+      detail: "Tailscale integration disabled.",
+    };
+  }
+
+  const available = await isTailscaleAvailable();
+  if (!available) {
+    return {
+      name: "tailscale",
+      status: "fail",
+      detail: `Tailscale mode set to "${config.tailscaleMode}" but Tailscale is not running.`,
+      remediation: "Install and start Tailscale, or set tailscaleMode to \"off\".",
+    };
+  }
+
+  return {
+    name: "tailscale",
+    status: "pass",
+    detail: `Tailscale ${config.tailscaleMode} mode configured and daemon is running.`,
   };
 }
 

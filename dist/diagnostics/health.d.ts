@@ -11,7 +11,7 @@ export interface DiagnosticReport {
     checks: HealthCheck[];
     generatedAt: string;
 }
-export declare function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<string, unknown>): DiagnosticReport;
+export declare function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<string, unknown>): Promise<DiagnosticReport>;
 /**
  * Detect @openclaw/voice-call — the built-in voice plugin that overlaps with
  * ClawVoice.  Both register voice tools/hooks, causing duplicate tool entries

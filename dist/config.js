@@ -41,6 +41,8 @@ const DEFAULT_CONFIG = {
     notifyDiscord: false,
     notifySlack: false,
     notificationTimezone: "America/Chicago",
+    tailscaleMode: "off",
+    tailscalePath: "/media-stream",
 };
 function parseBoolean(value, fallback) {
     if (typeof value === "boolean") {
@@ -104,6 +106,9 @@ function parseTelephonyProvider(value) {
 }
 function parseVoiceProvider(value) {
     return value === "deepgram-agent" || value === "elevenlabs-conversational" ? value : undefined;
+}
+function parseTailscaleMode(value) {
+    return value === "off" || value === "serve" || value === "funnel" ? value : undefined;
 }
 function validateTwilioStreamUrl(url) {
     let parsed;
@@ -206,6 +211,8 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
         notifyDiscord: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_DISCORD"), typeof pluginConfig.notifyDiscord === "undefined" ? undefined : String(pluginConfig.notifyDiscord), String(DEFAULT_CONFIG.notifyDiscord)), DEFAULT_CONFIG.notifyDiscord),
         notifySlack: parseBoolean(getValue(envString(env, "CLAWVOICE_NOTIFY_SLACK"), typeof pluginConfig.notifySlack === "undefined" ? undefined : String(pluginConfig.notifySlack), String(DEFAULT_CONFIG.notifySlack)), DEFAULT_CONFIG.notifySlack),
         notificationTimezone: getValue(envNotificationTimezone, typeof pluginConfig.notificationTimezone === "string" ? pluginConfig.notificationTimezone : undefined, DEFAULT_CONFIG.notificationTimezone),
+        tailscaleMode: getValue(parseTailscaleMode(envString(env, "CLAWVOICE_TAILSCALE_MODE")), parseTailscaleMode(pluginConfig.tailscaleMode), DEFAULT_CONFIG.tailscaleMode),
+        tailscalePath: getValue(envString(env, "CLAWVOICE_TAILSCALE_PATH"), typeof pluginConfig.tailscalePath === "string" ? pluginConfig.tailscalePath : undefined, DEFAULT_CONFIG.tailscalePath),
     };
 }
 function validateConfig(config) {
@@ -218,6 +225,12 @@ function validateConfig(config) {
     }
     if (!config.mediaStreamPath.startsWith("/")) {
         validationErrors.push("mediaStreamPath must start with '/'");
+    }
+    if (!config.tailscalePath || config.tailscalePath.trim().length === 0) {
+        validationErrors.push("tailscalePath must not be empty");
+    }
+    else if (!config.tailscalePath.startsWith("/")) {
+        validationErrors.push("tailscalePath must start with '/'");
     }
     if (config.disclosureEnabled &&
         config.disclosureStatement.trim().length === 0) {
