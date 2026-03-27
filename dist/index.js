@@ -457,7 +457,11 @@ function initPlugin(api) {
                 });
             }
         }
-    }).catch(() => { });
+    }).catch((err) => {
+        logger.warn?.("ClawVoice diagnostics failed to complete", {
+            error: err instanceof Error ? err.message : String(err),
+        });
+    });
     // Resolve workspace path for user profile and voice-memory access.
     // OpenClaw stores it at agents.defaults.workspace in the config.
     const rawApiConfig = api.config;
