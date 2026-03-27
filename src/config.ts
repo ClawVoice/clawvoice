@@ -375,7 +375,11 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
   // Credential/endpoint presence is enforced at call time by validateCallReadiness()
   // and surfaced by diagnostics. validateConfig only checks structural format.
 
-  if (config.notificationTimezone) {
+  if (!config.notificationTimezone || !config.notificationTimezone.trim()) {
+    validationErrors.push(
+      'notificationTimezone must not be blank (e.g. "America/New_York")',
+    );
+  } else {
     try {
       Intl.DateTimeFormat(undefined, { timeZone: config.notificationTimezone });
     } catch {
