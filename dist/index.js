@@ -448,7 +448,7 @@ function initPlugin(api) {
     if (!validation.ok) {
         throw new Error(validation.errors.join("; "));
     }
-    const diagnostics = (0, health_1.runDiagnostics)(config, rawCfg);
+    const diagnostics = (0, health_1.runDiagnostics)(config);
     for (const check of diagnostics.checks) {
         if (check.status === "fail" || check.status === "warn") {
             logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
@@ -650,11 +650,7 @@ function activate(api) {
 function register(api) {
     initPlugin(api);
 }
-/** Reset initialization guard — for testing only. L5: guarded by NODE_ENV. */
 function _resetForTesting() {
-    if (process.env.NODE_ENV !== "test") {
-        return;
-    }
     initialized = false;
 }
 exports.default = plugin;

@@ -43,9 +43,6 @@ class WebhookRateLimiter {
 function createWebhookHandlers(config, callbacks, logError) {
     const { onInbound, onInboundText, onRecording } = callbacks;
     const rateLimiter = new WebhookRateLimiter();
-    // H1: Derive base URL from twilioStreamUrl for use in signature verification
-    const webhookBaseUrl = deriveBaseUrl(config.twilioStreamUrl);
-    // Derive same auth token as ClawVoiceService so inbound TwiML includes it
     const mediaStreamAuthToken = config.twilioAuthToken
         ? (0, crypto_1.createHash)("sha256")
             .update(`clawvoice-media-stream:${config.twilioAuthToken}`)
@@ -87,7 +84,7 @@ function createWebhookHandlers(config, callbacks, logError) {
             return;
         }
         const request = req;
-        const url = buildPublicUrl(request, webhookBaseUrl);
+        const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
         const result = (0, verify_1.verifyTwilioSignature)(url, params, request.headers?.["x-twilio-signature"], config.twilioAuthToken);
         if (!result.valid) {
@@ -123,7 +120,7 @@ function createWebhookHandlers(config, callbacks, logError) {
             return;
         }
         const request = req;
-        const url = buildPublicUrl(request, webhookBaseUrl);
+        const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
         const result = (0, verify_1.verifyTwilioSignature)(url, params, request.headers?.["x-twilio-signature"], config.twilioAuthToken);
         if (!result.valid) {
@@ -150,7 +147,7 @@ function createWebhookHandlers(config, callbacks, logError) {
             return;
         }
         const request = req;
-        const url = buildPublicUrl(request, webhookBaseUrl);
+        const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
         const result = (0, verify_1.verifyTwilioSignature)(url, params, request.headers?.["x-twilio-signature"], config.twilioAuthToken);
         if (!result.valid) {
@@ -172,7 +169,7 @@ function createWebhookHandlers(config, callbacks, logError) {
             return;
         }
         const request = req;
-        const url = buildPublicUrl(request, webhookBaseUrl);
+        const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
         const result = (0, verify_1.verifyTwilioSignature)(url, params, request.headers?.["x-twilio-signature"], config.twilioAuthToken);
         if (!result.valid) {
@@ -250,25 +247,10 @@ function registerStandaloneWebhookRoutes(server, config, callbacks) {
         await handlers.handleTwilioRecording(req, res);
     });
 }
-/** H1: Derive a configured base URL from twilioStreamUrl for signature verification. */
-function deriveBaseUrl(twilioStreamUrl) {
-    if (!twilioStreamUrl)
-        return undefined;
-    try {
-        const parsed = new URL(twilioStreamUrl);
-        return `https://${parsed.host}`;
-    }
-    catch {
-        return undefined;
-    }
-}
-function buildPublicUrl(request, baseUrl) {
-    // H1: When a configured base URL is available, use it instead of
-    // reconstructing from attacker-controlled headers.
-    if (baseUrl) {
-        const urlPath = request.url ?? "/";
-        return `${baseUrl}${urlPath}`;
-    }
+/** Reconstruct the public URL from request headers for signature verification.
+ *  Twilio signs the real URL it called, so header-based reconstruction is safe:
+ *  a spoofed host produces a URL that won't match the Twilio signature. */
+function buildPublicUrl(request) {
     const forwardedProto = request.headers?.["x-forwarded-proto"]?.split(",")[0]?.trim();
     const forwardedHost = request.headers?.["x-forwarded-host"]?.split(",")[0]?.trim();
     const protocol = forwardedProto || request.protocol || "https";

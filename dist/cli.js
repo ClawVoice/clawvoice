@@ -176,7 +176,7 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     setupLog?.info?.("ClawVoice setup complete", {
         telephonyProvider,
         voiceProvider,
-        deepgramApiKey: maskSecret(String(values.deepgramApiKey)),
+        deepgramApiKey: maskSecret(typeof values.deepgramApiKey === "string" ? values.deepgramApiKey : undefined),
         telnyxApiKey: maskSecret(typeof values.telnyxApiKey === "string" ? values.telnyxApiKey : undefined),
         twilioAccountSid: maskSecret(typeof values.twilioAccountSid === "string" ? values.twilioAccountSid : undefined),
         elevenlabsApiKey: maskSecret(typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined)
@@ -295,7 +295,7 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         console.log("4. Start OpenClaw:");
     }
     console.log("     openclaw start\n");
-    console.log(`${voiceProvider === "elevenlabs-conversational" ? "6" : "5"}. Verify your setup (re-run anytime to check everything is working):`);
+    console.log(`${voiceProvider === "elevenlabs-conversational" ? "6" : "5"}. Verify your setup (re-run anytime):`);
     console.log("     openclaw clawvoice status\n");
     console.log(`${voiceProvider === "elevenlabs-conversational" ? "7" : "6"}. Make a test call:`);
     console.log("     openclaw clawvoice call +15559876543\n");
