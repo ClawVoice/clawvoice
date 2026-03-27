@@ -22,9 +22,10 @@ export interface TailscaleExposeResult {
 function runTailscaleCommand(
   args: string[],
   timeoutMs = 2500,
-): Promise<{ code: number; stdout: string }> {
+): Promise<{ code: number; stdout: string; stderr?: string }> {
   return new Promise((resolve) => {
     let stdout = "";
+    let stderr = "";
 
     const proc = spawn("tailscale", args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -34,19 +35,27 @@ function runTailscaleCommand(
       stdout += chunk.toString();
     });
 
+    proc.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+
+    // SIGTERM first for graceful cleanup, SIGKILL after 1s if needed
     const timer = setTimeout(() => {
-      proc.kill("SIGKILL");
-      resolve({ code: -1, stdout: "" });
+      proc.kill("SIGTERM");
+      setTimeout(() => {
+        if (!proc.killed) proc.kill("SIGKILL");
+      }, 1000);
+      resolve({ code: -1, stdout: "", stderr: stderr || undefined });
     }, timeoutMs);
 
     proc.on("error", () => {
       clearTimeout(timer);
-      resolve({ code: -1, stdout: "" });
+      resolve({ code: -1, stdout: "", stderr: stderr || undefined });
     });
 
     proc.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ code: code ?? -1, stdout });
+      resolve({ code: code ?? -1, stdout, stderr: stderr || undefined });
     });
   });
 }
@@ -112,8 +121,10 @@ export async function exposeViaTailscale(opts: {
   const localUrl = `http://127.0.0.1:${opts.localPort}${opts.localPath}`;
 
   if (opts.mode === "off") {
-    await cleanupTailscaleExposure({ mode: "serve", path: tsPath });
-    await cleanupTailscaleExposure({ mode: "funnel", path: tsPath });
+    await Promise.all([
+      cleanupTailscaleExposure({ mode: "serve", path: tsPath }),
+      cleanupTailscaleExposure({ mode: "funnel", path: tsPath }),
+    ]);
     return { ok: true, mode: "off", path: tsPath, localUrl, publicUrl: null };
   }
 

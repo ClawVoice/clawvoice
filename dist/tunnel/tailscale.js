@@ -10,23 +10,32 @@ const node_child_process_1 = require("node:child_process");
 function runTailscaleCommand(args, timeoutMs = 2500) {
     return new Promise((resolve) => {
         let stdout = "";
+        let stderr = "";
         const proc = (0, node_child_process_1.spawn)("tailscale", args, {
             stdio: ["ignore", "pipe", "pipe"],
         });
         proc.stdout.on("data", (chunk) => {
             stdout += chunk.toString();
         });
+        proc.stderr.on("data", (chunk) => {
+            stderr += chunk.toString();
+        });
+        // SIGTERM first for graceful cleanup, SIGKILL after 1s if needed
         const timer = setTimeout(() => {
-            proc.kill("SIGKILL");
-            resolve({ code: -1, stdout: "" });
+            proc.kill("SIGTERM");
+            setTimeout(() => {
+                if (!proc.killed)
+                    proc.kill("SIGKILL");
+            }, 1000);
+            resolve({ code: -1, stdout: "", stderr: stderr || undefined });
         }, timeoutMs);
         proc.on("error", () => {
             clearTimeout(timer);
-            resolve({ code: -1, stdout: "" });
+            resolve({ code: -1, stdout: "", stderr: stderr || undefined });
         });
         proc.on("close", (code) => {
             clearTimeout(timer);
-            resolve({ code: code ?? -1, stdout });
+            resolve({ code: code ?? -1, stdout, stderr: stderr || undefined });
         });
     });
 }
@@ -70,8 +79,10 @@ async function exposeViaTailscale(opts) {
     const tsPath = opts.tailscalePath ?? opts.localPath;
     const localUrl = `http://127.0.0.1:${opts.localPort}${opts.localPath}`;
     if (opts.mode === "off") {
-        await cleanupTailscaleExposure({ mode: "serve", path: tsPath });
-        await cleanupTailscaleExposure({ mode: "funnel", path: tsPath });
+        await Promise.all([
+            cleanupTailscaleExposure({ mode: "serve", path: tsPath }),
+            cleanupTailscaleExposure({ mode: "funnel", path: tsPath }),
+        ]);
         return { ok: true, mode: "off", path: tsPath, localUrl, publicUrl: null };
     }
     const publicUrl = await setupTailscaleExposure({
