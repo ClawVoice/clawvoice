@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.registerCLI = registerCLI;
+const config_1 = require("./config");
 const health_1 = require("./diagnostics/health");
 const user_profile_1 = require("./services/user-profile");
 const path = __importStar(require("path"));
@@ -138,9 +139,7 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
     }
     const voiceProvider = await askChoice(prompter, "Voice provider (deepgram-agent/elevenlabs-conversational): ", ["deepgram-agent", "elevenlabs-conversational"]);
     values.voiceProvider = voiceProvider;
-    if (voiceProvider === "deepgram-agent") {
-        values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
-    }
+    values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
     if (voiceProvider === "elevenlabs-conversational") {
         values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
         values.elevenlabsAgentId = await askNonEmpty(prompter, "ElevenLabs agent ID: ");
@@ -267,39 +266,49 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         console.log(`     https://${tunnelHost}/clawvoice/webhooks/telnyx\n`);
         console.log("   Make sure your phone number is assigned to this application.\n");
     }
-    console.log("2. Set up your voice profile:");
-    console.log("     openclaw clawvoice profile --name \"Your Name\"");
-    console.log("   Then edit voice-memory/user-profile.md to add your context.\n");
-    console.log("3. Tell your OpenClaw agent about voice calling:");
-    console.log("   Add this to your workspace MEMORY.md or instructions file:\n");
-    console.log("   ┌──────────────────────────────────────────────────────┐");
-    console.log("   │ ## Voice Calling (ClawVoice)                        │");
-    console.log("   │                                                      │");
-    console.log("   │ You have the `clawvoice_call` tool for placing       │");
-    console.log("   │ outbound phone calls. When asked to call someone:    │");
-    console.log("   │                                                      │");
-    console.log("   │ - Use `clawvoice_call` with phoneNumber, purpose,    │");
-    console.log("   │   and greeting                                       │");
-    console.log("   │ - Put ALL context in the purpose field — the voice   │");
-    console.log("   │   agent only knows what you tell it                  │");
-    console.log("   │ - The agent identifies itself as an AI assistant     │");
-    console.log("   └──────────────────────────────────────────────────────┘\n");
-    if (voiceProvider === "elevenlabs-conversational") {
-        console.log("4. Verify your ElevenLabs agent prompt includes:");
-        console.log("     {{ _system_prompt_ }}");
-        console.log("   Without this, the voice agent won't receive call context.\n");
-        console.log("5. Start OpenClaw:");
-    }
-    else {
-        console.log("4. Start OpenClaw:");
-    }
+    console.log("2. Start OpenClaw:");
     console.log("     openclaw start\n");
-    console.log(`${voiceProvider === "elevenlabs-conversational" ? "6" : "5"}. Verify your setup:`);
+    console.log("3. Verify your setup (re-run anytime to check everything is working):");
     console.log("     openclaw clawvoice status\n");
-    console.log(`${voiceProvider === "elevenlabs-conversational" ? "7" : "6"}. Make a test call:`);
+    console.log("4. Make a test call:");
     console.log("     openclaw clawvoice call +15559876543\n");
+    console.log("5. Set up your voice profile:");
+    console.log("     openclaw clawvoice profile --name \"Your Name\"");
+    console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
     console.log("────────────────────────────────────────────────────────────\n");
-    prompter.close();
+    try {
+        console.log("Running setup diagnostics...\n");
+        const diagConfig = (0, config_1.resolveConfig)(values);
+        const openclawCfg = api.config;
+        const report = await (0, health_1.runDiagnostics)(diagConfig, openclawCfg);
+        const failures = report.checks.filter((c) => c.status === "fail");
+        const warnings = report.checks.filter((c) => c.status === "warn");
+        if (failures.length === 0 && warnings.length === 0) {
+            console.log("✅ All checks passed — you're ready to go!");
+            console.log("   Tip: Run `openclaw clawvoice status` anytime to re-check your setup.\n");
+        }
+        else {
+            if (failures.length > 0) {
+                console.log(`❌ ${failures.length} issue(s) need attention:`);
+                for (const f of failures)
+                    console.log(`   • ${f.name}: ${f.remediation ?? f.detail ?? "(no details)"}`);
+                console.log();
+            }
+            if (warnings.length > 0) {
+                console.log(`⚠️  ${warnings.length} warning(s):`);
+                for (const w of warnings)
+                    console.log(`   • ${w.name}: ${w.remediation ?? w.detail ?? "(no details)"}`);
+                console.log();
+            }
+        }
+    }
+    catch (err) {
+        console.log(`Diagnostics could not be completed: ${err instanceof Error ? err.message : String(err)}`);
+        console.log("Run `openclaw clawvoice status` to check your setup.\n");
+    }
+    finally {
+        prompter.close();
+    }
 }
 function parseFlag(args, flag) {
     const inline = args.find((a) => a.startsWith(`--${flag}=`));
