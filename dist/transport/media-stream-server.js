@@ -37,12 +37,17 @@ exports.MediaStreamServer = void 0;
 const http = __importStar(require("http"));
 const ws_1 = require("ws");
 const url_1 = require("url");
+const RATE_LIMIT_WINDOW_MS = 60000;
+const RATE_LIMIT_MAX = 100;
+const MAX_BODY_SIZE = 1048576; // 1 MB
 class MediaStreamServer {
     constructor(options) {
         this.options = options;
         this.httpServer = null;
         this.wss = null;
         this.routes = [];
+        this.activeConnections = 0;
+        this.rateLimitMap = new Map();
     }
     /**
      * Register an HTTP route on the standalone server.
@@ -64,16 +69,42 @@ class MediaStreamServer {
         // Handle WebSocket upgrades only for the media-stream path
         this.httpServer.on("upgrade", (req, socket, head) => {
             const pathname = parsePathname(req.url);
-            if (pathname === this.options.path || pathname.startsWith(this.options.path + "?")) {
-                this.wss.handleUpgrade(req, socket, head, (ws) => {
-                    this.wss.emit("connection", ws, req);
-                });
-            }
-            else {
+            if (pathname !== this.options.path && !pathname.startsWith(this.options.path + "?")) {
                 socket.destroy();
+                return;
             }
+            // Enforce connection limit
+            const maxConns = this.options.maxConnections ?? 20;
+            if (this.activeConnections >= maxConns) {
+                socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
+                socket.destroy();
+                return;
+            }
+            // Validate auth token if configured
+            if (this.options.authToken) {
+                let tokenValid = false;
+                try {
+                    const parsed = new url_1.URL(req.url ?? "", "http://localhost");
+                    const queryToken = parsed.searchParams.get("token");
+                    const authHeader = req.headers["authorization"];
+                    const headerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+                        ? authHeader.slice(7)
+                        : undefined;
+                    tokenValid = queryToken === this.options.authToken || headerToken === this.options.authToken;
+                }
+                catch { /* malformed URL */ }
+                if (!tokenValid) {
+                    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+                    socket.destroy();
+                    return;
+                }
+            }
+            this.wss.handleUpgrade(req, socket, head, (ws) => {
+                this.wss.emit("connection", ws, req);
+            });
         });
         this.wss.on("connection", (socket, req) => {
+            this.activeConnections++;
             const twilioSocket = socket;
             // Attach URL query params from the WebSocket upgrade request so the
             // session handler can read purpose/greeting context set by the Twilio adapter.
@@ -91,6 +122,7 @@ class MediaStreamServer {
                 });
             });
             socket.on("close", () => {
+                this.activeConnections--;
                 this.options.sessionHandler.handleClose(twilioSocket);
             });
         });
@@ -116,9 +148,36 @@ class MediaStreamServer {
             server.close(() => resolve());
         });
     }
+    checkRateLimit(ip) {
+        const now = Date.now();
+        const entry = this.rateLimitMap.get(ip);
+        if (!entry || now >= entry.resetAt) {
+            this.rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+            return true;
+        }
+        entry.count++;
+        if (entry.count > RATE_LIMIT_MAX) {
+            return false;
+        }
+        // Periodic eviction: clean up expired entries when map grows large
+        if (this.rateLimitMap.size > 500) {
+            for (const [key, val] of this.rateLimitMap) {
+                if (now >= val.resetAt)
+                    this.rateLimitMap.delete(key);
+            }
+        }
+        return true;
+    }
     async handleHttpRequest(req, res) {
         const method = (req.method || "GET").toUpperCase();
         const pathname = parsePathname(req.url);
+        // Rate limit per IP
+        const clientIp = req.socket.remoteAddress ?? "unknown";
+        if (!this.checkRateLimit(clientIp)) {
+            res.writeHead(429, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Too Many Requests" }));
+            return;
+        }
         // Find matching route
         const route = this.routes.find((r) => r.method === method && r.path === pathname);
         if (!route) {
@@ -126,10 +185,18 @@ class MediaStreamServer {
             res.end(JSON.stringify({ error: "Not Found" }));
             return;
         }
-        // Parse body
+        // Parse body with size limit
         const chunks = [];
+        let totalSize = 0;
         for await (const chunk of req) {
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            totalSize += buf.length;
+            if (totalSize > MAX_BODY_SIZE) {
+                res.writeHead(413, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Payload Too Large" }));
+                return;
+            }
+            chunks.push(buf);
         }
         const rawBody = Buffer.concat(chunks).toString("utf8");
         let parsedBody = {};

@@ -1,4 +1,5 @@
 import * as path from "path";
+import { createHash, randomBytes } from "crypto";
 import { ClawVoiceConfig } from "../config";
 
 import { InboundCallRecord } from "../inbound/types";
@@ -74,6 +75,14 @@ export interface TextMessageRecord {
   createdAt: string;
 }
 
+/** Pending call context stored in-memory instead of URL query params (C2). */
+interface PendingCallContextEntry {
+  purpose?: string;
+  greeting?: string;
+  callId?: string;
+  createdAt: number;
+}
+
 export class ClawVoiceService {
   private running = false;
   private readonly activeCalls = new Map<string, CallRecord>();
@@ -87,6 +96,11 @@ export class ClawVoiceService {
   private dailyResetDate = new Date().toISOString().slice(0, 10);
   private systemEventEmitter: SystemEventEmitter | null = null;
   private readonly smsReplyTimestamps = new Map<string, number>();
+  /** In-memory map for passing call context via short reference IDs instead of URL query params. */
+  public readonly pendingCallContext = new Map<string, PendingCallContextEntry>();
+  private pendingContextCleanupTimer: NodeJS.Timeout | null = null;
+  /** Auth token for WebSocket connections, derived from Twilio auth token. */
+  private readonly mediaStreamAuthToken: string | undefined;
   public readonly bridge: VoiceBridgeService;
   public readonly postCall: PostCallService;
   private readonly voiceProviderClient: VoiceProviderClient | null;
@@ -104,6 +118,13 @@ export class ClawVoiceService {
     workspacePath?: string,
   ) {
     this.workspacePath = workspacePath;
+    // Generate a deterministic auth token from the Twilio auth token (C1)
+    if (config.twilioAuthToken) {
+      this.mediaStreamAuthToken = createHash("sha256")
+        .update(`clawvoice-media-stream:${config.twilioAuthToken}`)
+        .digest("hex")
+        .slice(0, 32);
+    }
     this.telephonyAdapter =
       config.telephonyProvider === "twilio"
         ? new TwilioTelephonyAdapter(config, fetchFn)
@@ -129,12 +150,24 @@ export class ClawVoiceService {
           : config.deepgramVoice,
         voiceSystemPrompt: config.voiceSystemPrompt,
         allowAutoAccept: true,
+        /** Resolver for pending call context references (C2). */
+        resolveCallContext: (refId: string) => this.pendingCallContext.get(refId) ?? null,
         onCallCompleted: (callId, summary, transcript, meta) => {
           if (!summary) return;
           void this.postCall.processCompletedCall(summary, transcript, undefined, meta).catch(() => undefined);
         },
       })
       : null;
+    // Start periodic cleanup of expired pending call context entries (5 min TTL)
+    this.pendingContextCleanupTimer = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.pendingCallContext) {
+        if (now - entry.createdAt > 300_000) {
+          this.pendingCallContext.delete(key);
+        }
+      }
+    }, 60_000);
+    this.pendingContextCleanupTimer.unref?.();
   }
 
   private createVoiceProviderClient(config: ClawVoiceConfig): VoiceProviderClient | null {
@@ -175,6 +208,10 @@ export class ClawVoiceService {
       clearTimeout(timer);
     }
     this.callTimers.clear();
+    if (this.pendingContextCleanupTimer) {
+      clearInterval(this.pendingContextCleanupTimer);
+      this.pendingContextCleanupTimer = null;
+    }
     await this.bridge.stopAll();
     this.running = false;
   }
@@ -205,6 +242,7 @@ export class ClawVoiceService {
       port: streamPort,
       path: streamPath,
       sessionHandler: this.mediaSessionHandler,
+      authToken: this.mediaStreamAuthToken,
     });
 
     // Register webhook routes on the standalone server so they work
@@ -341,6 +379,14 @@ export class ClawVoiceService {
       ? `${disclosure} ${baseGreeting}`
       : baseGreeting;
 
+    // Store purpose/greeting in-memory and pass only a short reference ID (C2)
+    const refId = randomBytes(16).toString("hex");
+    this.pendingCallContext.set(refId, {
+      purpose: request.purpose,
+      greeting,
+      createdAt: Date.now(),
+    });
+
     const providerResult = await this.telephonyAdapter.startCall({
       to: request.phoneNumber,
       from:
@@ -349,6 +395,8 @@ export class ClawVoiceService {
           : this.config.telnyxPhoneNumber,
       greeting,
       purpose: request.purpose,
+      refId,
+      mediaStreamAuthToken: this.mediaStreamAuthToken,
     });
 
     const callId = this.createCallId();

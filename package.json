@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist",
-    "test": "npm run build && node --test \"tests/**/*.test.cjs\""
+    "test": "npm run build && NODE_ENV=test node --test \"tests/**/*.test.cjs\""
   },
   "keywords": [
     "openclaw",

@@ -472,12 +472,13 @@ export function registerTools(
 
       // Generate CSV
       const escapeCsv = (s: string): string => {
+        // M3: Strip null bytes, embedded tabs, carriage returns, and newlines
+        let safe = s.replace(/\0/g, "").replace(/[\t\r\n]/g, " ");
         // Prevent CSV formula injection — prefix dangerous leading characters
-        let safe = s;
-        if (/^[=+\-@\t\r]/.test(safe)) {
+        if (/^[=+\-@]/.test(safe)) {
           safe = "'" + safe;
         }
-        if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+        if (safe.includes(",") || safe.includes('"')) {
           return `"${safe.replace(/"/g, '""')}"`;
         }
         return safe;

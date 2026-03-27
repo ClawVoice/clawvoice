@@ -112,6 +112,7 @@ export interface FunctionCallResponse {
 export type VoiceAgentMessageResult =
   | { action: "audio"; data: Buffer }
   | { action: "function_call"; request: FunctionCallRequest }
+  | { action: "function_call_denied"; request: FunctionCallRequest; reason: string }
   | { action: "barge_in"; duringGrace: boolean }
   | { action: "transcript"; entry: TranscriptEntry }
   | { action: "turn_change"; state: TurnState }
