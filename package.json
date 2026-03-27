@@ -25,10 +25,12 @@
     "url": "https://github.com/ClawVoice/clawvoice/issues"
   },
   "dependencies": {
+    "@clack/prompts": "^1.1.0",
     "ws": "^8.19.0"
   },
   "bundledDependencies": [
-    "ws"
+    "ws",
+    "@clack/prompts"
   ],
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -39,5 +41,9 @@
     "extensions": [
       "./openclaw-extension.mjs"
     ]
-  }
+  },
+  "bundleDependencies": [
+    "ws",
+    "@clack/prompts"
+  ]
 }
