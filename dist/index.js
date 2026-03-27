@@ -448,15 +448,20 @@ function initPlugin(api) {
     if (!validation.ok) {
         throw new Error(validation.errors.join("; "));
     }
-    const diagnostics = (0, health_1.runDiagnostics)(config);
-    for (const check of diagnostics.checks) {
-        if (check.status === "fail" || check.status === "warn") {
-            logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
-                detail: check.detail,
-                remediation: check.remediation,
-            });
+    (0, health_1.runDiagnostics)(config).then((diagnostics) => {
+        for (const check of diagnostics.checks) {
+            if (check.status === "fail" || check.status === "warn") {
+                logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
+                    detail: check.detail,
+                    remediation: check.remediation,
+                });
+            }
         }
-    }
+    }).catch((err) => {
+        logger.warn?.("ClawVoice diagnostics failed to complete", {
+            error: err instanceof Error ? err.message : String(err),
+        });
+    });
     // Resolve workspace path for user profile and voice-memory access.
     // OpenClaw stores it at agents.defaults.workspace in the config.
     const rawApiConfig = api.config;

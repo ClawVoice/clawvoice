@@ -29,33 +29,35 @@ function validConfig(overrides = {}) {
     elevenlabsAgentId: "",
     voiceSystemPrompt: "",
     inboundEnabled: true,
+    tailscaleMode: "off",
+    tailscalePath: "/media-stream",
     ...overrides,
   };
 }
 
 describe("Diagnostics (Story 5.3)", () => {
-  it("all pass with valid twilio+deepgram config", () => {
-    const report = runDiagnostics(validConfig());
+  it("all pass with valid twilio+deepgram config", async () => {
+    const report = await runDiagnostics(validConfig());
     assert.equal(report.overall, "pass");
     assert.ok(report.checks.every((c) => c.status === "pass"));
   });
 
-  it("fails when twilio credentials missing", () => {
-    const report = runDiagnostics(validConfig({ twilioAccountSid: "", twilioAuthToken: "" }));
+  it("fails when twilio credentials missing", async () => {
+    const report = await runDiagnostics(validConfig({ twilioAccountSid: "", twilioAuthToken: "" }));
     const cred = report.checks.find((c) => c.name === "telephony-credentials");
     assert.equal(cred.status, "fail");
     assert.ok(cred.remediation.includes("TWILIO_ACCOUNT_SID"));
   });
 
-  it("fails when deepgram API key missing", () => {
-    const report = runDiagnostics(validConfig({ deepgramApiKey: "" }));
+  it("fails when deepgram API key missing", async () => {
+    const report = await runDiagnostics(validConfig({ deepgramApiKey: "" }));
     const cred = report.checks.find((c) => c.name === "voice-credentials");
     assert.equal(cred.status, "fail");
     assert.ok(cred.remediation.includes("DEEPGRAM_API_KEY"));
   });
 
-  it("warns when telnyx webhook secret missing", () => {
-    const report = runDiagnostics(validConfig({
+  it("warns when telnyx webhook secret missing", async () => {
+    const report = await runDiagnostics(validConfig({
       telephonyProvider: "telnyx",
       telnyxApiKey: "key-123",
       telnyxWebhookSecret: "",
@@ -64,49 +66,49 @@ describe("Diagnostics (Story 5.3)", () => {
     assert.equal(webhook.status, "warn");
   });
 
-  it("fails when twilioStreamUrl is missing wss protocol", () => {
-    const report = runDiagnostics(validConfig({ twilioStreamUrl: "https://voice.example.test/media-stream" }));
+  it("fails when twilioStreamUrl is missing wss protocol", async () => {
+    const report = await runDiagnostics(validConfig({ twilioStreamUrl: "https://voice.example.test/media-stream" }));
     const check = report.checks.find((c) => c.name === "twilio-stream-config");
     assert.equal(check.status, "fail");
     assert.ok(check.remediation.includes("wss"));
   });
 
-  it("fails when twilioStreamUrl points to localhost", () => {
-    const report = runDiagnostics(validConfig({ twilioStreamUrl: "wss://127.0.0.1/media-stream" }));
+  it("fails when twilioStreamUrl points to localhost", async () => {
+    const report = await runDiagnostics(validConfig({ twilioStreamUrl: "wss://127.0.0.1/media-stream" }));
     const check = report.checks.find((c) => c.name === "twilio-stream-config");
     assert.equal(check.status, "fail");
     assert.ok(check.remediation.includes("public"));
   });
 
-  it("warns when twilioStreamUrl is missing", () => {
-    const report = runDiagnostics(validConfig({
+  it("warns when twilioStreamUrl is missing", async () => {
+    const report = await runDiagnostics(validConfig({
       twilioStreamUrl: "",
     }));
     const check = report.checks.find((c) => c.name === "twilio-stream-config");
     assert.equal(check.status, "warn");
   });
 
-  it("warns when maxCallDuration exceeds 2 hours", () => {
-    const report = runDiagnostics(validConfig({ maxCallDuration: 8000 }));
+  it("warns when maxCallDuration exceeds 2 hours", async () => {
+    const report = await runDiagnostics(validConfig({ maxCallDuration: 8000 }));
     const dur = report.checks.find((c) => c.name === "call-duration");
     assert.equal(dur.status, "warn");
   });
 
-  it("fails when maxCallDuration is invalid", () => {
-    const report = runDiagnostics(validConfig({ maxCallDuration: -1 }));
+  it("fails when maxCallDuration is invalid", async () => {
+    const report = await runDiagnostics(validConfig({ maxCallDuration: -1 }));
     const dur = report.checks.find((c) => c.name === "call-duration");
     assert.equal(dur.status, "fail");
   });
 
-  it("includes remediation text on failures", () => {
-    const report = runDiagnostics(validConfig({ deepgramApiKey: "" }));
+  it("includes remediation text on failures", async () => {
+    const report = await runDiagnostics(validConfig({ deepgramApiKey: "" }));
     const cred = report.checks.find((c) => c.name === "voice-credentials");
     assert.ok(cred.remediation);
     assert.ok(cred.remediation.length > 10);
   });
 
-  it("does not expose secret values in detail text", () => {
-    const report = runDiagnostics(validConfig());
+  it("does not expose secret values in detail text", async () => {
+    const report = await runDiagnostics(validConfig());
     for (const check of report.checks) {
       assert.ok(!check.detail.includes("dg-key-123"), `${check.name} leaks secret`);
       assert.ok(!check.detail.includes("AC123"), `${check.name} leaks secret`);
@@ -114,8 +116,8 @@ describe("Diagnostics (Story 5.3)", () => {
     }
   });
 
-  it("elevenlabs credentials fail when not configured", () => {
-    const report = runDiagnostics(validConfig({
+  it("elevenlabs credentials fail when not configured", async () => {
+    const report = await runDiagnostics(validConfig({
       voiceProvider: "elevenlabs-conversational",
       elevenlabsApiKey: "",
       elevenlabsAgentId: "",

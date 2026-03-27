@@ -2,7 +2,8 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runDiagnostics = runDiagnostics;
 exports.checkPluginConflict = checkPluginConflict;
-function runDiagnostics(config, openclawConfig) {
+const tailscale_1 = require("../tunnel/tailscale");
+async function runDiagnostics(config, openclawConfig) {
     const checks = [];
     checks.push(checkPluginConflict(openclawConfig));
     checks.push(checkMode(config));
@@ -12,6 +13,7 @@ function runDiagnostics(config, openclawConfig) {
     checks.push(checkVoiceCredentials(config));
     checks.push(checkWebhookConfig(config));
     checks.push(checkTwilioStreamConfig(config));
+    checks.push(await checkTailscale(config));
     checks.push(checkDisclosure(config));
     checks.push(checkCallDuration(config));
     const overall = deriveOverall(checks);
@@ -246,6 +248,29 @@ function checkTwilioStreamConfig(config) {
         name: "twilio-stream-config",
         status: "pass",
         detail: "Twilio stream URL looks valid (public WSS endpoint).",
+    };
+}
+async function checkTailscale(config) {
+    if (config.tailscaleMode === "off") {
+        return {
+            name: "tailscale",
+            status: "pass",
+            detail: "Tailscale integration disabled.",
+        };
+    }
+    const available = await (0, tailscale_1.isTailscaleAvailable)();
+    if (!available) {
+        return {
+            name: "tailscale",
+            status: "fail",
+            detail: `Tailscale mode set to "${config.tailscaleMode}" but Tailscale is not running.`,
+            remediation: "Install and start Tailscale, or set tailscaleMode to \"off\".",
+        };
+    }
+    return {
+        name: "tailscale",
+        status: "pass",
+        detail: `Tailscale ${config.tailscaleMode} mode configured and daemon is running.`,
     };
 }
 function checkDisclosure(config) {

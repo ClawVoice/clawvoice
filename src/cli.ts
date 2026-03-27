@@ -5,6 +5,7 @@ import { runDiagnostics } from "./diagnostics/health";
 import { MemoryExtractionService } from "./services/memory-extraction";
 import { ClawVoiceService } from "./services/clawvoice";
 import { readUserProfile, writeDefaultProfile } from "./services/user-profile";
+import { exposeViaTailscale, getTailscaleDnsName, type TailscaleMode } from "./tunnel/tailscale";
 import * as path from "path";
 
 export interface SetupPrompter {
@@ -123,14 +124,43 @@ export async function runSetupWizard(
         );
       }
     } else {
-      values.twilioStreamUrl = await askNonEmpty(
-        prompter,
-        "Twilio media stream URL (wss://...)\n" +
-          "  Twilio needs a public WSS endpoint to stream call audio.\n" +
-          "  Use a tunnel (ngrok, Cloudflare Tunnel) to expose your local media stream server on port 3101.\n" +
-          "  Example: wss://your-tunnel.ngrok-free.dev/media-stream\n" +
-          "  Stream URL: "
-      );
+      let tailscaleDns: string | null = null;
+      try {
+        tailscaleDns = await getTailscaleDnsName();
+      } catch { /* tailscale not available */ }
+
+      if (tailscaleDns) {
+        const msPath = resolveConfig(values).mediaStreamPath;
+        const tsStreamUrl = `wss://${tailscaleDns}${msPath}`;
+        console.log(`\n  ✓ Detected Tailscale: ${tailscaleDns}`);
+        console.log(`    Stream URL will be: ${tsStreamUrl}\n`);
+        const useTailscale = await askChoice(
+          prompter,
+          "Use Tailscale Funnel for tunnel? (yes/no): ",
+          ["yes", "no"],
+        );
+        if (useTailscale === "yes") {
+          values.twilioStreamUrl = tsStreamUrl;
+          values.tailscaleMode = "funnel";
+          values.tailscalePath = msPath;
+          console.log(`\n  After setup completes, run: openclaw clawvoice expose --mode funnel --path ${msPath} --ts-path ${msPath}`);
+        } else {
+          values.tailscaleMode = "off";
+          values.twilioStreamUrl = await askNonEmpty(
+            prompter,
+            "Twilio media stream URL (wss://...): "
+          );
+        }
+      } else {
+        values.twilioStreamUrl = await askNonEmpty(
+          prompter,
+          "Twilio media stream URL (wss://...)\n" +
+            "  Twilio needs a public WSS endpoint to stream call audio.\n" +
+            "  Use a tunnel (ngrok, Cloudflare Tunnel, Tailscale Funnel) to expose port 3101.\n" +
+            "  Example: wss://your-tunnel.ngrok-free.dev/media-stream\n" +
+            "  Stream URL: "
+        );
+      }
     }
   }
 
@@ -475,7 +505,7 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     name: "clawvoice status",
     description: "Show active calls and configuration health diagnostics",
     run: async () => {
-      const report = runDiagnostics(config);
+      const report = await runDiagnostics(config);
       console.log(`\nClawVoice Status: ${report.overall.toUpperCase()}\n`);
       for (const check of report.checks) {
         const icon = check.status === "pass" ? "✓" : check.status === "warn" ? "⚠" : "✗";
@@ -586,7 +616,7 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     name: "clawvoice test",
     description: "Test voice pipeline connectivity and provider readiness",
     run: async () => {
-      const report = runDiagnostics(config);
+      const report = await runDiagnostics(config);
       const failures = report.checks.filter((c) => c.status === "fail");
       if (failures.length > 0) {
         log.info("Connectivity test FAILED — fix these issues first:", {});
@@ -620,6 +650,62 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
         return;
       }
       log.info(`Cleared ${cleared.length} stuck call slot(s): ${cleared.join(", ")}`, {});
+    },
+  });
+
+  api.cli.register({
+    name: "clawvoice expose",
+    description: "Expose local media stream server via Tailscale serve or funnel",
+    run: async (args) => {
+      const modeArg = (parseFlag(args, "mode") ?? config.tailscaleMode) as string;
+      const validModes: TailscaleMode[] = ["off", "serve", "funnel"];
+      if (!validModes.includes(modeArg as TailscaleMode)) {
+        console.error(`Invalid --mode: ${modeArg}. Use: off|serve|funnel`);
+        return;
+      }
+      const mode = modeArg as TailscaleMode;
+
+      const portRaw = parseFlag(args, "port") ?? String(config.mediaStreamPort);
+      const port = Number(portRaw);
+      if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        console.error(`Invalid --port: ${portRaw}. Must be 1-65535.`);
+        return;
+      }
+
+      const localPath = parseFlag(args, "path") ?? config.mediaStreamPath;
+      const tailscalePath = parseFlag(args, "ts-path") ?? config.tailscalePath;
+
+      console.log(`Exposing via Tailscale ${mode}...`);
+
+      const result = await exposeViaTailscale({
+        mode,
+        localPort: port,
+        localPath,
+        tailscalePath,
+      });
+
+      if (result.ok && result.publicUrl) {
+        console.log(`\n  ✓ Tailscale ${mode} active`);
+        console.log(`    Public URL: ${result.publicUrl}`);
+        console.log(`    Local:      ${result.localUrl}`);
+        if (mode === "funnel" && config.telephonyProvider === "twilio") {
+          const wssUrl = result.publicUrl.replace(/^https:/, "wss:");
+          console.log(`\n  Twilio stream URL: ${wssUrl}`);
+          console.log(`  Set this as your twilioStreamUrl in config.`);
+        } else if (mode === "serve" && config.telephonyProvider === "twilio") {
+          console.log(`\n  Note: Tailscale serve is tailnet-only; Twilio requires funnel for public internet access.`);
+        }
+      } else if (result.ok && mode === "off") {
+        console.log(`\n  ✓ Tailscale exposure disabled for path: ${result.path}`);
+      } else {
+        console.log(`\n  ✗ Failed to activate Tailscale ${mode}`);
+        if (result.hint) {
+          console.log(`    ${result.hint.note}`);
+          if (result.hint.enableUrl) {
+            console.log(`    Enable: ${result.hint.enableUrl}`);
+          }
+        }
+      }
     },
   });
 
