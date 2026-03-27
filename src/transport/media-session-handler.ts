@@ -251,6 +251,10 @@ export class TwilioMediaSessionHandler {
       socket.close(1011, detail);
     };
 
+    // Track whether the voice session has closed so readyState reflects reality.
+    // Must be declared before connect() so the onClose callback can capture it.
+    let sessionClosed = false;
+
     let voiceSession: VoiceProviderSession;
     try {
       voiceSession = await this.options.voiceProviderClient.connect({
@@ -272,6 +276,7 @@ export class TwilioMediaSessionHandler {
           );
         },
         onClose: (_code, reason) => {
+          sessionClosed = true;
           if (this.localCloses.delete(socket)) return;
           teardownFromVoiceProvider(reason || "Voice provider stream closed");
         },
@@ -295,10 +300,6 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
-    // Track whether the voice session has closed so readyState reflects reality.
-    // VoiceProviderSession may not expose readyState directly, so we track it
-    // via the onClose callback above (which sets sessionClosed = true).
-    let sessionClosed = false;
     const origOnClose = voiceSession.close.bind(voiceSession);
     voiceSession.close = () => {
       sessionClosed = true;
