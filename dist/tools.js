@@ -19,7 +19,7 @@ function registerTools(api, config, callService, memoryService) {
                 },
                 purpose: {
                     type: "string",
-                    description: "REQUIRED. The voice agent's instructions for this call. This is the ONLY context the agent receives — it has no access to your conversation history. Include: (1) why you are calling, (2) who you are calling on behalf of, (3) specific questions to ask or information to convey, (4) any relevant details like account numbers, appointment preferences, prior interactions. Example: 'Calling Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental.'",
+            description: "REQUIRED. The voice agent's instructions for this call. This is the ONLY context the agent receives — it has no access to your conversation history. Include: (1) why you are calling, (2) who you are calling on behalf of, (3) specific questions to ask or information to convey, (4) any relevant details like account numbers, appointment preferences, prior interactions. Example: 'Calling Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental.'",
                 },
                 greeting: {
                     type: "string",

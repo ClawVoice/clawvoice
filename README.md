@@ -352,7 +352,7 @@ These tools are automatically available when ClawVoice is installed:
 The voice agent (e.g., "Jessica" on ElevenLabs) runs on the phone call as a **separate AI**. It has NO access to your conversation history. The `purpose` field is its ONLY source of context.
 
 **Good purpose:**
-> "Call Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings next week. Insurance: Delta Dental. Cody's number: 555-010-2468."
+> "Call Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings next week. Insurance: Delta Dental. Alex's number: 555-010-2468."
 
 **Bad purpose:**
 > "Call the dentist" *(agent won't know who, why, what to ask, or what number to give)*
