@@ -272,8 +272,8 @@ describe("Route Handlers — Twilio voice webhook", () => {
       From: "+15551234567",
       To: "+15550001111",
     };
-    // H1: With configured base URL, forwarded headers are ignored; URL is derived from twilioStreamUrl
-    const expectedUrl = "https://voice.example.test/clawvoice/webhooks/twilio/voice";
+    // buildPublicUrl uses forwarded headers to reconstruct the URL Twilio signed
+    const expectedUrl = "https://public.example.com/clawvoice/webhooks/twilio/voice";
     const signature = twilioSignature(expectedUrl, params, config.twilioAuthToken);
 
     const req = {

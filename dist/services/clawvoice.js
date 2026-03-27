@@ -626,22 +626,27 @@ class ClawVoiceService {
         call.summary = summary ?? undefined;
         // Hang up first, then destroy session — ensures telephony provider
         // receives the hangup before we tear down the local bridge session.
-        await this.telephonyAdapter.hangup(providerCallId);
-        this.bridge.destroySession(callId);
-        call.status = "completed";
-        call.endedAt = new Date().toISOString();
-        this.activeCalls.delete(callId);
-        this.callIdByProviderCallId.delete(call.providerCallId);
-        if (summary) {
-            await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl, {
-                callerPhone: call.to,
-                direction: "outbound",
-            }).catch(() => undefined);
+        // Cleanup runs in `finally` so a hangup failure never leaves zombie calls.
+        try {
+            await this.telephonyAdapter.hangup(providerCallId);
         }
-        const timer = this.callTimers.get(callId);
-        if (timer) {
-            clearTimeout(timer);
-            this.callTimers.delete(callId);
+        finally {
+            this.bridge.destroySession(callId);
+            call.status = "completed";
+            call.endedAt = new Date().toISOString();
+            this.activeCalls.delete(callId);
+            this.callIdByProviderCallId.delete(call.providerCallId);
+            if (summary) {
+                await this.postCall.processCompletedCall(summary, transcript, call.recordingUrl, {
+                    callerPhone: call.to,
+                    direction: "outbound",
+                }).catch(() => undefined);
+            }
+            const timer = this.callTimers.get(callId);
+            if (timer) {
+                clearTimeout(timer);
+                this.callTimers.delete(callId);
+            }
         }
     }
 }
