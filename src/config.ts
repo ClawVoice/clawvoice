@@ -381,6 +381,12 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     validationErrors.push("mediaStreamPath must start with '/'");
   }
 
+  if (!config.tailscalePath || config.tailscalePath.trim().length === 0) {
+    validationErrors.push("tailscalePath must not be empty");
+  } else if (!config.tailscalePath.startsWith("/")) {
+    validationErrors.push("tailscalePath must start with '/'");
+  }
+
   if (
     config.disclosureEnabled &&
     config.disclosureStatement.trim().length === 0

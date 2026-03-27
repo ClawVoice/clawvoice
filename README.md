@@ -119,7 +119,8 @@ cloudflared tunnel --url http://localhost:3101
 
 # Option C: Tailscale Funnel (if you use Tailscale)
 openclaw clawvoice expose --mode funnel
-# Or manually: tailscale funnel 3101
+# Or manually (path-based):
+tailscale funnel --bg --yes --set-path /media-stream http://127.0.0.1:3101/media-stream
 ```
 
 The `expose` command auto-detects your Tailscale DNS name, activates Funnel on the media stream path, and prints the WSS URL to use. Use `--mode serve` for Tailnet-only (no public internet) or `--mode off` to disable.
