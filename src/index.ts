@@ -729,11 +729,7 @@ export function register(api: PluginAPI): void {
   initPlugin(api);
 }
 
-/** Reset initialization guard — for testing only. L5: guarded by NODE_ENV. */
 export function _resetForTesting(): void {
-  if (process.env.NODE_ENV !== "test") {
-    return;
-  }
   initialized = false;
 }
 

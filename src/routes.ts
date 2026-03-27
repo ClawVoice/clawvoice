@@ -78,8 +78,6 @@ export function createWebhookHandlers(
 } {
   const { onInbound, onInboundText, onRecording } = callbacks;
   const rateLimiter = new WebhookRateLimiter();
-  // H1: Derive base URL from twilioStreamUrl for use in signature verification
-  const webhookBaseUrl = deriveBaseUrl(config.twilioStreamUrl);
 
   const handleTelnyxWebhook = async (req: WebhookRequest, response: unknown): Promise<void> => {
     if (!rateLimiter.check(req)) {
@@ -136,7 +134,7 @@ export function createWebhookHandlers(
       return;
     }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request, webhookBaseUrl);
+    const url = buildPublicUrl(request);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -188,7 +186,7 @@ export function createWebhookHandlers(
       return;
     }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request, webhookBaseUrl);
+    const url = buildPublicUrl(request);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -230,7 +228,7 @@ export function createWebhookHandlers(
       return;
     }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request, webhookBaseUrl);
+    const url = buildPublicUrl(request);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -260,7 +258,7 @@ export function createWebhookHandlers(
       return;
     }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request, webhookBaseUrl);
+    const url = buildPublicUrl(request);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -386,22 +384,10 @@ export function registerStandaloneWebhookRoutes(
   });
 }
 
-/** H1: Derive a configured base URL from twilioStreamUrl for signature verification. */
-function deriveBaseUrl(twilioStreamUrl: string | undefined): string | undefined {
-  if (!twilioStreamUrl) return undefined;
-  try {
-    const parsed = new URL(twilioStreamUrl);
-    return `https://${parsed.host}`;
-  } catch { return undefined; }
-}
-
-function buildPublicUrl(request: WebhookRequest, baseUrl?: string): string {
-  // H1: When a configured base URL is available, use it instead of
-  // reconstructing from attacker-controlled headers.
-  if (baseUrl) {
-    const urlPath = request.url ?? "/";
-    return `${baseUrl}${urlPath}`;
-  }
+/** Reconstruct the public URL from request headers for signature verification.
+ *  Twilio signs the real URL it called, so header-based reconstruction is safe:
+ *  a spoofed host produces a URL that won't match the Twilio signature. */
+function buildPublicUrl(request: WebhookRequest): string {
   const forwardedProto = request.headers?.["x-forwarded-proto"]?.split(",")[0]?.trim();
   const forwardedHost = request.headers?.["x-forwarded-host"]?.split(",")[0]?.trim();
   const protocol = forwardedProto || request.protocol || "https";
