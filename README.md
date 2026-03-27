@@ -6,16 +6,34 @@ ClawVoice turns your [OpenClaw](https://github.com/openclaw) agent into a phone-
 
 ## Why ClawVoice?
 
-OpenClaw agents are powerful over text, but the real world still runs on phone calls. ClawVoice bridges that gap:
+OpenClaw already has [`@openclaw/voice-call`](https://docs.openclaw.ai/plugins/voice-call) for PSTN calling. ClawVoice is a community alternative that adds batch operations, SMS, post-call intelligence, and a guided setup experience.
 
-- **Your agent makes calls for you** — restaurant reservations, appointment scheduling, business inquiries, follow-ups. You give the purpose; the voice agent handles the conversation.
-- **Your agent answers calls for you** — takes messages, screens callers, gathers information, and relays everything back to you with a full transcript.
-- **Bulk outbound campaigns** — upload a spreadsheet of contacts with purposes, and your agent calls each one sequentially, then delivers a CSV report with outcomes and transcripts.
-- **SMS** — send and receive text messages through the same number. Inbound texts get auto-acknowledged and relayed to you.
-- **Post-call intelligence** — every call produces a structured summary with extracted details (caller name, company, callback number, reason), delivered to your Telegram/Discord/Slack with a downloadable transcript file.
-- **Two premium voice engines** — ElevenLabs Conversational AI (natural, expressive voices) or Deepgram Voice Agent (low latency, lower cost).
+### vs `@openclaw/voice-call` (official plugin)
 
-> **How is this different from OpenClaw's built-in voice?** OpenClaw's built-in voice is for talking *to* your agent. ClawVoice is for your agent talking *to the world* — real phone calls over the PSTN to real phone numbers, with real-time voice AI conversations.
+| Capability | `@openclaw/voice-call` | ClawVoice |
+|------------|:----------------------:|:---------:|
+| Outbound PSTN calls | ✅ | ✅ |
+| Inbound call handling | ✅ | ✅ |
+| Multi-turn voice conversations | ✅ | ✅ |
+| Twilio | ✅ | ✅ |
+| Telnyx | ✅ | ✅ |
+| Plivo | ✅ | — |
+| SMS send/receive | — | ✅ |
+| Batch calling + campaign reports | — | ✅ |
+| Post-call notifications (Telegram/Discord/Slack) | — | ✅ |
+| Voice profiles (owner identity per call) | — | ✅ |
+| ElevenLabs Conversational AI agent | — | ✅ |
+| Deepgram Voice Agent | — | ✅ |
+| Setup wizard + health diagnostics | — | ✅ |
+| Call state machine (13 states) | ✅ | — |
+| Tailscale Funnel exposure | ✅ | — |
+| Latency analysis CLI | ✅ | — |
+
+**Choose `@openclaw/voice-call`** if you need Plivo support, Tailscale integration, or prefer the official plugin with OpenClaw core team maintenance.
+
+**Choose ClawVoice** if you want SMS, batch campaigns with CSV reports, post-call notifications, voice profiles, or a wizard-guided setup.
+
+> **Note:** OpenClaw also has [Talk Mode](https://docs.openclaw.ai/nodes/talk) — a built-in local voice chat for speaking with your agent through your device's microphone. Neither ClawVoice nor `@openclaw/voice-call` replaces Talk Mode; they add PSTN telephony (real phone calls to real phone numbers).
 
 ## Features
 
