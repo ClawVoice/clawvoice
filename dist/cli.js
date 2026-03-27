@@ -53,6 +53,9 @@ function normalizeChoice(value, options) {
     const lowered = value.trim().toLowerCase();
     return options.includes(lowered) ? lowered : "";
 }
+function normalizePersistedInput(value) {
+    return value.trim();
+}
 async function askNonEmpty(prompter, question) {
     while (true) {
         const answer = (await prompter.ask(question)).trim();
@@ -329,14 +332,14 @@ async function runInteractiveSetupWizard(api, config) {
                 process.exit(0);
             }
             if (keep)
-                return currentValue;
+                return normalizePersistedInput(currentValue);
         }
         const newVal = await promptFn();
         if (isCancel(newVal)) {
             cancel("Setup cancelled.");
             process.exit(0);
         }
-        return newVal.trim();
+        return normalizePersistedInput(newVal);
     }
     intro("ClawVoice Setup");
     const hasExistingConfig = !!(existing.twilioAccountSid || existing.telnyxApiKey);
@@ -441,7 +444,11 @@ async function runInteractiveSetupWizard(api, config) {
                     cancel("Setup cancelled.");
                     process.exit(0);
                 }
-                values.twilioStreamUrl = streamUrl;
+                if (typeof streamUrl !== "string") {
+                    cancel("Setup cancelled.");
+                    process.exit(0);
+                }
+                values.twilioStreamUrl = normalizePersistedInput(streamUrl);
             }
         }
         else {
@@ -463,7 +470,11 @@ async function runInteractiveSetupWizard(api, config) {
                 cancel("Setup cancelled.");
                 process.exit(0);
             }
-            values.twilioStreamUrl = streamUrl;
+            if (typeof streamUrl !== "string") {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            values.twilioStreamUrl = normalizePersistedInput(streamUrl);
         }
     }
     // --- Voice provider ---
@@ -616,21 +627,9 @@ async function runInteractiveSetupWizard(api, config) {
         process.exit(0);
     }
     if (runDiag) {
-        const diagConfig = {
-            telephonyProvider: String(values.telephonyProvider),
-            voiceProvider: String(values.voiceProvider),
-            twilioAccountSid: typeof values.twilioAccountSid === "string" ? values.twilioAccountSid : undefined,
-            twilioAuthToken: typeof values.twilioAuthToken === "string" ? values.twilioAuthToken : undefined,
-            twilioPhoneNumber: typeof values.twilioPhoneNumber === "string" ? values.twilioPhoneNumber : undefined,
-            twilioStreamUrl: typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl : undefined,
-            telnyxApiKey: typeof values.telnyxApiKey === "string" ? values.telnyxApiKey : undefined,
-            telnyxConnectionId: typeof values.telnyxConnectionId === "string" ? values.telnyxConnectionId : undefined,
-            telnyxPhoneNumber: typeof values.telnyxPhoneNumber === "string" ? values.telnyxPhoneNumber : undefined,
-            deepgramApiKey: typeof values.deepgramApiKey === "string" ? values.deepgramApiKey : undefined,
-            elevenlabsApiKey: typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined,
-            elevenlabsAgentId: typeof values.elevenlabsAgentId === "string" ? values.elevenlabsAgentId : undefined,
-        };
-        const report = (0, health_1.runDiagnostics)(diagConfig);
+        const existingConfig = existing;
+        const mergedConfig = (0, config_1.resolveConfig)({ ...existingConfig, ...values });
+        const report = (0, health_1.runDiagnostics)(mergedConfig);
         for (const check of report.checks) {
             if (check.status === "pass") {
                 clackLog.success(`${check.name}: ${check.detail}`);
@@ -695,7 +694,7 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
         name: "clawvoice setup",
         description: "Set up ClawVoice (configure telephony and voice providers)",
         run: async (_args) => {
-            await runInteractiveSetupWizard(api);
+            await runInteractiveSetupWizard(api, config);
         },
     });
     api.cli.register({

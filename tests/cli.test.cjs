@@ -38,12 +38,15 @@ function createApi() {
 
 test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   const { api, state } = createApi();
+  const originalFetch = global.fetch;
+  global.fetch = async () => {
+    throw new Error("ngrok unavailable in test");
+  };
   const prompter = createPrompter([
     "twilio",              // telephony provider
     "AC123",               // twilio account SID
     "auth123",             // twilio auth token
     "+15551112222",        // twilio phone number
-    "no",                  // use detected ngrok tunnel? (or this is the stream URL if ngrok not detected)
     "wss://my-tunnel.ngrok-free.dev/media-stream",  // manual stream URL
     "elevenlabs-conversational",  // voice provider
     "el-key",              // elevenlabs API key
@@ -52,18 +55,22 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
     "no",                  // auto-configure Twilio webhooks?
   ]);
 
-  await runSetupWizard(api, [], prompter);
+  try {
+    await runSetupWizard(api, [], prompter);
 
-  assert.equal(state.saved.telephonyProvider, "twilio");
-  assert.equal(state.saved.twilioAccountSid, "AC123");
-  assert.equal(state.saved.twilioAuthToken, "auth123");
-  assert.equal(state.saved.twilioPhoneNumber, "+15551112222");
-  assert.equal(state.saved.twilioStreamUrl, "wss://my-tunnel.ngrok-free.dev/media-stream");
-  assert.equal(state.saved.voiceProvider, "elevenlabs-conversational");
-  assert.equal(state.saved.deepgramApiKey, undefined);
-  assert.equal(state.saved.elevenlabsApiKey, "el-key");
-  assert.equal(state.saved.elevenlabsAgentId, "agent-1");
-  assert.equal(state.logs.length, 1);
+    assert.equal(state.saved.telephonyProvider, "twilio");
+    assert.equal(state.saved.twilioAccountSid, "AC123");
+    assert.equal(state.saved.twilioAuthToken, "auth123");
+    assert.equal(state.saved.twilioPhoneNumber, "+15551112222");
+    assert.equal(state.saved.twilioStreamUrl, "wss://my-tunnel.ngrok-free.dev/media-stream");
+    assert.equal(state.saved.voiceProvider, "elevenlabs-conversational");
+    assert.equal(state.saved.deepgramApiKey, undefined);
+    assert.equal(state.saved.elevenlabsApiKey, "el-key");
+    assert.equal(state.saved.elevenlabsAgentId, "agent-1");
+    assert.equal(state.logs.length, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 // --- Story 4.1: CLI Call Initiation ---

@@ -32,6 +32,10 @@ function normalizeChoice(value: string, options: string[]): string {
   return options.includes(lowered) ? lowered : "";
 }
 
+function normalizePersistedInput(value: string): string {
+  return value.trim();
+}
+
 async function askNonEmpty(prompter: SetupPrompter, question: string): Promise<string> {
   while (true) {
     const answer = (await prompter.ask(question)).trim();
@@ -358,11 +362,11 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
         initialValue: true,
       });
       if (isCancel(keep)) { cancel("Setup cancelled."); process.exit(0); }
-      if (keep) return currentValue;
+      if (keep) return normalizePersistedInput(currentValue);
     }
     const newVal = await promptFn();
     if (isCancel(newVal)) { cancel("Setup cancelled."); process.exit(0); }
-    return (newVal as string).trim();
+    return normalizePersistedInput(newVal as string);
   }
 
   intro("ClawVoice Setup");
@@ -386,25 +390,25 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
 
   if (telephonyProvider === "telnyx") {
     values.telnyxApiKey = await askKeepOrReplace("Telnyx API key", existing.telnyxApiKey, () =>
-      password({ message: "Telnyx API key", validate(v) { if (!v || v.length === 0) return "API key is required"; } }));
+      password({ message: "Telnyx API key", validate(v: string) { if (!v || v.length === 0) return "API key is required"; } }));
 
     values.telnyxConnectionId = await askKeepOrReplace("Telnyx connection ID", existing.telnyxConnectionId, () =>
-      text({ message: "Telnyx connection ID", validate(v) { if (!v || v.length === 0) return "Connection ID is required"; } }));
+      text({ message: "Telnyx connection ID", validate(v: string) { if (!v || v.length === 0) return "Connection ID is required"; } }));
 
     values.telnyxPhoneNumber = await askKeepOrReplace("Telnyx phone number", existing.telnyxPhoneNumber, () =>
       text({ message: "Telnyx phone number (E.164)", placeholder: "+15551234567",
-        validate(v) { if (!v || v.length === 0) return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim())) return "Must be E.164 format"; } }));
+        validate(v: string) { if (!v || v.length === 0) return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim())) return "Must be E.164 format"; } }));
   } else {
     // Twilio
     values.twilioAccountSid = await askKeepOrReplace("Twilio Account SID", existing.twilioAccountSid, () =>
-      text({ message: "Twilio Account SID", placeholder: "AC...", validate(v) { if (!v || v.length === 0) return "Account SID is required"; } }));
+      text({ message: "Twilio Account SID", placeholder: "AC...", validate(v: string) { if (!v || v.length === 0) return "Account SID is required"; } }));
 
     values.twilioAuthToken = await askKeepOrReplace("Twilio Auth Token", existing.twilioAuthToken, () =>
-      password({ message: "Twilio Auth Token", validate(v) { if (!v || v.length === 0) return "Auth token is required"; } }));
+      password({ message: "Twilio Auth Token", validate(v: string) { if (!v || v.length === 0) return "Auth token is required"; } }));
 
     values.twilioPhoneNumber = await askKeepOrReplace("Twilio phone number", existing.twilioPhoneNumber, () =>
       text({ message: "Twilio phone number (E.164)", placeholder: "+15551234567",
-        validate(v) { if (!v || v.length === 0) return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim())) return "Must be E.164 format"; } }));
+        validate(v: string) { if (!v || v.length === 0) return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim())) return "Must be E.164 format"; } }));
 
     // --- Tunnel auto-detection ---
     const s = createSpinner();
@@ -459,13 +463,14 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
         const streamUrl = await text({
           message: "Twilio media stream URL",
           placeholder: "wss://your-tunnel.example.com/media-stream",
-          validate(v) {
+          validate(v: string) {
             if (!v || v.length === 0) return "Stream URL is required";
             if (!v.startsWith("wss://")) return "Must start with wss://";
           },
         });
         if (isCancel(streamUrl)) { cancel("Setup cancelled."); process.exit(0); }
-        values.twilioStreamUrl = streamUrl;
+        if (typeof streamUrl !== "string") { cancel("Setup cancelled."); process.exit(0); }
+        values.twilioStreamUrl = normalizePersistedInput(streamUrl);
       }
     } else {
       note(
@@ -479,13 +484,14 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
       const streamUrl = await text({
         message: "Twilio media stream URL",
         placeholder: "wss://your-tunnel.ngrok-free.dev/media-stream",
-        validate(v) {
+          validate(v: string) {
           if (!v || v.length === 0) return "Stream URL is required";
           if (!v.startsWith("wss://")) return "Must start with wss://";
         },
       });
       if (isCancel(streamUrl)) { cancel("Setup cancelled."); process.exit(0); }
-      values.twilioStreamUrl = streamUrl;
+      if (typeof streamUrl !== "string") { cancel("Setup cancelled."); process.exit(0); }
+      values.twilioStreamUrl = normalizePersistedInput(streamUrl);
     }
   }
 
@@ -502,15 +508,15 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
 
   if (voiceProvider === "deepgram-agent") {
     values.deepgramApiKey = await askKeepOrReplace("Deepgram API key", existing.deepgramApiKey, () =>
-      password({ message: "Deepgram API key", validate(v) { if (!v || v.length === 0) return "API key is required"; } }));
+      password({ message: "Deepgram API key", validate(v: string) { if (!v || v.length === 0) return "API key is required"; } }));
   }
 
   if (voiceProvider === "elevenlabs-conversational") {
     values.elevenlabsApiKey = await askKeepOrReplace("ElevenLabs API key", existing.elevenlabsApiKey, () =>
-      password({ message: "ElevenLabs API key", validate(v) { if (!v || v.length === 0) return "API key is required"; } }));
+      password({ message: "ElevenLabs API key", validate(v: string) { if (!v || v.length === 0) return "API key is required"; } }));
 
     values.elevenlabsAgentId = await askKeepOrReplace("ElevenLabs Agent ID", existing.elevenlabsAgentId, () =>
-      text({ message: "ElevenLabs Agent ID", placeholder: "agent_...", validate(v) { if (!v || v.length === 0) return "Agent ID is required"; } }));
+      text({ message: "ElevenLabs Agent ID", placeholder: "agent_...", validate(v: string) { if (!v || v.length === 0) return "Agent ID is required"; } }));
 
     note(
       "Your ElevenLabs agent's system prompt MUST include:\n\n" +
@@ -660,22 +666,9 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
   if (isCancel(runDiag)) { cancel("Setup cancelled."); process.exit(0); }
 
   if (runDiag) {
-    const diagConfig = {
-      telephonyProvider: String(values.telephonyProvider),
-      voiceProvider: String(values.voiceProvider),
-      twilioAccountSid: typeof values.twilioAccountSid === "string" ? values.twilioAccountSid : undefined,
-      twilioAuthToken: typeof values.twilioAuthToken === "string" ? values.twilioAuthToken : undefined,
-      twilioPhoneNumber: typeof values.twilioPhoneNumber === "string" ? values.twilioPhoneNumber : undefined,
-      twilioStreamUrl: typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl : undefined,
-      telnyxApiKey: typeof values.telnyxApiKey === "string" ? values.telnyxApiKey : undefined,
-      telnyxConnectionId: typeof values.telnyxConnectionId === "string" ? values.telnyxConnectionId : undefined,
-      telnyxPhoneNumber: typeof values.telnyxPhoneNumber === "string" ? values.telnyxPhoneNumber : undefined,
-      deepgramApiKey: typeof values.deepgramApiKey === "string" ? values.deepgramApiKey : undefined,
-      elevenlabsApiKey: typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined,
-      elevenlabsAgentId: typeof values.elevenlabsAgentId === "string" ? values.elevenlabsAgentId : undefined,
-    } as unknown as import("./config").ClawVoiceConfig;
-
-    const report = runDiagnostics(diagConfig);
+    const existingConfig = existing as unknown as Record<string, unknown>;
+    const mergedConfig = resolveConfig({ ...existingConfig, ...values });
+    const report = runDiagnostics(mergedConfig);
     for (const check of report.checks) {
       if (check.status === "pass") {
         clackLog.success(`${check.name}: ${check.detail}`);
@@ -749,7 +742,7 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     name: "clawvoice setup",
     description: "Set up ClawVoice (configure telephony and voice providers)",
     run: async (_args) => {
-      await runInteractiveSetupWizard(api);
+      await runInteractiveSetupWizard(api, config);
     },
   });
 
