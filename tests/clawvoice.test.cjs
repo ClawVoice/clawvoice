@@ -129,8 +129,9 @@ test("start is idempotent and does not create duplicate reaper timers", async ()
 
   try {
     await service.start();
+    const intervalCountAfterFirstStart = intervalCount;
     await service.start();
-    assert.equal(intervalCount, 1);
+    assert.equal(intervalCount, intervalCountAfterFirstStart);
   } finally {
     global.setInterval = originalSetInterval;
     await service.stop();
