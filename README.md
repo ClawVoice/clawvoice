@@ -26,10 +26,10 @@ OpenClaw already has [`@openclaw/voice-call`](https://docs.openclaw.ai/plugins/v
 | Deepgram Voice Agent | — | ✅ |
 | Setup wizard + health diagnostics | — | ✅ |
 | Call state machine (13 states) | ✅ | — |
-| Tailscale Funnel exposure | ✅ | — |
+| Tailscale Funnel exposure | ✅ | ✅ |
 | Latency analysis CLI | ✅ | — |
 
-**Choose `@openclaw/voice-call`** if you need Plivo support, Tailscale integration, or prefer the official plugin with OpenClaw core team maintenance.
+**Choose `@openclaw/voice-call`** if you need Plivo support or prefer the official plugin with OpenClaw core team maintenance.
 
 **Choose ClawVoice** if you want SMS, batch campaigns with CSV reports, post-call notifications, voice profiles, or a wizard-guided setup.
 
