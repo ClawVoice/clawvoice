@@ -130,7 +130,8 @@ export async function runSetupWizard(
       } catch { /* tailscale not available */ }
 
       if (tailscaleDns) {
-        const tsStreamUrl = `wss://${tailscaleDns}/media-stream`;
+        const msPath = resolveConfig(values).mediaStreamPath;
+        const tsStreamUrl = `wss://${tailscaleDns}${msPath}`;
         console.log(`\n  ✓ Detected Tailscale: ${tailscaleDns}`);
         console.log(`    Stream URL will be: ${tsStreamUrl}\n`);
         const useTailscale = await askChoice(
@@ -141,8 +142,10 @@ export async function runSetupWizard(
         if (useTailscale === "yes") {
           values.twilioStreamUrl = tsStreamUrl;
           values.tailscaleMode = "funnel";
-          values.tailscalePath = "/media-stream";
+          values.tailscalePath = msPath;
+          console.log(`\n  After setup completes, run: openclaw clawvoice expose --mode funnel --path ${msPath} --ts-path ${msPath}`);
         } else {
+          values.tailscaleMode = "off";
           values.twilioStreamUrl = await askNonEmpty(
             prompter,
             "Twilio media stream URL (wss://...): "
@@ -654,13 +657,21 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
     name: "clawvoice expose",
     description: "Expose local media stream server via Tailscale serve or funnel",
     run: async (args) => {
-      const modeArg = parseFlag(args, "mode") ?? config.tailscaleMode;
+      const modeArg = (parseFlag(args, "mode") ?? config.tailscaleMode) as string;
       const validModes: TailscaleMode[] = ["off", "serve", "funnel"];
-      const mode = validModes.includes(modeArg as TailscaleMode)
-        ? (modeArg as TailscaleMode)
-        : "funnel";
+      if (!validModes.includes(modeArg as TailscaleMode)) {
+        console.error(`Invalid --mode: ${modeArg}. Use: off|serve|funnel`);
+        return;
+      }
+      const mode = modeArg as TailscaleMode;
 
-      const port = Number(parseFlag(args, "port") ?? config.mediaStreamPort);
+      const portRaw = parseFlag(args, "port") ?? String(config.mediaStreamPort);
+      const port = Number(portRaw);
+      if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+        console.error(`Invalid --port: ${portRaw}. Must be 1-65535.`);
+        return;
+      }
+
       const localPath = parseFlag(args, "path") ?? config.mediaStreamPath;
       const tailscalePath = parseFlag(args, "ts-path") ?? config.tailscalePath;
 
@@ -677,10 +688,12 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
         console.log(`\n  ✓ Tailscale ${mode} active`);
         console.log(`    Public URL: ${result.publicUrl}`);
         console.log(`    Local:      ${result.localUrl}`);
-        if (config.telephonyProvider === "twilio") {
+        if (mode === "funnel" && config.telephonyProvider === "twilio") {
           const wssUrl = result.publicUrl.replace(/^https:/, "wss:");
           console.log(`\n  Twilio stream URL: ${wssUrl}`);
           console.log(`  Set this as your twilioStreamUrl in config.`);
+        } else if (mode === "serve" && config.telephonyProvider === "twilio") {
+          console.log(`\n  Note: Tailscale serve is tailnet-only; Twilio requires funnel for public internet access.`);
         }
       } else if (result.ok && mode === "off") {
         console.log(`\n  ✓ Tailscale exposure disabled for path: ${result.path}`);

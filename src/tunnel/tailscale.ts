@@ -26,6 +26,7 @@ function runTailscaleCommand(
   return new Promise((resolve) => {
     let stdout = "";
     let stderr = "";
+    let settled = false;
 
     const proc = spawn("tailscale", args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -39,23 +40,28 @@ function runTailscaleCommand(
       stderr += chunk.toString();
     });
 
-    // SIGTERM first for graceful cleanup, SIGKILL after 1s if needed
+    const finish = (code: number, out: string, err?: string) => {
+      if (settled) return;
+      settled = true;
+      resolve({ code, stdout: out, stderr: err && err.length > 0 ? err : undefined });
+    };
+
     const timer = setTimeout(() => {
-      proc.kill("SIGTERM");
-      setTimeout(() => {
-        if (!proc.killed) proc.kill("SIGKILL");
-      }, 1000);
-      resolve({ code: -1, stdout: "", stderr: stderr || undefined });
+      try {
+        proc.kill();
+      } catch {
+      }
+      finish(-1, "", stderr);
     }, timeoutMs);
 
     proc.on("error", () => {
       clearTimeout(timer);
-      resolve({ code: -1, stdout: "", stderr: stderr || undefined });
+      finish(-1, "", stderr);
     });
 
     proc.on("close", (code) => {
       clearTimeout(timer);
-      resolve({ code: code ?? -1, stdout, stderr: stderr || undefined });
+      finish(code ?? -1, stdout, stderr);
     });
   });
 }
@@ -90,25 +96,31 @@ export async function setupTailscaleExposure(opts: {
   path: string;
   localUrl: string;
 }): Promise<string | null> {
+  const p = normalizePath(opts.path);
   const dnsName = await getTailscaleDnsName();
   if (!dnsName) return null;
 
   const { code } = await runTailscaleCommand(
-    [opts.mode, "--bg", "--yes", "--set-path", opts.path, opts.localUrl],
+    [opts.mode, "--bg", "--yes", "--set-path", p, opts.localUrl],
     10_000,
   );
 
   if (code === 0) {
-    return `https://${dnsName}${opts.path}`;
+    return `https://${dnsName}${p}`;
   }
   return null;
 }
+
+const normalizePath = (p: string) => (p.startsWith("/") ? p : `/${p}`);
 
 export async function cleanupTailscaleExposure(opts: {
   mode: "serve" | "funnel";
   path: string;
 }): Promise<void> {
-  await runTailscaleCommand([opts.mode, "off", opts.path]);
+  const p = normalizePath(opts.path);
+  await runTailscaleCommand([opts.mode, "--yes", "--set-path", p, "off"], 10_000);
+  await runTailscaleCommand([opts.mode, "off", p]);
+  await runTailscaleCommand([opts.mode, "off"]);
 }
 
 export async function exposeViaTailscale(opts: {
@@ -117,8 +129,9 @@ export async function exposeViaTailscale(opts: {
   localPath: string;
   tailscalePath?: string;
 }): Promise<TailscaleExposeResult> {
-  const tsPath = opts.tailscalePath ?? opts.localPath;
-  const localUrl = `http://127.0.0.1:${opts.localPort}${opts.localPath}`;
+  const localPath = normalizePath(opts.localPath);
+  const tsPath = normalizePath(opts.tailscalePath ?? localPath);
+  const localUrl = `http://127.0.0.1:${opts.localPort}${localPath}`;
 
   if (opts.mode === "off") {
     await Promise.all([
@@ -127,6 +140,9 @@ export async function exposeViaTailscale(opts: {
     ]);
     return { ok: true, mode: "off", path: tsPath, localUrl, publicUrl: null };
   }
+
+  const oppositeMode = opts.mode === "funnel" ? "serve" : "funnel";
+  await cleanupTailscaleExposure({ mode: oppositeMode, path: tsPath });
 
   const publicUrl = await setupTailscaleExposure({
     mode: opts.mode,

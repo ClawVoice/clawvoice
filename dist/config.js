@@ -226,6 +226,12 @@ function validateConfig(config) {
     if (!config.mediaStreamPath.startsWith("/")) {
         validationErrors.push("mediaStreamPath must start with '/'");
     }
+    if (!config.tailscalePath || config.tailscalePath.trim().length === 0) {
+        validationErrors.push("tailscalePath must not be empty");
+    }
+    else if (!config.tailscalePath.startsWith("/")) {
+        validationErrors.push("tailscalePath must start with '/'");
+    }
     if (config.disclosureEnabled &&
         config.disclosureStatement.trim().length === 0) {
         validationErrors.push("disclosureStatement must be non-empty when disclosureEnabled is true");
