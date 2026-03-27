@@ -234,7 +234,10 @@ export class PostCallService {
     lines.push(`<b>${dir} Call Summary</b>`);
     lines.push("");
 
-    // Caller identification — name if extracted, phone number always shown
+    // M1: Mask phone numbers in notifications
+    const maskPhone = (num: string): string => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
+
+    // Caller identification — name if extracted, phone number always masked
     if (extracted?.callerName) {
       const nameLine = extracted.company
         ? `${extracted.callerName} (${extracted.company})`
@@ -242,12 +245,12 @@ export class PostCallService {
       lines.push(`<b>Caller:</b> ${nameLine}`);
     }
     if (meta?.callerPhone) {
-      lines.push(`<b>Phone:</b> ${meta.callerPhone}`);
+      lines.push(`<b>Phone:</b> ${maskPhone(meta.callerPhone)}`);
     } else {
       lines.push(`<b>Phone:</b> Unknown`);
     }
     if (extracted?.callbackNumber && extracted.callbackNumber !== meta?.callerPhone?.replace(/\D/g, "")) {
-      lines.push(`<b>Callback #:</b> ${extracted.callbackNumber}`);
+      lines.push(`<b>Callback #:</b> ${maskPhone(extracted.callbackNumber)}`);
     }
     lines.push(`<b>Time:</b> ${time}`);
     lines.push(`<b>Duration:</b> ${duration} | ${transcript.length} turns`);
@@ -300,22 +303,22 @@ export class PostCallService {
   ): string {
     const lines: string[] = [];
     const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
+    // M1: Mask phone numbers in system event text
+    const maskPhone = (num: string): string => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
     lines.push(`--- CALL COMPLETED (${dir}) ---`);
-    if (meta?.callerPhone) lines.push(`Phone: ${meta.callerPhone}`);
+    if (meta?.callerPhone) lines.push(`Phone: ${maskPhone(meta.callerPhone)}`);
     if (extracted?.callerName) lines.push(`Caller: ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
-    if (extracted?.callbackNumber) lines.push(`Callback: ${extracted.callbackNumber}`);
+    if (extracted?.callbackNumber) lines.push(`Callback: ${maskPhone(extracted.callbackNumber)}`);
     if (extracted?.reason) lines.push(`Reason: ${extracted.reason}`);
     lines.push(`Duration: ${this.formatDuration(summary.durationMs)} | Turns: ${transcript.length}`);
     lines.push(`Outcome: ${summary.outcome}`);
 
+    // M5: Limit system event transcript to last 5 turns instead of up to 20
     if (transcript.length > 0) {
-      lines.push("\nTranscript:");
-      for (const entry of transcript.slice(0, 20)) {
+      lines.push(`\nTranscript (last ${Math.min(transcript.length, 5)} of ${transcript.length} turns):`);
+      for (const entry of transcript.slice(-5)) {
         const role = entry.speaker === "agent" ? "Agent" : "Caller";
         lines.push(`${role}: ${entry.text}`);
-      }
-      if (transcript.length > 20) {
-        lines.push(`... (${transcript.length - 20} more turns)`);
       }
     }
 
@@ -359,14 +362,16 @@ export class PostCallService {
     const lines: string[] = [];
     lines.push(`CALL TRANSCRIPT — ${dir}`);
     lines.push("=".repeat(40));
+    // M1: Mask phone numbers in transcript file
+    const maskPhone = (num: string): string => num.length > 4 ? num.slice(0, -4).replace(/./g, "*") + num.slice(-4) : "****";
     lines.push(`Date:     ${time}`);
     lines.push(`Duration: ${this.formatDuration(summary.durationMs)}`);
     lines.push(`Outcome:  ${summary.outcome}`);
-    if (meta?.callerPhone) lines.push(`Phone:    ${meta.callerPhone}`);
+    if (meta?.callerPhone) lines.push(`Phone:    ${maskPhone(meta.callerPhone)}`);
     if (extracted?.callerName) {
       lines.push(`Caller:   ${extracted.callerName}${extracted.company ? ` (${extracted.company})` : ""}`);
     }
-    if (extracted?.callbackNumber) lines.push(`Callback: ${extracted.callbackNumber}`);
+    if (extracted?.callbackNumber) lines.push(`Callback: ${maskPhone(extracted.callbackNumber)}`);
     if (extracted?.reason) lines.push(`Reason:   ${extracted.reason}`);
     lines.push("=".repeat(40));
     lines.push("");

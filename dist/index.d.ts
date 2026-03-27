@@ -6,6 +6,6 @@ type OpenClawPluginExports = Plugin & {
 declare const plugin: OpenClawPluginExports;
 export declare function activate(api: PluginAPI): void;
 export declare function register(api: PluginAPI): void;
-/** Reset initialization guard — for testing only. */
+/** Reset initialization guard — for testing only. L5: guarded by NODE_ENV. */
 export declare function _resetForTesting(): void;
 export default plugin;

@@ -26,6 +26,42 @@ export interface WebhookCallbacks {
   onRecording?: RecordingHandler;
 }
 
+/** H5: Simple in-memory per-IP rate limiter for webhook endpoints. */
+const WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
+const WEBHOOK_RATE_LIMIT_MAX = 100;
+
+class WebhookRateLimiter {
+  private readonly map = new Map<string, { count: number; resetAt: number }>();
+  private cleanupTimer: NodeJS.Timeout | null = null;
+
+  constructor() {
+    // Periodically evict expired entries to prevent unbounded growth
+    this.cleanupTimer = setInterval(() => this.evictExpired(), 5 * 60_000);
+    this.cleanupTimer.unref?.();
+  }
+
+  check(req: WebhookRequest): boolean {
+    const rawReq = req as unknown as { socket?: { remoteAddress?: string }; connection?: { remoteAddress?: string } };
+    const forwarded = req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim();
+    const ip = forwarded || rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
+    const now = Date.now();
+    const entry = this.map.get(ip);
+    if (!entry || now >= entry.resetAt) {
+      this.map.set(ip, { count: 1, resetAt: now + WEBHOOK_RATE_LIMIT_WINDOW_MS });
+      return true;
+    }
+    entry.count++;
+    return entry.count <= WEBHOOK_RATE_LIMIT_MAX;
+  }
+
+  private evictExpired(): void {
+    const now = Date.now();
+    for (const [ip, entry] of this.map) {
+      if (now >= entry.resetAt) this.map.delete(ip);
+    }
+  }
+}
+
 /**
  * Core webhook handler logic, shared between OpenClaw API registration and standalone server.
  */
@@ -41,8 +77,15 @@ export function createWebhookHandlers(
   handleTwilioRecording: (req: WebhookRequest, response: unknown) => Promise<void>;
 } {
   const { onInbound, onInboundText, onRecording } = callbacks;
+  const rateLimiter = new WebhookRateLimiter();
+  // H1: Derive base URL from twilioStreamUrl for use in signature verification
+  const webhookBaseUrl = deriveBaseUrl(config.twilioStreamUrl);
 
   const handleTelnyxWebhook = async (req: WebhookRequest, response: unknown): Promise<void> => {
+    if (!rateLimiter.check(req)) {
+      (response as ResponseShim).status(429).json({ error: "Too Many Requests" });
+      return;
+    }
     const request = req as WebhookRequest;
     const body = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? "");
     const result = verifyTelnyxSignature(
@@ -88,8 +131,12 @@ export function createWebhookHandlers(
   };
 
   const handleTwilioVoice = async (req: WebhookRequest, response: unknown): Promise<void> => {
+    if (!rateLimiter.check(req)) {
+      (response as ResponseShim).status(429).json({ error: "Too Many Requests" });
+      return;
+    }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request);
+    const url = buildPublicUrl(request, webhookBaseUrl);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -136,8 +183,12 @@ export function createWebhookHandlers(
   };
 
   const handleTwilioAmd = async (req: WebhookRequest, response: unknown): Promise<void> => {
+    if (!rateLimiter.check(req)) {
+      (response as ResponseShim).status(429).json({ error: "Too Many Requests" });
+      return;
+    }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request);
+    const url = buildPublicUrl(request, webhookBaseUrl);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -174,8 +225,12 @@ export function createWebhookHandlers(
   };
 
   const handleTwilioSms = async (req: WebhookRequest, response: unknown): Promise<void> => {
+    if (!rateLimiter.check(req)) {
+      (response as ResponseShim).status(429).json({ error: "Too Many Requests" });
+      return;
+    }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request);
+    const url = buildPublicUrl(request, webhookBaseUrl);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -200,8 +255,12 @@ export function createWebhookHandlers(
   };
 
   const handleTwilioRecording = async (req: WebhookRequest, response: unknown): Promise<void> => {
+    if (!rateLimiter.check(req)) {
+      (response as ResponseShim).status(429).json({ error: "Too Many Requests" });
+      return;
+    }
     const request = req as WebhookRequest;
-    const url = buildPublicUrl(request);
+    const url = buildPublicUrl(request, webhookBaseUrl);
     const params = typeof request.body === "object" && request.body !== null ? request.body as Record<string, string> : {};
     const result = verifyTwilioSignature(
       url,
@@ -217,8 +276,18 @@ export function createWebhookHandlers(
     const callSid = typeof params.CallSid === "string" ? params.CallSid : "";
     const recordingUrl = typeof params.RecordingUrl === "string" ? params.RecordingUrl : "";
 
+    // M7: Validate recording URL domain matches Twilio/Telnyx patterns
     if (callSid && recordingUrl && onRecording) {
-      onRecording(callSid, recordingUrl);
+      let validDomain = false;
+      try {
+        const parsed = new URL(recordingUrl);
+        validDomain = /\.(twilio\.com|telnyx\.com)$/i.test(parsed.hostname);
+      } catch { /* invalid URL */ }
+      if (validDomain) {
+        onRecording(callSid, recordingUrl);
+      } else {
+        logError?.(`Recording URL rejected — unexpected domain: ${recordingUrl}`);
+      }
     }
 
     (response as ResponseShim).status(200).json({ ok: true });
@@ -317,7 +386,22 @@ export function registerStandaloneWebhookRoutes(
   });
 }
 
-function buildPublicUrl(request: WebhookRequest): string {
+/** H1: Derive a configured base URL from twilioStreamUrl for signature verification. */
+function deriveBaseUrl(twilioStreamUrl: string | undefined): string | undefined {
+  if (!twilioStreamUrl) return undefined;
+  try {
+    const parsed = new URL(twilioStreamUrl);
+    return `https://${parsed.host}`;
+  } catch { return undefined; }
+}
+
+function buildPublicUrl(request: WebhookRequest, baseUrl?: string): string {
+  // H1: When a configured base URL is available, use it instead of
+  // reconstructing from attacker-controlled headers.
+  if (baseUrl) {
+    const urlPath = request.url ?? "/";
+    return `${baseUrl}${urlPath}`;
+  }
   const forwardedProto = request.headers?.["x-forwarded-proto"]?.split(",")[0]?.trim();
   const forwardedHost = request.headers?.["x-forwarded-host"]?.split(",")[0]?.trim();
   const protocol = forwardedProto || request.protocol || "https";

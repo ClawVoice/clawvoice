@@ -52,6 +52,13 @@ export interface TextMessageRecord {
     body: string;
     createdAt: string;
 }
+/** Pending call context stored in-memory instead of URL query params (C2). */
+interface PendingCallContextEntry {
+    purpose?: string;
+    greeting?: string;
+    callId?: string;
+    createdAt: number;
+}
 export declare class ClawVoiceService {
     private readonly config;
     private running;
@@ -66,6 +73,11 @@ export declare class ClawVoiceService {
     private dailyResetDate;
     private systemEventEmitter;
     private readonly smsReplyTimestamps;
+    /** In-memory map for passing call context via short reference IDs instead of URL query params. */
+    readonly pendingCallContext: Map<string, PendingCallContextEntry>;
+    private pendingContextCleanupTimer;
+    /** Auth token for WebSocket connections, derived from Twilio auth token. */
+    private readonly mediaStreamAuthToken;
     readonly bridge: VoiceBridgeService;
     readonly postCall: PostCallService;
     private readonly voiceProviderClient;
@@ -126,3 +138,4 @@ export declare class ClawVoiceService {
     getRecentTexts(): TextMessageRecord[];
     private completeCall;
 }
+export {};

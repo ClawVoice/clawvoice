@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ClawVoiceService = void 0;
 const path = __importStar(require("path"));
+const crypto_1 = require("crypto");
 const routes_1 = require("../routes");
 const telnyx_1 = require("../telephony/telnyx");
 const twilio_1 = require("../telephony/twilio");
@@ -62,9 +63,19 @@ class ClawVoiceService {
         this.dailyResetDate = new Date().toISOString().slice(0, 10);
         this.systemEventEmitter = null;
         this.smsReplyTimestamps = new Map();
+        /** In-memory map for passing call context via short reference IDs instead of URL query params. */
+        this.pendingCallContext = new Map();
+        this.pendingContextCleanupTimer = null;
         this.mediaStreamServer = null;
         this.reaperTimer = null;
         this.workspacePath = workspacePath;
+        // Generate a deterministic auth token from the Twilio auth token (C1)
+        if (config.twilioAuthToken) {
+            this.mediaStreamAuthToken = (0, crypto_1.createHash)("sha256")
+                .update(`clawvoice-media-stream:${config.twilioAuthToken}`)
+                .digest("hex")
+                .slice(0, 32);
+        }
         this.telephonyAdapter =
             config.telephonyProvider === "twilio"
                 ? new twilio_1.TwilioTelephonyAdapter(config, fetchFn)
@@ -89,6 +100,8 @@ class ClawVoiceService {
                     : config.deepgramVoice,
                 voiceSystemPrompt: config.voiceSystemPrompt,
                 allowAutoAccept: true,
+                /** Resolver for pending call context references (C2). */
+                resolveCallContext: (refId) => this.pendingCallContext.get(refId) ?? null,
                 onCallCompleted: (callId, summary, transcript, meta) => {
                     if (!summary)
                         return;
@@ -96,6 +109,16 @@ class ClawVoiceService {
                 },
             })
             : null;
+        // Start periodic cleanup of expired pending call context entries (5 min TTL)
+        this.pendingContextCleanupTimer = setInterval(() => {
+            const now = Date.now();
+            for (const [key, entry] of this.pendingCallContext) {
+                if (now - entry.createdAt > 300000) {
+                    this.pendingCallContext.delete(key);
+                }
+            }
+        }, 60000);
+        this.pendingContextCleanupTimer.unref?.();
     }
     createVoiceProviderClient(config) {
         if (config.voiceProvider === "elevenlabs-conversational") {
@@ -133,6 +156,10 @@ class ClawVoiceService {
             clearTimeout(timer);
         }
         this.callTimers.clear();
+        if (this.pendingContextCleanupTimer) {
+            clearInterval(this.pendingContextCleanupTimer);
+            this.pendingContextCleanupTimer = null;
+        }
         await this.bridge.stopAll();
         this.running = false;
     }
@@ -159,6 +186,7 @@ class ClawVoiceService {
             port: streamPort,
             path: streamPath,
             sessionHandler: this.mediaSessionHandler,
+            authToken: this.mediaStreamAuthToken,
         });
         // Register webhook routes on the standalone server so they work
         // even when the OpenClaw gateway doesn't dispatch plugin routes.
@@ -272,6 +300,13 @@ class ClawVoiceService {
         const greeting = disclosure.length > 0
             ? `${disclosure} ${baseGreeting}`
             : baseGreeting;
+        // Store purpose/greeting in-memory and pass only a short reference ID (C2)
+        const refId = (0, crypto_1.randomBytes)(16).toString("hex");
+        this.pendingCallContext.set(refId, {
+            purpose: request.purpose,
+            greeting,
+            createdAt: Date.now(),
+        });
         const providerResult = await this.telephonyAdapter.startCall({
             to: request.phoneNumber,
             from: this.config.telephonyProvider === "twilio"
@@ -279,6 +314,8 @@ class ClawVoiceService {
                 : this.config.telnyxPhoneNumber,
             greeting,
             purpose: request.purpose,
+            refId,
+            mediaStreamAuthToken: this.mediaStreamAuthToken,
         });
         const callId = this.createCallId();
         const record = {
