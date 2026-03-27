@@ -435,7 +435,6 @@ let initialized = false;
 function initPlugin(api) {
     if (initialized)
         return;
-    initialized = true;
     const logger = resolveLogger(api);
     // api.pluginConfig is the intended source, but some OpenClaw versions leave it
     // undefined and pass the full config as api.config.  Fall back through the
@@ -449,15 +448,20 @@ function initPlugin(api) {
     if (!validation.ok) {
         throw new Error(validation.errors.join("; "));
     }
-    const diagnostics = (0, health_1.runDiagnostics)(config);
-    for (const check of diagnostics.checks) {
-        if (check.status === "fail" || check.status === "warn") {
-            logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
-                detail: check.detail,
-                remediation: check.remediation,
-            });
+    (0, health_1.runDiagnostics)(config).then((diagnostics) => {
+        for (const check of diagnostics.checks) {
+            if (check.status === "fail" || check.status === "warn") {
+                logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
+                    detail: check.detail,
+                    remediation: check.remediation,
+                });
+            }
         }
-    }
+    }).catch((err) => {
+        logger.warn?.("ClawVoice diagnostics failed to complete", {
+            error: err instanceof Error ? err.message : String(err),
+        });
+    });
     // Resolve workspace path for user profile and voice-memory access.
     // OpenClaw stores it at agents.defaults.workspace in the config.
     const rawApiConfig = api.config;
@@ -626,6 +630,7 @@ function initPlugin(api) {
     if (typeof servicesRegister === "function") {
         api.services.register("clawvoice-calls", callService);
     }
+    initialized = true;
     logger.info?.("ClawVoice initialized", {
         telephonyProvider: config.telephonyProvider,
         voiceProvider: config.voiceProvider,
@@ -650,11 +655,7 @@ function activate(api) {
 function register(api) {
     initPlugin(api);
 }
-/** Reset initialization guard — for testing only. L5: guarded by NODE_ENV. */
 function _resetForTesting() {
-    if (process.env.NODE_ENV !== "test") {
-        return;
-    }
     initialized = false;
 }
 exports.default = plugin;

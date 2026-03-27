@@ -123,7 +123,7 @@ test("plugin init registers core extension points", async () => {
   await plugin.init(api);
 
   assert.equal(state.tools.length, 9, "expected 9 tools: batch_call, call, campaign_report, clear_calls, hangup, send_text, text_status, status, promote_memory");
-  assert.equal(state.cli.length, 10, "expected 10 CLI commands: setup, call, clear, sms, inbox, status, promote, history, test, profile");
+  assert.equal(state.cli.length, 11, "expected 11 CLI commands: setup, call, clear, expose, sms, inbox, status, promote, history, test, profile");
   assert.equal(state.routes.length, 5);
   assert.equal(state.hooks.length, 4);
   assert.equal(state.services.length, 1);
@@ -161,6 +161,7 @@ test("plugin init registers expected CLI command names", async () => {
   assert.deepEqual(cliNames, [
     "clawvoice call",
     "clawvoice clear",
+    "clawvoice expose",
     "clawvoice history",
     "clawvoice inbox",
     "clawvoice profile",
