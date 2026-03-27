@@ -726,7 +726,7 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
   if (runDiag) {
     const existingConfig = existing as unknown as Record<string, unknown>;
     const mergedConfig = resolveConfig({ ...existingConfig, ...values });
-    const report = runDiagnostics(mergedConfig);
+    const report = await runDiagnostics(mergedConfig);
     for (const check of report.checks) {
       if (check.status === "pass") {
         clackLog.success(`${check.name}: ${check.detail}`);

@@ -686,7 +686,7 @@ async function runInteractiveSetupWizard(api, config) {
     if (runDiag) {
         const existingConfig = existing;
         const mergedConfig = (0, config_1.resolveConfig)({ ...existingConfig, ...values });
-        const report = (0, health_1.runDiagnostics)(mergedConfig);
+        const report = await (0, health_1.runDiagnostics)(mergedConfig);
         for (const check of report.checks) {
             if (check.status === "pass") {
                 clackLog.success(`${check.name}: ${check.detail}`);
