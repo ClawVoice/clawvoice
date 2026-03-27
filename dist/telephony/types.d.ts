@@ -3,6 +3,10 @@ export interface StartCallInput {
     from?: string;
     greeting?: string;
     purpose?: string;
+    /** Short reference ID for looking up purpose/greeting from in-memory store instead of URL params (C2). */
+    refId?: string;
+    /** Auth token to include in the media stream URL for WebSocket authentication (C1). */
+    mediaStreamAuthToken?: string;
 }
 export interface StartCallResult {
     providerCallId: string;

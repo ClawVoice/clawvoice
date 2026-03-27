@@ -72,7 +72,7 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   dailyCallLimit: 50,
   recordCalls: false,
   amdEnabled: true,
-  mediaStreamBind: "0.0.0.0",
+  mediaStreamBind: "127.0.0.1",
   mediaStreamPort: 3101,
   mediaStreamPath: "/media-stream",
   smsAutoReply: true,

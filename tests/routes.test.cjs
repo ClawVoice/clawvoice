@@ -185,13 +185,14 @@ describe("Route Handlers — SMS webhooks", () => {
       Body: "Hello from Twilio",
       MessageSid: "SM123",
     };
-    const url = "https://example.test/clawvoice/webhooks/twilio/sms";
+    // H1: URL is now derived from twilioStreamUrl (wss://voice.example.test/media-stream -> https://voice.example.test)
+    const url = "https://voice.example.test/clawvoice/webhooks/twilio/sms";
     const signature = twilioSignature(url, params, config.twilioAuthToken);
     const req = {
       protocol: "https",
       url: "/clawvoice/webhooks/twilio/sms",
       headers: {
-        host: "example.test",
+        host: "voice.example.test",
         "x-twilio-signature": signature,
       },
       body: params,
@@ -271,6 +272,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
       From: "+15551234567",
       To: "+15550001111",
     };
+    // buildPublicUrl uses forwarded headers to reconstruct the URL Twilio signed
     const expectedUrl = "https://public.example.com/clawvoice/webhooks/twilio/voice";
     const signature = twilioSignature(expectedUrl, params, config.twilioAuthToken);
 
@@ -302,13 +304,14 @@ describe("Route Handlers — Twilio voice webhook", () => {
       From: "+15551234567",
       To: "+15550001111",
     };
-    const url = "https://example.test/clawvoice/webhooks/twilio/voice";
+    // H1: URL derived from twilioStreamUrl
+    const url = "https://voice.example.test/clawvoice/webhooks/twilio/voice";
     const signature = twilioSignature(url, params, config.twilioAuthToken);
     const req = {
       protocol: "https",
       url: "/clawvoice/webhooks/twilio/voice",
       headers: {
-        host: "example.test",
+        host: "voice.example.test",
         "x-twilio-signature": signature,
       },
       body: params,
@@ -321,7 +324,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
     assert.equal(res.getContentType(), "text/xml");
     assert.match(res.getSentBody(), /<Response>/);
     assert.match(res.getSentBody(), /<Connect>/);
-    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream" track="inbound_track">/);
+    assert.match(res.getSentBody(), /<Stream url="wss:\/\/voice.example.test\/media-stream\?token=[a-f0-9]{32}" track="inbound_track">/);
     // Inbound TwiML now includes From/To as stream parameters
     assert.match(res.getSentBody(), /<Parameter name="from" value="\+15551234567"\/>/);
   });
@@ -338,6 +341,7 @@ describe("Route Handlers — Twilio voice webhook", () => {
       From: "+15551234567",
       To: "+15550001111",
     };
+    // No twilioStreamUrl configured, so buildPublicUrl falls back to header-based reconstruction
     const url = "https://example.test/clawvoice/webhooks/twilio/voice";
     const signature = twilioSignature(url, params, config.twilioAuthToken);
     const req = {

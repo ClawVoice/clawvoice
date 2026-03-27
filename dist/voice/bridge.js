@@ -310,6 +310,14 @@ class VoiceBridgeService {
                     name: message.function_name,
                     input: message.input ?? {},
                 };
+                // L4: Check function name against denied tools list
+                if (this.config.restrictTools && this.config.deniedTools.includes(fcReq.name)) {
+                    return {
+                        action: "function_call_denied",
+                        request: fcReq,
+                        reason: `Function "${fcReq.name}" is denied by restrictTools policy`,
+                    };
+                }
                 bridge.pendingFunctionCalls.set(fcReq.id, fcReq);
                 return { action: "function_call", request: fcReq };
             }

@@ -90,6 +90,10 @@ export type VoiceAgentMessageResult = {
     action: "function_call";
     request: FunctionCallRequest;
 } | {
+    action: "function_call_denied";
+    request: FunctionCallRequest;
+    reason: string;
+} | {
     action: "barge_in";
     duringGrace: boolean;
 } | {
