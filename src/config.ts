@@ -49,6 +49,8 @@ export interface ClawVoiceConfig {
   notifyDiscord: boolean;
   notifySlack: boolean;
   notificationTimezone: string;
+  tailscaleMode: "off" | "serve" | "funnel";
+  tailscalePath: string;
 }
 
 export interface ValidationResult {
@@ -89,6 +91,8 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   notifyDiscord: false,
   notifySlack: false,
   notificationTimezone: "America/Chicago",
+  tailscaleMode: "off" as const,
+  tailscalePath: "/media-stream",
 };
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -162,6 +166,10 @@ function parseTelephonyProvider(value: unknown): TelephonyProvider | undefined {
 
 function parseVoiceProvider(value: unknown): VoiceProvider | undefined {
   return value === "deepgram-agent" || value === "elevenlabs-conversational" ? value : undefined;
+}
+
+function parseTailscaleMode(value: unknown): "off" | "serve" | "funnel" | undefined {
+  return value === "off" || value === "serve" || value === "funnel" ? value : undefined;
 }
 
 function validateTwilioStreamUrl(url: string): string | undefined {
@@ -343,6 +351,16 @@ export function resolveConfig(
       typeof pluginConfig.notificationTimezone === "string" ? pluginConfig.notificationTimezone : undefined,
       DEFAULT_CONFIG.notificationTimezone
     ),
+    tailscaleMode: getValue(
+      parseTailscaleMode(envString(env, "CLAWVOICE_TAILSCALE_MODE")),
+      parseTailscaleMode(pluginConfig.tailscaleMode),
+      DEFAULT_CONFIG.tailscaleMode,
+    ),
+    tailscalePath: getValue(
+      envString(env, "CLAWVOICE_TAILSCALE_PATH"),
+      typeof pluginConfig.tailscalePath === "string" ? pluginConfig.tailscalePath : undefined,
+      DEFAULT_CONFIG.tailscalePath,
+    ),
   };
 }
 
@@ -363,6 +381,12 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
     validationErrors.push("mediaStreamPath must start with '/'");
   }
 
+  if (!config.tailscalePath || config.tailscalePath.trim().length === 0) {
+    validationErrors.push("tailscalePath must not be empty");
+  } else if (!config.tailscalePath.startsWith("/")) {
+    validationErrors.push("tailscalePath must start with '/'");
+  }
+
   if (
     config.disclosureEnabled &&
     config.disclosureStatement.trim().length === 0
@@ -374,6 +398,20 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
 
   // Credential/endpoint presence is enforced at call time by validateCallReadiness()
   // and surfaced by diagnostics. validateConfig only checks structural format.
+
+  if (!config.notificationTimezone || !config.notificationTimezone.trim()) {
+    validationErrors.push(
+      'notificationTimezone must not be blank (e.g. "America/New_York")',
+    );
+  } else {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: config.notificationTimezone });
+    } catch {
+      validationErrors.push(
+        `notificationTimezone "${config.notificationTimezone}" is not a valid IANA timezone (e.g. "America/New_York")`,
+      );
+    }
+  }
 
   if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
     const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);

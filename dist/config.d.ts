@@ -46,6 +46,8 @@ export interface ClawVoiceConfig {
     notifyDiscord: boolean;
     notifySlack: boolean;
     notificationTimezone: string;
+    tailscaleMode: "off" | "serve" | "funnel";
+    tailscalePath: string;
 }
 export interface ValidationResult {
     ok: boolean;

@@ -1,4 +1,5 @@
 import { ClawVoiceConfig } from "../config";
+import { isTailscaleAvailable } from "../tunnel/tailscale";
 
 export type CheckStatus = "pass" | "warn" | "fail";
 
@@ -15,9 +16,10 @@ export interface DiagnosticReport {
   generatedAt: string;
 }
 
-export function runDiagnostics(config: ClawVoiceConfig): DiagnosticReport {
+export async function runDiagnostics(config: ClawVoiceConfig, openclawConfig?: Record<string, unknown>): Promise<DiagnosticReport> {
   const checks: HealthCheck[] = [];
 
+  checks.push(checkPluginConflict(openclawConfig));
   checks.push(checkMode(config));
   checks.push(checkTelephonyProvider(config));
   checks.push(checkVoiceProvider(config));
@@ -25,6 +27,7 @@ export function runDiagnostics(config: ClawVoiceConfig): DiagnosticReport {
   checks.push(checkVoiceCredentials(config));
   checks.push(checkWebhookConfig(config));
   checks.push(checkTwilioStreamConfig(config));
+  checks.push(await checkTailscale(config));
   checks.push(checkDisclosure(config));
   checks.push(checkCallDuration(config));
 
@@ -34,6 +37,62 @@ export function runDiagnostics(config: ClawVoiceConfig): DiagnosticReport {
     overall,
     checks,
     generatedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Detect @openclaw/voice-call — the built-in voice plugin that overlaps with
+ * ClawVoice.  Both register voice tools/hooks, causing duplicate tool entries
+ * and unpredictable routing when both are active.
+ *
+ * When the full OpenClaw config is available (initPlugin / wizard), callers
+ * should pass it as `openclawConfig` so we can check
+ * `plugins.entries["voice-call"]`.  Without it we fall back to a
+ * `require.resolve` probe which only catches npm-installed copies.
+ */
+export function checkPluginConflict(openclawConfig?: Record<string, unknown>): HealthCheck {
+  let conflictDetected = false;
+  let determinedFromConfig = false;
+
+  if (openclawConfig) {
+    const plugins = openclawConfig.plugins as Record<string, unknown> | undefined;
+    const entries = plugins?.entries as Record<string, unknown> | undefined;
+    const voiceCallEntry = entries?.["voice-call"];
+
+    if (voiceCallEntry !== undefined && voiceCallEntry !== null) {
+      determinedFromConfig = true;
+      if (typeof voiceCallEntry === "object" && (voiceCallEntry as Record<string, unknown>).enabled === false) {
+        conflictDetected = false;
+      } else {
+        conflictDetected = true;
+      }
+    }
+  }
+
+  if (!determinedFromConfig) {
+    try {
+      require.resolve("@openclaw/voice-call");
+      conflictDetected = true;
+    } catch (err: unknown) {
+      if (err instanceof Error && !err.message.includes("Cannot find module")) {
+        console.warn("[clawvoice] Unexpected error probing for @openclaw/voice-call:", err.message);
+      }
+    }
+  }
+
+  if (conflictDetected) {
+    return {
+      name: "plugin-conflict",
+      status: "warn",
+      detail: "@openclaw/voice-call is also active. The agent may route voice requests to the wrong plugin.",
+      remediation: 'Disable it: set plugins.entries["voice-call"].enabled = false in your OpenClaw config, or run `openclaw plugins disable voice-call`.',
+    };
+  }
+
+  return {
+    name: "plugin-conflict",
+    status: "pass",
+    detail: "No conflicting voice plugins detected.",
   };
 }
 
@@ -229,6 +288,32 @@ function checkTwilioStreamConfig(config: ClawVoiceConfig): HealthCheck {
     name: "twilio-stream-config",
     status: "pass",
     detail: "Twilio stream URL looks valid (public WSS endpoint).",
+  };
+}
+
+async function checkTailscale(config: ClawVoiceConfig): Promise<HealthCheck> {
+  if (config.tailscaleMode === "off") {
+    return {
+      name: "tailscale",
+      status: "pass",
+      detail: "Tailscale integration disabled.",
+    };
+  }
+
+  const available = await isTailscaleAvailable();
+  if (!available) {
+    return {
+      name: "tailscale",
+      status: "fail",
+      detail: `Tailscale mode set to "${config.tailscaleMode}" but Tailscale is not running.`,
+      remediation: "Install and start Tailscale, or set tailscaleMode to \"off\".",
+    };
+  }
+
+  return {
+    name: "tailscale",
+    status: "pass",
+    detail: `Tailscale ${config.tailscaleMode} mode configured and daemon is running.`,
   };
 }
 

@@ -6,16 +6,34 @@ ClawVoice turns your [OpenClaw](https://github.com/openclaw) agent into a phone-
 
 ## Why ClawVoice?
 
-OpenClaw agents are powerful over text, but the real world still runs on phone calls. ClawVoice bridges that gap:
+OpenClaw already has [`@openclaw/voice-call`](https://docs.openclaw.ai/plugins/voice-call) for PSTN calling. ClawVoice is a community alternative that adds batch operations, SMS, post-call intelligence, and a guided setup experience.
 
-- **Your agent makes calls for you** — restaurant reservations, appointment scheduling, business inquiries, follow-ups. You give the purpose; the voice agent handles the conversation.
-- **Your agent answers calls for you** — takes messages, screens callers, gathers information, and relays everything back to you with a full transcript.
-- **Bulk outbound campaigns** — upload a spreadsheet of contacts with purposes, and your agent calls each one sequentially, then delivers a CSV report with outcomes and transcripts.
-- **SMS** — send and receive text messages through the same number. Inbound texts get auto-acknowledged and relayed to you.
-- **Post-call intelligence** — every call produces a structured summary with extracted details (caller name, company, callback number, reason), delivered to your Telegram/Discord/Slack with a downloadable transcript file.
-- **Two premium voice engines** — ElevenLabs Conversational AI (natural, expressive voices) or Deepgram Voice Agent (low latency, lower cost).
+### vs `@openclaw/voice-call` (official plugin)
 
-> **How is this different from OpenClaw's built-in voice?** OpenClaw's built-in voice is for talking *to* your agent. ClawVoice is for your agent talking *to the world* — real phone calls over the PSTN to real phone numbers, with real-time voice AI conversations.
+| Capability | `@openclaw/voice-call` | ClawVoice |
+|------------|:----------------------:|:---------:|
+| Outbound PSTN calls | ✅ | ✅ |
+| Inbound call handling | ✅ | ✅ |
+| Multi-turn voice conversations | ✅ | ✅ |
+| Twilio | ✅ | ✅ |
+| Telnyx | ✅ | ✅ |
+| Plivo | ✅ | — |
+| SMS send/receive | — | ✅ |
+| Batch calling + campaign reports | — | ✅ |
+| Post-call notifications (Telegram/Discord/Slack) | — | ✅ |
+| Voice profiles (owner identity per call) | — | ✅ |
+| ElevenLabs Conversational AI agent | — | ✅ |
+| Deepgram Voice Agent | — | ✅ |
+| Setup wizard + health diagnostics | — | ✅ |
+| Call state machine (13 states) | ✅ | — |
+| Tailscale Funnel exposure | ✅ | — |
+| Latency analysis CLI | ✅ | — |
+
+**Choose `@openclaw/voice-call`** if you need Plivo support, Tailscale integration, or prefer the official plugin with OpenClaw core team maintenance.
+
+**Choose ClawVoice** if you want SMS, batch campaigns with CSV reports, post-call notifications, voice profiles, or a wizard-guided setup.
+
+> **Note:** OpenClaw also has [Talk Mode](https://docs.openclaw.ai/nodes/talk) — a built-in local voice chat for speaking with your agent through your device's microphone. Neither ClawVoice nor `@openclaw/voice-call` replaces Talk Mode; they add PSTN telephony (real phone calls to real phone numbers).
 
 ## Features
 
@@ -45,17 +63,47 @@ There are two ways to set up ClawVoice:
 | **Guided setup** — Tell your agent *"Set up ClawVoice"* or run `openclaw clawvoice setup` | First-time users. The wizard walks through every step with explanations. |
 | **Manual setup** — Follow the steps below | Experienced users or automated deployments |
 
-### Prerequisites
+### What You'll Need
 
-- An [OpenClaw](https://github.com/openclaw) instance running
-- A [Twilio](https://twilio.com) or [Telnyx](https://telnyx.com) account with a phone number
-- A voice provider account: [ElevenLabs](https://elevenlabs.io) (recommended) or [Deepgram](https://deepgram.com)
-- A public tunnel (ngrok, Cloudflare Tunnel, or Tailscale Funnel)
+| Requirement | Where to get it | Cost |
+|-------------|----------------|------|
+| **OpenClaw** installed and running | [openclaw.dev](https://openclaw.dev) | Free (open source) |
+| **Phone number** from Twilio or Telnyx | [twilio.com](https://twilio.com) or [telnyx.com](https://telnyx.com) | ~$1.50/mo |
+| **Deepgram API key** | [deepgram.com](https://deepgram.com) | Free tier available |
+| **ElevenLabs API key + Agent ID** *(optional, for premium voices)* | [elevenlabs.io](https://elevenlabs.io) | Free tier available |
+| **Tunnel tool** (ngrok, Cloudflare Tunnel, or Tailscale Funnel) | See [Step 2](#2-start-a-public-tunnel) | Free options available |
+
+> **Note:** A Deepgram API key is always required — even if you use ElevenLabs for voice. Deepgram handles speech-to-text for call transcription.
+
+**Cost per call:**
+
+| Voice Stack | Telephony | Voice AI | Total per minute |
+|-------------|-----------|----------|------------------|
+| **Deepgram** (recommended to start) | ~$0.01 | ~$0.01 | **~$0.02/min** |
+| **ElevenLabs** (premium voices) | ~$0.01 | ~$0.12–0.15 | **~$0.13–0.16/min** |
+
+A typical 5-minute call costs **$0.10** on Deepgram or **$0.65–0.80** on ElevenLabs. Both voice providers offer free tiers to get started.
+
+> **If you're using ElevenLabs:** Create your ElevenLabs Conversational AI agent **before** running the setup wizard — the wizard asks for your Agent ID. See [Step 4](#4-configure-elevenlabs-agent-if-using-elevenlabs) for instructions.
+
+> **If you already have `@openclaw/voice-call` installed:** ClawVoice replaces the built-in voice plugin. Disable it to prevent conflicts: `openclaw plugins disable voice-call`. The setup wizard will detect and warn you about this automatically.
 
 ### 1. Install
 
+ClawVoice is published on [npm](https://www.npmjs.com/package/clawvoice). Install it with npm, then register it as an OpenClaw plugin:
+
 ```bash
+npm install -g clawvoice
 openclaw plugins install clawvoice
+```
+
+**Or install from source** (for contributors or pre-release versions):
+
+```bash
+git clone https://github.com/ClawVoice/clawvoice.git
+cd clawvoice
+npm install && npm run build
+openclaw plugins install --link .
 ```
 
 ### 2. Start a Public Tunnel
@@ -70,8 +118,12 @@ ngrok http 3101
 cloudflared tunnel --url http://localhost:3101
 
 # Option C: Tailscale Funnel (if you use Tailscale)
-tailscale funnel 3101
+openclaw clawvoice expose --mode funnel
+# Or manually (path-based):
+tailscale funnel --bg --yes --set-path /media-stream http://127.0.0.1:3101/media-stream
 ```
+
+The `expose` command auto-detects your Tailscale DNS name, activates Funnel on the media stream path, and prints the WSS URL to use. Use `--mode serve` for Tailnet-only (no public internet) or `--mode off` to disable.
 
 > **Tunnel URL changes:** Free ngrok URLs change every restart. You'll need to update your Twilio webhooks and `twilioStreamUrl` each time. For a stable URL, use ngrok with a custom domain ($), Cloudflare Tunnel, or Tailscale Funnel.
 
@@ -194,11 +246,32 @@ The `ownerPhone` is important — when a restaurant asks *"what number for the r
 
 ```bash
 openclaw start
-openclaw clawvoice status    # All checks should pass
+openclaw clawvoice status
+```
+
+All checks should show **pass**. If any fail, the output tells you exactly what to fix.
+
+> **Tip:** Run `openclaw clawvoice status` anytime to re-check your setup — after config changes, provider swaps, or if calls stop working.
+
+### 8. Test Connectivity
+
+Before spending money on a real call, verify the voice pipeline is wired up correctly:
+
+```bash
+openclaw clawvoice test
+```
+
+This checks that your tunnel is reachable, provider credentials are valid, and the voice pipeline can connect. Fix any failures before proceeding.
+
+### 9. Make a Test Call
+
+```bash
 openclaw clawvoice call +15559876543 --purpose "Test call"
 ```
 
-### 8. Enable Post-Call Notifications (Optional)
+If the call connects and you hear the voice agent, you're all set.
+
+### 10. Enable Post-Call Notifications (Optional)
 
 Get call summaries on Telegram/Discord/Slack after every call:
 
@@ -229,6 +302,8 @@ openclaw clawvoice history <id>     # Specific call detail
 openclaw clawvoice inbox            # Recent SMS messages
 openclaw clawvoice promote          # Review voice memories
 openclaw clawvoice test             # Test connectivity
+openclaw clawvoice expose           # Tailscale Funnel/Serve tunnel
+  --mode funnel|serve|off           #   Exposure mode
 openclaw clawvoice clear            # Clear stuck call slots
 ```
 
@@ -331,6 +406,8 @@ CLAWVOICE_MAX_CALL_DURATION=1800
 CLAWVOICE_DAILY_CALL_LIMIT=50
 CLAWVOICE_NOTIFY_TELEGRAM=true
 CLAWVOICE_SMS_AUTO_REPLY=true
+CLAWVOICE_TAILSCALE_MODE=off        # off | serve | funnel
+CLAWVOICE_TAILSCALE_PATH=/media-stream
 ```
 
 ---
@@ -348,6 +425,14 @@ CLAWVOICE_SMS_AUTO_REPLY=true
 | `clawvoice status` shows failures | Missing credentials or tunnel down | Run `openclaw clawvoice setup` to reconfigure |
 | Tunnel URL changed | ngrok free tier rotates URLs | Update `twilioStreamUrl` and Twilio webhook URLs |
 | Agent repeats itself on calls | Duplicate purpose in system prompt | Ensure purpose is stated once (profile + purpose, not both saying the same thing) |
+| Agent uses wrong voice plugin | `@openclaw/voice-call` is also installed | Disable it: `openclaw plugins disable voice-call` or set `plugins.entries["voice-call"].enabled = false` in config |
+| Tailscale Funnel not working | Funnel not enabled for your account | Visit your [Tailscale admin console](https://login.tailscale.com/admin/dns) and enable Funnel, then retry `openclaw clawvoice expose --mode funnel` |
+
+> **Compatibility note:** OpenClaw ships a built-in `@openclaw/voice-call` plugin. If both it and ClawVoice are active, the agent may route voice requests unpredictably. ClawVoice's setup wizard and `status` command will warn you if a conflict is detected. To resolve, disable one:
+>
+> ```bash
+> openclaw plugins disable voice-call
+> ```
 
 ---
 
@@ -391,12 +476,12 @@ workspace/
 ## Development
 
 ```bash
-npm install        # Install dependencies
-npm run build      # Compile TypeScript
-npm test           # Run all tests (218 tests)
-
-# Local testing
-npm run build && openclaw plugins install --link .
+git clone https://github.com/ClawVoice/clawvoice.git
+cd clawvoice
+npm install                                # Install dependencies
+npm run build                              # Compile TypeScript
+npm test                                   # Run all tests (218 tests)
+openclaw plugins install --link .          # Link local build as plugin
 ```
 
 ## License

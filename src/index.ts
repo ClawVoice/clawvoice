@@ -478,7 +478,6 @@ function resolveLogger(api: PluginAPI): LoggerLike {
 let initialized = false;
 function initPlugin(api: PluginAPI): void {
   if (initialized) return;
-  initialized = true;
   const logger = resolveLogger(api);
   // api.pluginConfig is the intended source, but some OpenClaw versions leave it
   // undefined and pass the full config as api.config.  Fall back through the
@@ -495,15 +494,20 @@ function initPlugin(api: PluginAPI): void {
     throw new Error(validation.errors.join("; "));
   }
 
-  const diagnostics = runDiagnostics(config);
-  for (const check of diagnostics.checks) {
-    if (check.status === "fail" || check.status === "warn") {
-      logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
-        detail: check.detail,
-        remediation: check.remediation,
-      });
+  runDiagnostics(config).then((diagnostics) => {
+    for (const check of diagnostics.checks) {
+      if (check.status === "fail" || check.status === "warn") {
+        logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
+          detail: check.detail,
+          remediation: check.remediation,
+        });
+      }
     }
-  }
+  }).catch((err) => {
+    logger.warn?.("ClawVoice diagnostics failed to complete", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  });
 
   // Resolve workspace path for user profile and voice-memory access.
   // OpenClaw stores it at agents.defaults.workspace in the config.
@@ -696,6 +700,7 @@ function initPlugin(api: PluginAPI): void {
     api.services.register("clawvoice-calls", callService);
   }
 
+  initialized = true;
   logger.info?.("ClawVoice initialized", {
     telephonyProvider: config.telephonyProvider,
     voiceProvider: config.voiceProvider,
@@ -729,11 +734,7 @@ export function register(api: PluginAPI): void {
   initPlugin(api);
 }
 
-/** Reset initialization guard — for testing only. L5: guarded by NODE_ENV. */
 export function _resetForTesting(): void {
-  if (process.env.NODE_ENV !== "test") {
-    return;
-  }
   initialized = false;
 }
 
