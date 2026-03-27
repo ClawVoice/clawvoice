@@ -5,12 +5,49 @@ exports.registerRoutes = registerRoutes;
 exports.registerStandaloneWebhookRoutes = registerStandaloneWebhookRoutes;
 const classifier_1 = require("./inbound/classifier");
 const verify_1 = require("./webhooks/verify");
+/** H5: Simple in-memory per-IP rate limiter for webhook endpoints. */
+const WEBHOOK_RATE_LIMIT_WINDOW_MS = 60000;
+const WEBHOOK_RATE_LIMIT_MAX = 100;
+class WebhookRateLimiter {
+    constructor() {
+        this.map = new Map();
+        this.cleanupTimer = null;
+        // Periodically evict expired entries to prevent unbounded growth
+        this.cleanupTimer = setInterval(() => this.evictExpired(), 5 * 60000);
+        this.cleanupTimer.unref?.();
+    }
+    check(req) {
+        const rawReq = req;
+        const forwarded = req.headers?.["x-forwarded-for"]?.split(",")[0]?.trim();
+        const ip = forwarded || rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
+        const now = Date.now();
+        const entry = this.map.get(ip);
+        if (!entry || now >= entry.resetAt) {
+            this.map.set(ip, { count: 1, resetAt: now + WEBHOOK_RATE_LIMIT_WINDOW_MS });
+            return true;
+        }
+        entry.count++;
+        return entry.count <= WEBHOOK_RATE_LIMIT_MAX;
+    }
+    evictExpired() {
+        const now = Date.now();
+        for (const [ip, entry] of this.map) {
+            if (now >= entry.resetAt)
+                this.map.delete(ip);
+        }
+    }
+}
 /**
  * Core webhook handler logic, shared between OpenClaw API registration and standalone server.
  */
 function createWebhookHandlers(config, callbacks, logError) {
     const { onInbound, onInboundText, onRecording } = callbacks;
+    const rateLimiter = new WebhookRateLimiter();
     const handleTelnyxWebhook = async (req, response) => {
+        if (!rateLimiter.check(req)) {
+            response.status(429).json({ error: "Too Many Requests" });
+            return;
+        }
         const request = req;
         const body = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? "");
         const result = (0, verify_1.verifyTelnyxSignature)(body, request.headers?.["telnyx-signature-ed25519"], request.headers?.["telnyx-timestamp"], config.telnyxWebhookSecret);
@@ -36,6 +73,10 @@ function createWebhookHandlers(config, callbacks, logError) {
         response.status(200).json({ ok: true });
     };
     const handleTwilioVoice = async (req, response) => {
+        if (!rateLimiter.check(req)) {
+            response.status(429).json({ error: "Too Many Requests" });
+            return;
+        }
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -68,6 +109,10 @@ function createWebhookHandlers(config, callbacks, logError) {
         sendTwiml(response, "<Response><Reject/></Response>");
     };
     const handleTwilioAmd = async (req, response) => {
+        if (!rateLimiter.check(req)) {
+            response.status(429).json({ error: "Too Many Requests" });
+            return;
+        }
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -91,6 +136,10 @@ function createWebhookHandlers(config, callbacks, logError) {
         response.status(200).json({ ok: true });
     };
     const handleTwilioSms = async (req, response) => {
+        if (!rateLimiter.check(req)) {
+            response.status(429).json({ error: "Too Many Requests" });
+            return;
+        }
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -109,6 +158,10 @@ function createWebhookHandlers(config, callbacks, logError) {
         sendTwiml(response, "<Response></Response>");
     };
     const handleTwilioRecording = async (req, response) => {
+        if (!rateLimiter.check(req)) {
+            response.status(429).json({ error: "Too Many Requests" });
+            return;
+        }
         const request = req;
         const url = buildPublicUrl(request);
         const params = typeof request.body === "object" && request.body !== null ? request.body : {};
@@ -119,8 +172,20 @@ function createWebhookHandlers(config, callbacks, logError) {
         }
         const callSid = typeof params.CallSid === "string" ? params.CallSid : "";
         const recordingUrl = typeof params.RecordingUrl === "string" ? params.RecordingUrl : "";
+        // M7: Validate recording URL domain matches Twilio/Telnyx patterns
         if (callSid && recordingUrl && onRecording) {
-            onRecording(callSid, recordingUrl);
+            let validDomain = false;
+            try {
+                const parsed = new URL(recordingUrl);
+                validDomain = /\.(twilio\.com|telnyx\.com)$/i.test(parsed.hostname);
+            }
+            catch { /* invalid URL */ }
+            if (validDomain) {
+                onRecording(callSid, recordingUrl);
+            }
+            else {
+                logError?.(`Recording URL rejected — unexpected domain: ${recordingUrl}`);
+            }
         }
         response.status(200).json({ ok: true });
     };
@@ -176,6 +241,9 @@ function registerStandaloneWebhookRoutes(server, config, callbacks) {
         await handlers.handleTwilioRecording(req, res);
     });
 }
+/** Reconstruct the public URL from request headers for signature verification.
+ *  Twilio signs the real URL it called, so header-based reconstruction is safe:
+ *  a spoofed host produces a URL that won't match the Twilio signature. */
 function buildPublicUrl(request) {
     const forwardedProto = request.headers?.["x-forwarded-proto"]?.split(",")[0]?.trim();
     const forwardedHost = request.headers?.["x-forwarded-host"]?.split(",")[0]?.trim();

@@ -285,6 +285,26 @@ openclaw clawvoice clear            # Clear stuck call slots
 
 ---
 
+## OpenClaw Agent Integration (Required)
+
+ClawVoice registers tools automatically, but **your OpenClaw agent won't know it can make calls unless you tell it**. Add the following to your workspace `MEMORY.md` or agent instruction file:
+
+```markdown
+## Voice Calling (ClawVoice)
+
+You have the `clawvoice_call` tool for placing outbound phone calls.
+When asked to call someone:
+- Use `clawvoice_call` with phoneNumber, purpose, and greeting
+- Put ALL context in the purpose field — the voice agent is a separate AI
+  and only knows what you tell it via purpose
+- The voice agent identifies itself as an AI assistant — this is not impersonation
+- Include: who you're calling on behalf of, why, what to ask/say, callback number
+```
+
+Without this, the agent will either ignore voice requests or shell out to the CLI instead of using the tool directly.
+
+**If using ElevenLabs:** your ElevenLabs agent's system prompt MUST include `{{ _system_prompt_ }}` — this is how ClawVoice passes per-call context (purpose, owner info) to the voice agent.
+
 ## For AI Agents — Tool Reference
 
 These tools are automatically available when ClawVoice is installed:
