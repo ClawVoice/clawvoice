@@ -375,6 +375,16 @@ export function validateConfig(config: ClawVoiceConfig): ValidationResult {
   // Credential/endpoint presence is enforced at call time by validateCallReadiness()
   // and surfaced by diagnostics. validateConfig only checks structural format.
 
+  if (config.notificationTimezone) {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: config.notificationTimezone });
+    } catch {
+      validationErrors.push(
+        `notificationTimezone "${config.notificationTimezone}" is not a valid IANA timezone (e.g. "America/New_York")`,
+      );
+    }
+  }
+
   if (config.telephonyProvider === "twilio" && config.twilioStreamUrl) {
     const streamUrlError = validateTwilioStreamUrl(config.twilioStreamUrl);
     if (streamUrlError) {
