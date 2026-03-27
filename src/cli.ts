@@ -140,7 +140,10 @@ export async function runSetupWizard(
     ["deepgram-agent", "elevenlabs-conversational"]
   );
   values.voiceProvider = voiceProvider;
-  values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+
+  if (voiceProvider === "deepgram-agent") {
+    values.deepgramApiKey = await askNonEmpty(prompter, "Deepgram API key: ");
+  }
 
   if (voiceProvider === "elevenlabs-conversational") {
     values.elevenlabsApiKey = await askNonEmpty(prompter, "ElevenLabs API key: ");
@@ -180,7 +183,7 @@ export async function runSetupWizard(
   setupLog?.info?.("ClawVoice setup complete", {
     telephonyProvider,
     voiceProvider,
-    deepgramApiKey: maskSecret(String(values.deepgramApiKey)),
+    deepgramApiKey: maskSecret(typeof values.deepgramApiKey === "string" ? values.deepgramApiKey : undefined),
     telnyxApiKey: maskSecret(typeof values.telnyxApiKey === "string" ? values.telnyxApiKey : undefined),
     twilioAccountSid: maskSecret(typeof values.twilioAccountSid === "string" ? values.twilioAccountSid : undefined),
     elevenlabsApiKey: maskSecret(typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined)
@@ -288,15 +291,36 @@ export async function runSetupWizard(
     console.log("   Make sure your phone number is assigned to this application.\n");
   }
 
-  console.log("2. Start OpenClaw:");
-  console.log("     openclaw start\n");
-  console.log("3. Verify your setup (re-run anytime to check everything is working):");
-  console.log("     openclaw clawvoice status\n");
-  console.log("4. Make a test call:");
-  console.log("     openclaw clawvoice call +15559876543\n");
-  console.log("5. Set up your voice profile:");
+  console.log("2. Set up your voice profile:");
   console.log("     openclaw clawvoice profile --name \"Your Name\"");
-  console.log("   Then edit voice-memory/user-profile.md to add your phone number and context.\n");
+  console.log("   Then edit voice-memory/user-profile.md to add your context.\n");
+  console.log("3. Tell your OpenClaw agent about voice calling:");
+  console.log("   Add this to your workspace MEMORY.md or instructions file:\n");
+  console.log("   ┌──────────────────────────────────────────────────────┐");
+  console.log("   │ ## Voice Calling (ClawVoice)                        │");
+  console.log("   │                                                      │");
+  console.log("   │ You have the `clawvoice_call` tool for placing       │");
+  console.log("   │ outbound phone calls. When asked to call someone:    │");
+  console.log("   │                                                      │");
+  console.log("   │ - Use `clawvoice_call` with phoneNumber, purpose,    │");
+  console.log("   │   and greeting                                       │");
+  console.log("   │ - Put ALL context in the purpose field — the voice   │");
+  console.log("   │   agent only knows what you tell it                  │");
+  console.log("   │ - The agent identifies itself as an AI assistant     │");
+  console.log("   └──────────────────────────────────────────────────────┘\n");
+  if (voiceProvider === "elevenlabs-conversational") {
+    console.log("4. Verify your ElevenLabs agent prompt includes:");
+    console.log("     {{ _system_prompt_ }}");
+    console.log("   Without this, the voice agent won't receive call context.\n");
+    console.log("5. Start OpenClaw:");
+  } else {
+    console.log("4. Start OpenClaw:");
+  }
+  console.log("     openclaw start\n");
+  console.log(`${voiceProvider === "elevenlabs-conversational" ? "6" : "5"}. Verify your setup (re-run anytime):`);
+  console.log("     openclaw clawvoice status\n");
+  console.log(`${voiceProvider === "elevenlabs-conversational" ? "7" : "6"}. Make a test call:`);
+  console.log("     openclaw clawvoice call +15559876543\n");
   console.log("────────────────────────────────────────────────────────────\n");
 
   try {

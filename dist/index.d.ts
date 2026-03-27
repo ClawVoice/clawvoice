@@ -6,4 +6,5 @@ type OpenClawPluginExports = Plugin & {
 declare const plugin: OpenClawPluginExports;
 export declare function activate(api: PluginAPI): void;
 export declare function register(api: PluginAPI): void;
+export declare function _resetForTesting(): void;
 export default plugin;

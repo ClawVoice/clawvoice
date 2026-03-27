@@ -104,6 +104,9 @@ class TwilioMediaSessionHandler {
         }
         // Read purpose/greeting from Twilio start message customParameters
         // (set via <Parameter> elements in TwiML) or URL query params as fallback.
+        // WORKAROUND: customParameters were arriving EMPTY in testing, so URL query
+        // params (_queryParams set by media-stream-server) serve as the reliable path.
+        // SECURITY NOTE: URL params should not contain sensitive PII (they appear in logs).
         const cp = message.start?.customParameters ?? {};
         const qp = socket._queryParams ?? {};
         const urlPurpose = cp.purpose || qp.purpose || "";
@@ -203,6 +206,9 @@ class TwilioMediaSessionHandler {
             this.handleClose(socket);
             socket.close(1011, detail);
         };
+        // Track whether the voice session has closed so readyState reflects reality.
+        // Must be declared before connect() so the onClose callback can capture it.
+        let sessionClosed = false;
         let voiceSession;
         try {
             voiceSession = await this.options.voiceProviderClient.connect({
@@ -221,6 +227,7 @@ class TwilioMediaSessionHandler {
                     }));
                 },
                 onClose: (_code, reason) => {
+                    sessionClosed = true;
                     if (this.localCloses.delete(socket))
                         return;
                     teardownFromVoiceProvider(reason || "Voice provider stream closed");
@@ -240,6 +247,11 @@ class TwilioMediaSessionHandler {
             this.options.bridge.reportDisconnection(callId, "telephony_provider_error", "Twilio media socket closed before voice provider session was attached");
             return;
         }
+        const origOnClose = voiceSession.close.bind(voiceSession);
+        voiceSession.close = () => {
+            sessionClosed = true;
+            origOnClose();
+        };
         this.options.bridge.setVoiceSocket(callId, {
             send: (data) => {
                 if (Buffer.isBuffer(data)) {
@@ -258,7 +270,7 @@ class TwilioMediaSessionHandler {
                 }
             },
             close: () => voiceSession.close(),
-            readyState: 1,
+            get readyState() { return sessionClosed ? 3 : 1; },
         });
         this.sessionsBySocket.set(socket, {
             callId,

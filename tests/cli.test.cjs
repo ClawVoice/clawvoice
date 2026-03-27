@@ -39,16 +39,16 @@ function createApi() {
 test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   const { api, state } = createApi();
   const prompter = createPrompter([
-    "twilio",
-    "AC123",
-    "auth123",
-    "+15551112222",
-    "wss://my-tunnel.ngrok-free.dev/media-stream",
-    "elevenlabs-conversational",
-    "dg-key",
-    "el-key",
-    "agent-1",
-    "yes"
+    "twilio",              // telephony provider
+    "AC123",               // twilio account SID
+    "auth123",             // twilio auth token
+    "+15551112222",        // twilio phone number
+    "wss://my-tunnel.ngrok-free.dev/media-stream",  // stream URL (ngrok not running in test)
+    "elevenlabs-conversational",  // voice provider
+    "el-key",              // elevenlabs API key
+    "agent-1",             // elevenlabs agent ID
+    "yes",                 // confirmed ElevenLabs agent setup?
+    "no",                  // auto-configure Twilio webhooks?
   ]);
 
   await runSetupWizard(api, [], prompter);
@@ -59,11 +59,10 @@ test("runSetupWizard collects twilio + elevenlabs credentials", async () => {
   assert.equal(state.saved.twilioPhoneNumber, "+15551112222");
   assert.equal(state.saved.twilioStreamUrl, "wss://my-tunnel.ngrok-free.dev/media-stream");
   assert.equal(state.saved.voiceProvider, "elevenlabs-conversational");
-  assert.equal(state.saved.deepgramApiKey, "dg-key");
+  assert.equal(state.saved.deepgramApiKey, undefined);
   assert.equal(state.saved.elevenlabsApiKey, "el-key");
   assert.equal(state.saved.elevenlabsAgentId, "agent-1");
   assert.equal(state.logs.length, 1);
-  assert.equal(state.logs[0].metadata.deepgramApiKey, "dg-k...");
 });
 
 // --- Story 4.1: CLI Call Initiation ---

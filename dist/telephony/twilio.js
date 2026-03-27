@@ -24,9 +24,11 @@ class TwilioTelephonyAdapter {
             throw new Error("Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint");
         }
         const callSidPlaceholder = "{CallSid}";
-        // Encode purpose/greeting as query params on the stream URL so the
-        // media-stream-server can pass context to the session handler even
-        // before the Twilio start message arrives.
+        // WORKAROUND: Encode purpose/greeting as query params on the stream URL.
+        // Twilio's <Parameter> elements (customParameters) are the correct mechanism,
+        // but they were arriving EMPTY in testing. URL query params are the fallback.
+        // SECURITY NOTE: purpose/greeting text should not contain sensitive PII since
+        // it will appear in the WebSocket URL (server logs, Twilio console, etc.).
         const streamUrl = new URL(baseWebhookUrl);
         if (input.purpose)
             streamUrl.searchParams.set("purpose", input.purpose);

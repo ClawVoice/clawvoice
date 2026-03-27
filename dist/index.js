@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.activate = activate;
 exports.register = register;
+exports._resetForTesting = _resetForTesting;
 const fs = __importStar(require("fs"));
 const fsp = __importStar(require("fs/promises"));
 const path = __importStar(require("path"));
@@ -165,6 +166,7 @@ function registerModernToolsBridge(api, config, callService, memoryService, skip
  * but routes.ts handlers expect Express-like req.body, res.status().json() etc.
  */
 function wrapExpressHandler(expressHandler, method) {
+    const MAX_BODY = 1048576; // 1 MB (M4)
     return async (req, res) => {
         if (method && req.method !== method) {
             res.writeHead(405, { "Content-Type": "application/json" });
@@ -172,9 +174,17 @@ function wrapExpressHandler(expressHandler, method) {
             return;
         }
         const chunks = [];
+        let totalSize = 0;
         for await (const chunk of req) {
             // Ensure Buffer for safety — some Node versions may yield non-Buffer chunks
-            chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+            const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+            totalSize += buf.length;
+            if (totalSize > MAX_BODY) {
+                res.writeHead(413, { "Content-Type": "application/json" });
+                res.end(JSON.stringify({ error: "Payload Too Large" }));
+                return;
+            }
+            chunks.push(buf);
         }
         const rawBody = Buffer.concat(chunks).toString("utf8");
         let parsedBody = {};
@@ -267,7 +277,15 @@ async function resolveInternalRouteRegistrar(api) {
         if (webhookFiles.length === 0)
             return null;
         const { pathToFileURL } = require("url");
-        const chunkUrl = pathToFileURL(path.join(openclawDist, webhookFiles[0])).href;
+        // H4: Verify the resolved module path is inside the expected openclaw dist directory.
+        // TRUST BOUNDARY: We only import from the openclaw dist directory found by
+        // walking up from process.argv[1]. This prevents code injection via crafted paths.
+        const resolvedChunkPath = path.resolve(openclawDist, webhookFiles[0]);
+        const resolvedDistDir = path.resolve(openclawDist);
+        if (!resolvedChunkPath.startsWith(resolvedDistDir + path.sep) && resolvedChunkPath !== resolvedDistDir) {
+            return null;
+        }
+        const chunkUrl = pathToFileURL(resolvedChunkPath).href;
         const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
         // registerPluginHttpRoute is exported as 'l' in the bundled chunk
         if (typeof mod.l === "function")
@@ -275,9 +293,12 @@ async function resolveInternalRouteRegistrar(api) {
         // Fallback: search all single-letter exports for the right signature
         for (const key of Object.keys(mod)) {
             if (typeof mod[key] === "function" && key.length === 1) {
-                const src = mod[key].toString();
-                if (src.includes("httpRoutes") && src.includes("pluginId"))
-                    return mod[key];
+                try {
+                    const src = mod[key].toString();
+                    if (src.includes("httpRoutes") && src.includes("pluginId"))
+                        return mod[key];
+                }
+                catch { /* skip proxied/native functions */ }
             }
         }
     }
@@ -322,7 +343,14 @@ async function resolveSystemEventEmitter(api) {
         if (sysEventFiles.length === 0)
             return null;
         const { pathToFileURL } = require("url");
-        const chunkUrl = pathToFileURL(path.join(openclawDist, sysEventFiles[0])).href;
+        // H4: Verify the resolved module path is inside the expected openclaw dist directory.
+        // TRUST BOUNDARY: Same validation as resolveInternalRouteRegistrar.
+        const resolvedChunkPath = path.resolve(openclawDist, sysEventFiles[0]);
+        const resolvedDistDir = path.resolve(openclawDist);
+        if (!resolvedChunkPath.startsWith(resolvedDistDir + path.sep) && resolvedChunkPath !== resolvedDistDir) {
+            return null;
+        }
+        const chunkUrl = pathToFileURL(resolvedChunkPath).href;
         const mod = await Promise.resolve(`${chunkUrl}`).then(s => __importStar(require(s)));
         // Look for enqueueSystemEvent export
         if (typeof mod.enqueueSystemEvent === "function")
@@ -330,9 +358,12 @@ async function resolveSystemEventEmitter(api) {
         // Fallback: search single-letter exports
         for (const key of Object.keys(mod)) {
             if (typeof mod[key] === "function") {
-                const src = mod[key].toString();
-                if (src.includes("systemEvent") || src.includes("enqueueSystem"))
-                    return mod[key];
+                try {
+                    const src = mod[key].toString();
+                    if (src.includes("systemEvent") || src.includes("enqueueSystem"))
+                        return mod[key];
+                }
+                catch { /* skip proxied/native functions */ }
             }
         }
     }
@@ -363,7 +394,11 @@ function registerModernRoutesBridge(api, config, callService) {
     }, (providerCallId, recordingUrl) => {
         callService.setRecordingUrl(providerCallId, recordingUrl);
     });
-    // Try the internal gateway registry first; fall back to api.registerHttpRoute
+    // Try the internal gateway registry first; fall back to api.registerHttpRoute.
+    // NOTE: This async registration is intentionally fire-and-forget. The standalone
+    // webhook server on port 3101 is the primary webhook handler and works independently
+    // of gateway route registration. These gateway routes are a bonus for environments
+    // where the gateway dispatches plugin routes directly.
     resolveInternalRouteRegistrar(api)
         .then((internalRegister) => {
         const registerFn = internalRegister
@@ -396,7 +431,11 @@ function resolveLogger(api) {
         return raw.logger;
     return {};
 }
+let initialized = false;
 function initPlugin(api) {
+    if (initialized)
+        return;
+    initialized = true;
     const logger = resolveLogger(api);
     // api.pluginConfig is the intended source, but some OpenClaw versions leave it
     // undefined and pass the full config as api.config.  Fall back through the
@@ -410,7 +449,7 @@ function initPlugin(api) {
     if (!validation.ok) {
         throw new Error(validation.errors.join("; "));
     }
-    const diagnostics = (0, health_1.runDiagnostics)(config, rawCfg);
+    const diagnostics = (0, health_1.runDiagnostics)(config);
     for (const check of diagnostics.checks) {
         if (check.status === "fail" || check.status === "warn") {
             logger.warn?.(`ClawVoice config ${check.status}: ${check.name}`, {
@@ -436,7 +475,10 @@ function initPlugin(api) {
     // Wire filesystem-based memory writer for post-call transcript persistence
     if (workspacePath) {
         callService.postCall.setMemoryWriter(async (namespace, key, value) => {
-            // Sanitize key to prevent path traversal
+            // M8: Whitelist key characters to prevent path traversal and injection
+            if (!/^[a-zA-Z0-9\-_\/]+$/.test(key)) {
+                throw new Error(`Invalid memory key: ${key}`);
+            }
             if (key.includes("..") || key.startsWith("/") || key.startsWith("\\")) {
                 throw new Error(`Invalid memory key: ${key}`);
             }
@@ -607,5 +649,8 @@ function activate(api) {
 }
 function register(api) {
     initPlugin(api);
+}
+function _resetForTesting() {
+    initialized = false;
 }
 exports.default = plugin;
