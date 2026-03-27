@@ -118,8 +118,11 @@ ngrok http 3101
 cloudflared tunnel --url http://localhost:3101
 
 # Option C: Tailscale Funnel (if you use Tailscale)
-tailscale funnel 3101
+openclaw clawvoice expose --mode funnel
+# Or manually: tailscale funnel 3101
 ```
+
+The `expose` command auto-detects your Tailscale DNS name, activates Funnel on the media stream path, and prints the WSS URL to use. Use `--mode serve` for Tailnet-only (no public internet) or `--mode off` to disable.
 
 > **Tunnel URL changes:** Free ngrok URLs change every restart. You'll need to update your Twilio webhooks and `twilioStreamUrl` each time. For a stable URL, use ngrok with a custom domain ($), Cloudflare Tunnel, or Tailscale Funnel.
 
@@ -298,6 +301,8 @@ openclaw clawvoice history <id>     # Specific call detail
 openclaw clawvoice inbox            # Recent SMS messages
 openclaw clawvoice promote          # Review voice memories
 openclaw clawvoice test             # Test connectivity
+openclaw clawvoice expose           # Tailscale Funnel/Serve tunnel
+  --mode funnel|serve|off           #   Exposure mode
 openclaw clawvoice clear            # Clear stuck call slots
 ```
 
@@ -400,6 +405,8 @@ CLAWVOICE_MAX_CALL_DURATION=1800
 CLAWVOICE_DAILY_CALL_LIMIT=50
 CLAWVOICE_NOTIFY_TELEGRAM=true
 CLAWVOICE_SMS_AUTO_REPLY=true
+CLAWVOICE_TAILSCALE_MODE=off        # off | serve | funnel
+CLAWVOICE_TAILSCALE_PATH=/media-stream
 ```
 
 ---
@@ -418,6 +425,7 @@ CLAWVOICE_SMS_AUTO_REPLY=true
 | Tunnel URL changed | ngrok free tier rotates URLs | Update `twilioStreamUrl` and Twilio webhook URLs |
 | Agent repeats itself on calls | Duplicate purpose in system prompt | Ensure purpose is stated once (profile + purpose, not both saying the same thing) |
 | Agent uses wrong voice plugin | `@openclaw/voice-call` is also installed | Disable it: `openclaw plugins disable voice-call` or set `plugins.entries["voice-call"].enabled = false` in config |
+| Tailscale Funnel not working | Funnel not enabled for your account | Visit your [Tailscale admin console](https://login.tailscale.com/admin/dns) and enable Funnel, then retry `openclaw clawvoice expose --mode funnel` |
 
 > **Compatibility note:** OpenClaw ships a built-in `@openclaw/voice-call` plugin. If both it and ClawVoice are active, the agent may route voice requests unpredictably. ClawVoice's setup wizard and `status` command will warn you if a conflict is detected. To resolve, disable one:
 >

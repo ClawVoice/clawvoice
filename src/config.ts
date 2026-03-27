@@ -49,6 +49,8 @@ export interface ClawVoiceConfig {
   notifyDiscord: boolean;
   notifySlack: boolean;
   notificationTimezone: string;
+  tailscaleMode: "off" | "serve" | "funnel";
+  tailscalePath: string;
 }
 
 export interface ValidationResult {
@@ -89,6 +91,8 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   notifyDiscord: false,
   notifySlack: false,
   notificationTimezone: "America/Chicago",
+  tailscaleMode: "off" as const,
+  tailscalePath: "/media-stream",
 };
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -162,6 +166,10 @@ function parseTelephonyProvider(value: unknown): TelephonyProvider | undefined {
 
 function parseVoiceProvider(value: unknown): VoiceProvider | undefined {
   return value === "deepgram-agent" || value === "elevenlabs-conversational" ? value : undefined;
+}
+
+function parseTailscaleMode(value: unknown): "off" | "serve" | "funnel" | undefined {
+  return value === "off" || value === "serve" || value === "funnel" ? value : undefined;
 }
 
 function validateTwilioStreamUrl(url: string): string | undefined {
@@ -342,6 +350,16 @@ export function resolveConfig(
       envNotificationTimezone,
       typeof pluginConfig.notificationTimezone === "string" ? pluginConfig.notificationTimezone : undefined,
       DEFAULT_CONFIG.notificationTimezone
+    ),
+    tailscaleMode: getValue(
+      parseTailscaleMode(envString(env, "CLAWVOICE_TAILSCALE_MODE")),
+      parseTailscaleMode(pluginConfig.tailscaleMode),
+      DEFAULT_CONFIG.tailscaleMode,
+    ),
+    tailscalePath: getValue(
+      envString(env, "CLAWVOICE_TAILSCALE_PATH"),
+      typeof pluginConfig.tailscalePath === "string" ? pluginConfig.tailscalePath : undefined,
+      DEFAULT_CONFIG.tailscalePath,
     ),
   };
 }
