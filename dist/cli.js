@@ -34,6 +34,7 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
+exports.runInteractiveSetupWizard = runInteractiveSetupWizard;
 exports.registerCLI = registerCLI;
 const config_1 = require("./config");
 const health_1 = require("./diagnostics/health");
@@ -52,6 +53,9 @@ function maskSecret(value) {
 function normalizeChoice(value, options) {
     const lowered = value.trim().toLowerCase();
     return options.includes(lowered) ? lowered : "";
+}
+function normalizePersistedInput(value) {
+    return value.trim();
 }
 async function askNonEmpty(prompter, question) {
     while (true) {
@@ -359,6 +363,362 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         prompter.close();
     }
 }
+// ---------------------------------------------------------------------------
+// Interactive TUI wizard using @clack/prompts
+// ---------------------------------------------------------------------------
+async function runInteractiveSetupWizard(api, config) {
+    // Import @clack/prompts for interactive TUI prompts
+    const clack = await Promise.resolve().then(() => __importStar(require("@clack/prompts")));
+    const { intro, outro, select, text, password, spinner: createSpinner, note, isCancel, cancel, log: clackLog, confirm } = clack;
+    // Read existing config to pre-fill values
+    const rawCfg = api.config;
+    const nestedCfg = rawCfg?.plugins
+        ?.entries?.clawvoice;
+    const existing = config ?? (0, config_1.resolveConfig)((nestedCfg?.config ?? {}));
+    const values = {};
+    const mask = (s) => s && s.length > 4 ? `${s.slice(0, 4)}...${s.slice(-4)}` : s ? "****" : "";
+    // Helper: ask to keep existing value or enter new one
+    async function askKeepOrReplace(label, currentValue, promptFn) {
+        if (currentValue) {
+            const keep = await confirm({
+                message: `${label}: ${mask(currentValue)} — keep existing?`,
+                initialValue: true,
+            });
+            if (isCancel(keep)) {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            if (keep)
+                return normalizePersistedInput(currentValue);
+        }
+        const newVal = await promptFn();
+        if (isCancel(newVal)) {
+            cancel("Setup cancelled.");
+            process.exit(0);
+        }
+        return normalizePersistedInput(newVal);
+    }
+    intro("ClawVoice Setup");
+    const hasExistingConfig = !!(existing.twilioAccountSid || existing.telnyxApiKey);
+    if (hasExistingConfig) {
+        clackLog.info("Existing configuration detected. You can keep current values or enter new ones.");
+    }
+    // --- Telephony provider ---
+    const telephonyProvider = await select({
+        message: "Telephony provider",
+        initialValue: existing.telephonyProvider,
+        options: [
+            { value: "twilio", label: "Twilio", hint: "recommended — easy setup, reliable" },
+            { value: "telnyx", label: "Telnyx", hint: "developer-friendly, competitive pricing" },
+        ],
+    });
+    if (isCancel(telephonyProvider)) {
+        cancel("Setup cancelled.");
+        process.exit(0);
+    }
+    values.telephonyProvider = telephonyProvider;
+    if (telephonyProvider === "telnyx") {
+        values.telnyxApiKey = await askKeepOrReplace("Telnyx API key", existing.telnyxApiKey, () => password({ message: "Telnyx API key", validate(v) { if (!v || v.length === 0)
+                return "API key is required"; } }));
+        values.telnyxConnectionId = await askKeepOrReplace("Telnyx connection ID", existing.telnyxConnectionId, () => text({ message: "Telnyx connection ID", validate(v) { if (!v || v.length === 0)
+                return "Connection ID is required"; } }));
+        values.telnyxPhoneNumber = await askKeepOrReplace("Telnyx phone number", existing.telnyxPhoneNumber, () => text({ message: "Telnyx phone number (E.164)", placeholder: "+15551234567",
+            validate(v) { if (!v || v.length === 0)
+                return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim()))
+                return "Must be E.164 format"; } }));
+    }
+    else {
+        // Twilio
+        values.twilioAccountSid = await askKeepOrReplace("Twilio Account SID", existing.twilioAccountSid, () => text({ message: "Twilio Account SID", placeholder: "AC...", validate(v) { if (!v || v.length === 0)
+                return "Account SID is required"; } }));
+        values.twilioAuthToken = await askKeepOrReplace("Twilio Auth Token", existing.twilioAuthToken, () => password({ message: "Twilio Auth Token", validate(v) { if (!v || v.length === 0)
+                return "Auth token is required"; } }));
+        values.twilioPhoneNumber = await askKeepOrReplace("Twilio phone number", existing.twilioPhoneNumber, () => text({ message: "Twilio phone number (E.164)", placeholder: "+15551234567",
+            validate(v) { if (!v || v.length === 0)
+                return "Phone number is required"; if (!/^\+[1-9]\d{7,14}$/.test(v.trim()))
+                return "Must be E.164 format"; } }));
+        // --- Tunnel auto-detection ---
+        const s = createSpinner();
+        let detectedTunnelUrl = "";
+        s.start("Detecting tunnels...");
+        // Check ngrok
+        try {
+            const resp = await globalThis.fetch("http://localhost:4040/api/tunnels", { signal: AbortSignal.timeout(2000) });
+            const data = await resp.json();
+            const httpsTunnel = data.tunnels?.find((t) => t.proto === "https");
+            if (httpsTunnel?.public_url) {
+                detectedTunnelUrl = httpsTunnel.public_url.replace(/^https:/, "wss:") + "/media-stream";
+                s.stop(`Found ngrok: ${httpsTunnel.public_url}`);
+            }
+        }
+        catch { /* ngrok not running */ }
+        // Check Tailscale if no ngrok
+        if (!detectedTunnelUrl) {
+            try {
+                const { execFile } = require("child_process");
+                const { promisify } = require("util");
+                const execFileAsync = promisify(execFile);
+                const { stdout: tsStatus } = await execFileAsync("tailscale", ["status", "--json"], { timeout: 3000 });
+                const ts = JSON.parse(tsStatus);
+                if (ts.Self?.DNSName) {
+                    const tsHost = ts.Self.DNSName.replace(/\.$/, "");
+                    detectedTunnelUrl = `wss://${tsHost}/media-stream`;
+                    s.stop(`Found Tailscale: ${tsHost}`);
+                }
+            }
+            catch { /* tailscale not available */ }
+        }
+        if (!detectedTunnelUrl) {
+            s.stop("No tunnels detected");
+        }
+        if (detectedTunnelUrl) {
+            const useTunnel = await select({
+                message: "Use detected tunnel?",
+                options: [
+                    { value: "yes", label: "Yes", hint: detectedTunnelUrl },
+                    { value: "no", label: "No — I'll enter my own URL" },
+                ],
+            });
+            if (isCancel(useTunnel)) {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            if (useTunnel === "yes") {
+                values.twilioStreamUrl = detectedTunnelUrl;
+            }
+            else {
+                const streamUrl = await text({
+                    message: "Twilio media stream URL",
+                    placeholder: "wss://your-tunnel.example.com/media-stream",
+                    validate(v) {
+                        if (!v || v.length === 0)
+                            return "Stream URL is required";
+                        if (!v.startsWith("wss://"))
+                            return "Must start with wss://";
+                    },
+                });
+                if (isCancel(streamUrl)) {
+                    cancel("Setup cancelled.");
+                    process.exit(0);
+                }
+                if (typeof streamUrl !== "string") {
+                    cancel("Setup cancelled.");
+                    process.exit(0);
+                }
+                values.twilioStreamUrl = normalizePersistedInput(streamUrl);
+            }
+        }
+        else {
+            note("Twilio needs a public WSS endpoint to stream call audio.\n" +
+                "Use a tunnel (ngrok, Cloudflare Tunnel) to expose your\n" +
+                "local media stream server on port 3101.\n" +
+                "Example: wss://your-tunnel.ngrok-free.dev/media-stream", "Stream URL");
+            const streamUrl = await text({
+                message: "Twilio media stream URL",
+                placeholder: "wss://your-tunnel.ngrok-free.dev/media-stream",
+                validate(v) {
+                    if (!v || v.length === 0)
+                        return "Stream URL is required";
+                    if (!v.startsWith("wss://"))
+                        return "Must start with wss://";
+                },
+            });
+            if (isCancel(streamUrl)) {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            if (typeof streamUrl !== "string") {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            values.twilioStreamUrl = normalizePersistedInput(streamUrl);
+        }
+    }
+    // --- Voice provider ---
+    const voiceProvider = await select({
+        message: "Voice AI provider",
+        options: [
+            { value: "elevenlabs-conversational", label: "ElevenLabs Conversational AI", hint: "natural voices, recommended" },
+            { value: "deepgram-agent", label: "Deepgram Voice Agent", hint: "low latency, lower cost" },
+        ],
+    });
+    if (isCancel(voiceProvider)) {
+        cancel("Setup cancelled.");
+        process.exit(0);
+    }
+    values.voiceProvider = voiceProvider;
+    if (voiceProvider === "deepgram-agent") {
+        values.deepgramApiKey = await askKeepOrReplace("Deepgram API key", existing.deepgramApiKey, () => password({ message: "Deepgram API key", validate(v) { if (!v || v.length === 0)
+                return "API key is required"; } }));
+    }
+    if (voiceProvider === "elevenlabs-conversational") {
+        values.elevenlabsApiKey = await askKeepOrReplace("ElevenLabs API key", existing.elevenlabsApiKey, () => password({ message: "ElevenLabs API key", validate(v) { if (!v || v.length === 0)
+                return "API key is required"; } }));
+        values.elevenlabsAgentId = await askKeepOrReplace("ElevenLabs Agent ID", existing.elevenlabsAgentId, () => text({ message: "ElevenLabs Agent ID", placeholder: "agent_...", validate(v) { if (!v || v.length === 0)
+                return "Agent ID is required"; } }));
+        note("Your ElevenLabs agent's system prompt MUST include:\n\n" +
+            "  {{ _system_prompt_ }}\n\n" +
+            "This is how ClawVoice passes call context to your agent.\n" +
+            "Without it, the agent won't know why it's calling.\n\n" +
+            "Example system prompt:\n" +
+            "  You are a professional AI phone assistant.\n" +
+            "  {{ _system_prompt_ }}\n" +
+            "  Be calm, clear, and concise. Confirm important details.", "IMPORTANT: ElevenLabs Agent Configuration");
+        const confirmed = await confirm({
+            message: "Have you added {{ _system_prompt_ }} to your ElevenLabs agent's system prompt?",
+        });
+        if (isCancel(confirmed)) {
+            cancel("Setup cancelled.");
+            process.exit(0);
+        }
+        if (!confirmed) {
+            clackLog.warn("Please add it before making calls. Configure your agent at:\n" +
+                "https://elevenlabs.io/app/conversational-ai");
+        }
+    }
+    // --- Save config ---
+    await saveConfig(api, values);
+    const setupRaw = api;
+    const setupLog = (api.log && typeof api.log.info === "function") ? api.log
+        : (setupRaw.logger && typeof setupRaw.logger.info === "function") ? setupRaw.logger
+            : undefined;
+    setupLog?.info?.("ClawVoice setup complete", {
+        telephonyProvider: String(telephonyProvider),
+        voiceProvider: String(voiceProvider),
+        deepgramApiKey: maskSecret(String(values.deepgramApiKey)),
+        telnyxApiKey: maskSecret(typeof values.telnyxApiKey === "string" ? values.telnyxApiKey : undefined),
+        twilioAccountSid: maskSecret(typeof values.twilioAccountSid === "string" ? values.twilioAccountSid : undefined),
+        elevenlabsApiKey: maskSecret(typeof values.elevenlabsApiKey === "string" ? values.elevenlabsApiKey : undefined)
+    });
+    // --- Twilio webhook auto-configuration ---
+    const tunnelPlaceholder = "<YOUR-TUNNEL-URL>";
+    const rawStreamUrl = typeof values.twilioStreamUrl === "string" ? values.twilioStreamUrl.trim() : "";
+    function hostFromMaybeUrlInteractive(input) {
+        if (!input)
+            return tunnelPlaceholder;
+        const withScheme = /^[a-z]+:\/\//i.test(input) ? input : `https://${input}`;
+        const normalized = withScheme.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+        try {
+            return new URL(normalized).host || tunnelPlaceholder;
+        }
+        catch {
+            return tunnelPlaceholder;
+        }
+    }
+    const tunnelHost = hostFromMaybeUrlInteractive(rawStreamUrl);
+    if (telephonyProvider === "twilio") {
+        const voiceWebhookUrl = `https://${tunnelHost}/clawvoice/webhooks/twilio/voice`;
+        const smsWebhookUrl = `https://${tunnelHost}/clawvoice/webhooks/twilio/sms`;
+        let webhooksConfigured = false;
+        if (tunnelHost !== tunnelPlaceholder && values.twilioAccountSid && values.twilioAuthToken && values.twilioPhoneNumber) {
+            const autoConfig = await confirm({
+                message: "Auto-configure Twilio webhooks for this number?",
+            });
+            if (isCancel(autoConfig)) {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            if (autoConfig) {
+                const ws = createSpinner();
+                ws.start("Configuring Twilio webhooks...");
+                try {
+                    const sid = String(values.twilioAccountSid);
+                    const token = String(values.twilioAuthToken);
+                    const phone = String(values.twilioPhoneNumber);
+                    const auth = Buffer.from(`${sid}:${token}`).toString("base64");
+                    const listResp = await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phone)}`, { headers: { Authorization: `Basic ${auth}` } });
+                    const listData = await listResp.json();
+                    const phoneSid = listData.incoming_phone_numbers?.[0]?.sid;
+                    if (phoneSid) {
+                        await globalThis.fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`, {
+                            method: "POST",
+                            headers: {
+                                Authorization: `Basic ${auth}`,
+                                "Content-Type": "application/x-www-form-urlencoded",
+                            },
+                            body: new URLSearchParams({
+                                VoiceUrl: voiceWebhookUrl,
+                                VoiceMethod: "POST",
+                                SmsUrl: smsWebhookUrl,
+                                SmsMethod: "POST",
+                            }).toString(),
+                        });
+                        ws.stop("Twilio webhooks configured");
+                        clackLog.success(`Voice: ${voiceWebhookUrl}`);
+                        clackLog.success(`SMS:   ${smsWebhookUrl}`);
+                        webhooksConfigured = true;
+                    }
+                    else {
+                        ws.stop(`Could not find phone number ${phone} in your Twilio account`);
+                    }
+                }
+                catch (err) {
+                    ws.stop(`Auto-configuration failed: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+        }
+        if (!webhooksConfigured) {
+            note(`Configure webhooks in Twilio Console:\n` +
+                `https://console.twilio.com > Phone Numbers > Active Numbers\n` +
+                `Select your number (${values.twilioPhoneNumber || "..."}):\n\n` +
+                `Voice Configuration > A call comes in > Webhook:\n` +
+                `  ${voiceWebhookUrl}  (HTTP POST)\n\n` +
+                `Messaging Configuration > A message comes in > Webhook:\n` +
+                `  ${smsWebhookUrl}  (HTTP POST)`, "Manual Webhook Setup");
+        }
+        clackLog.warn("SMS NOTICE: To send/receive SMS in the US, your Twilio number must be\n" +
+            "registered with a Messaging Service and A2P 10DLC campaign.\n" +
+            "Register at: https://console.twilio.com/us1/develop/sms/services");
+    }
+    else {
+        note(`Configure webhook in Telnyx Mission Control:\n` +
+            `Set webhook URL: https://${tunnelHost}/clawvoice/webhooks/telnyx\n` +
+            `Make sure your phone number is assigned to this application.`, "Telnyx Webhook Setup");
+    }
+    // --- Post-setup diagnostics ---
+    const runDiag = await confirm({
+        message: "Run diagnostics now?",
+    });
+    if (isCancel(runDiag)) {
+        cancel("Setup cancelled.");
+        process.exit(0);
+    }
+    if (runDiag) {
+        const existingConfig = existing;
+        const mergedConfig = (0, config_1.resolveConfig)({ ...existingConfig, ...values });
+        const report = await (0, health_1.runDiagnostics)(mergedConfig);
+        for (const check of report.checks) {
+            if (check.status === "pass") {
+                clackLog.success(`${check.name}: ${check.detail}`);
+            }
+            else if (check.status === "warn") {
+                clackLog.warn(`${check.name}: ${check.detail}`);
+            }
+            else {
+                clackLog.error(`${check.name}: ${check.detail}`);
+            }
+        }
+    }
+    // --- Next steps ---
+    const nextSteps = [
+        "Set up your voice profile:",
+        "  openclaw clawvoice profile --name \"Your Name\"",
+        "",
+        "Start OpenClaw:",
+        "  openclaw start",
+        "",
+        "Verify your setup:",
+        "  openclaw clawvoice status",
+        "",
+        "Make a test call:",
+        "  openclaw clawvoice call +15559876543",
+    ];
+    if (voiceProvider === "elevenlabs-conversational") {
+        nextSteps.unshift("Verify your ElevenLabs agent prompt includes:", "  {{ _system_prompt_ }}", "");
+    }
+    note(nextSteps.join("\n"), "Next Steps");
+    outro("Setup complete! Run: openclaw clawvoice status");
+}
 function parseFlag(args, flag) {
     const inline = args.find((a) => a.startsWith(`--${flag}=`));
     if (inline)
@@ -390,8 +750,8 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
     api.cli.register({
         name: "clawvoice setup",
         description: "Set up ClawVoice (configure telephony and voice providers)",
-        run: async (args) => {
-            await runSetupWizard(api, args);
+        run: async (_args) => {
+            await runInteractiveSetupWizard(api, config);
         },
     });
     api.cli.register({
