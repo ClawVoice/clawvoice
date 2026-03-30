@@ -335,7 +335,7 @@ Without this, the agent will either ignore voice requests or shell out to the CL
 
 The `purpose` and `greeting` parameters serve different roles and should not overlap:
 
-- **`greeting`** is the exact first sentence the voice agent speaks aloud. Keep it short — one sentence. Example: *"Hi, I'm calling on behalf of Cody McLain."*
+- **`greeting`** is the exact first sentence the voice agent speaks aloud. Keep it short — one sentence. Example: *"Hi, I'm calling on behalf of Alex Harper."*
 - **`purpose`** is background context the agent uses to guide the conversation but does **not** read aloud. Include: who you represent, what to accomplish, relevant details (account numbers, preferences), and a callback number.
 
 **Do not** put the same information in both fields. If you say "schedule a dental cleaning" in both `greeting` and `purpose`, the agent may repeat itself awkwardly.
