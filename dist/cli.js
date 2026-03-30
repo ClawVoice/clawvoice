@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.runSetupWizard = runSetupWizard;
 exports.runInteractiveSetupWizard = runInteractiveSetupWizard;
 exports.registerCLI = registerCLI;
+const fs = __importStar(require("fs"));
 const config_1 = require("./config");
 const health_1 = require("./diagnostics/health");
 const user_profile_1 = require("./services/user-profile");
@@ -668,6 +669,87 @@ async function runInteractiveSetupWizard(api, config) {
         nextSteps.unshift("Verify your ElevenLabs agent prompt includes:", "  {{ _system_prompt_ }}", "");
     }
     note(nextSteps.join("\n"), "Next Steps");
+    // --- Agent memory integration ---
+    const agentMemoryBlock = [
+        "## Voice Calling (ClawVoice)",
+        "",
+        "You can place outbound phone calls using the ClawVoice CLI.",
+        "Command: `openclaw clawvoice call <E.164 number> --purpose \"<context>\" --greeting \"<opening line>\"`",
+        "",
+        "Rules:",
+        "- When the user says \"call X and tell them Y\" — that IS explicit approval. Place the call immediately.",
+        "- --greeting = first sentence spoken aloud (keep short)",
+        "- --purpose = background context (NOT read aloud). Include: who you represent, what to accomplish, callback number.",
+        "- NEVER put the same intent in both fields.",
+        "- Other commands: clawvoice sms, clawvoice status, clawvoice history",
+        "",
+    ].join("\n");
+    // Resolve workspace to find MEMORY.md
+    // Resolve workspace path for MEMORY.md integration
+    const rawApiCfg = api.config;
+    const agentDefs = rawApiCfg?.agents?.defaults;
+    const agentWorkspace = (typeof rawApiCfg?.workspace === "string" ? rawApiCfg.workspace : undefined) ??
+        (typeof agentDefs?.workspace === "string" ? agentDefs.workspace : undefined) ??
+        process.env.OPENCLAW_WORKSPACE ??
+        (() => {
+            const cfgPath = process.env.OPENCLAW_CONFIG_PATH;
+            if (cfgPath) {
+                try {
+                    const cfg = JSON.parse(fs.readFileSync(cfgPath, "utf8"));
+                    return cfg?.agents?.defaults?.workspace ?? cfg?.workspace ?? null;
+                }
+                catch { /* ignore */ }
+            }
+            return null;
+        })();
+    if (agentWorkspace) {
+        const memoryPath = path.join(agentWorkspace, "MEMORY.md");
+        const memoryExists = fs.existsSync(memoryPath);
+        const alreadyHasVoice = memoryExists && fs.readFileSync(memoryPath, "utf8").includes("Voice Calling");
+        if (alreadyHasVoice) {
+            clackLog.success("Agent MEMORY.md already has voice calling instructions.");
+        }
+        else {
+            const addToMemory = await confirm({
+                message: "Add voice calling instructions to your agent's MEMORY.md?",
+                initialValue: true,
+            });
+            if (isCancel(addToMemory)) {
+                cancel("Setup cancelled.");
+                process.exit(0);
+            }
+            if (addToMemory) {
+                try {
+                    if (memoryExists) {
+                        const existing = fs.readFileSync(memoryPath, "utf8");
+                        // Insert after the first heading or at the top
+                        const insertPoint = existing.indexOf("\n## ");
+                        if (insertPoint > 0) {
+                            const updated = existing.slice(0, insertPoint) + "\n\n" + agentMemoryBlock + existing.slice(insertPoint);
+                            fs.writeFileSync(memoryPath, updated);
+                        }
+                        else {
+                            fs.appendFileSync(memoryPath, "\n\n" + agentMemoryBlock);
+                        }
+                    }
+                    else {
+                        fs.writeFileSync(memoryPath, "# Memory\n\n" + agentMemoryBlock);
+                    }
+                    clackLog.success(`Added voice calling instructions to ${memoryPath}`);
+                }
+                catch (err) {
+                    clackLog.error(`Could not update MEMORY.md: ${err instanceof Error ? err.message : String(err)}`);
+                    clackLog.info("Add the following to your agent's MEMORY.md manually:\n\n" + agentMemoryBlock);
+                }
+            }
+            else {
+                note(agentMemoryBlock, "Add this to your agent's MEMORY.md");
+            }
+        }
+    }
+    else {
+        note(agentMemoryBlock, "Add this to your agent's MEMORY.md");
+    }
     outro("Setup complete! Run: openclaw clawvoice status");
 }
 function parseFlag(args, flag) {
