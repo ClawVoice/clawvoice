@@ -14,6 +14,7 @@ import { MediaStreamServer } from "../transport/media-stream-server";
 import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
+import { OUTBOUND_CALL_INSTRUCTIONS } from "./call-instructions";
 import { PostCallService } from "./post-call";
 import { readUserProfile } from "./user-profile";
 
@@ -749,21 +750,7 @@ export class ClawVoiceService {
       parts.push(purpose);
     }
 
-    parts.push(
-      "If you reach a voicemail or answering machine:\n" +
-      "- Wait for the beep\n" +
-      "- Leave a clear, concise message stating: who is calling, on whose behalf, the purpose, and a callback number\n" +
-      "- Then end the call"
-    );
-
-    parts.push(
-      "If you encounter an automated phone system (IVR):\n" +
-      "- Listen to the options carefully\n" +
-      "- If asked to press a number, say the number clearly (e.g., \"one\" or \"zero\")\n" +
-      "- If asked to say your name, say the name of the person you represent\n" +
-      "- If asked to hold, wait patiently\n" +
-      "- If you reach a dead end, hang up"
-    );
+    parts.push(OUTBOUND_CALL_INSTRUCTIONS);
 
     return parts.join("\n\n");
   }

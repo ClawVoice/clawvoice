@@ -44,6 +44,7 @@ const elevenlabs_bridge_1 = require("../transport/elevenlabs-bridge");
 const media_session_handler_1 = require("../transport/media-session-handler");
 const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
+const call_instructions_1 = require("./call-instructions");
 const post_call_1 = require("./post-call");
 const user_profile_1 = require("./user-profile");
 class ClawVoiceService {
@@ -625,16 +626,7 @@ class ClawVoiceService {
         else if (purpose) {
             parts.push(purpose);
         }
-        parts.push("If you reach a voicemail or answering machine:\n" +
-            "- Wait for the beep\n" +
-            "- Leave a clear, concise message stating: who is calling, on whose behalf, the purpose, and a callback number\n" +
-            "- Then end the call");
-        parts.push("If you encounter an automated phone system (IVR):\n" +
-            "- Listen to the options carefully\n" +
-            "- If asked to press a number, say the number clearly (e.g., \"one\" or \"zero\")\n" +
-            "- If asked to say your name, say the name of the person you represent\n" +
-            "- If asked to hold, wait patiently\n" +
-            "- If you reach a dead end, hang up");
+        parts.push(call_instructions_1.OUTBOUND_CALL_INSTRUCTIONS);
         return parts.join("\n\n");
     }
     async completeCall(callId, providerCallId) {

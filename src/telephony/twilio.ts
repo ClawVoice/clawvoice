@@ -53,12 +53,15 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
     // so auth token and ref ID are passed as <Parameter> elements instead.
     // They arrive in the `start` event's customParameters on the media stream.
 
+    const streamPath = this.config.mediaStreamPath || "/media-stream";
+    const streamPathRegex = new RegExp(streamPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "/?$");
+
     let recordAttr = "";
     if (this.config.recordCalls) {
       // Derive HTTPS webhook URL from the WSS stream URL for recording status callback
       const recordingCallbackUrl = baseWebhookUrl
         .replace(/^wss:/i, "https:")
-        .replace(/\/media-stream\/?$/, "/clawvoice/webhooks/twilio/recording");
+        .replace(streamPathRegex, "/clawvoice/webhooks/twilio/recording");
       recordAttr = ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackEvent="completed"`;
     }
     // XML-escape values to prevent TwiML parse errors from special chars in purpose/greeting
@@ -81,7 +84,7 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
     if (this.config.amdEnabled) {
       const amdCallbackUrl = baseWebhookUrl
         .replace(/^wss:/i, "https:")
-        .replace(/\/media-stream\/?$/, "/clawvoice/webhooks/twilio/amd");
+        .replace(streamPathRegex, "/clawvoice/webhooks/twilio/amd");
       body.set("MachineDetection", "DetectMessageEnd");
       body.set("MachineDetectionTimeout", "10");
       body.set("AsyncAmd", "true");

@@ -736,7 +736,6 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
     "",
   ].join("\n");
 
-  // Resolve workspace to find MEMORY.md
   // Resolve workspace path for MEMORY.md integration
   const rawApiCfg = api.config as Record<string, unknown> | undefined;
   const agentDefs = (rawApiCfg?.agents as Record<string, unknown> | undefined)?.defaults as Record<string, unknown> | undefined;
@@ -757,7 +756,10 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
   if (agentWorkspace) {
     const memoryPath = path.join(agentWorkspace, "MEMORY.md");
     const memoryExists = fs.existsSync(memoryPath);
-    const alreadyHasVoice = memoryExists && fs.readFileSync(memoryPath, "utf8").includes("Voice Calling");
+    let alreadyHasVoice = false;
+    try {
+      alreadyHasVoice = memoryExists && fs.readFileSync(memoryPath, "utf8").includes("Voice Calling");
+    } catch { /* permission error — treat as not found */ }
 
     if (alreadyHasVoice) {
       clackLog.success("Agent MEMORY.md already has voice calling instructions.");

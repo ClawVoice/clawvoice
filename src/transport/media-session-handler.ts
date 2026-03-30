@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { VoiceProviderClient, VoiceProviderSession } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
+import { OUTBOUND_CALL_INSTRUCTIONS } from "../services/call-instructions";
 import { readUserProfile, buildCallPrompt } from "../services/user-profile";
 import { ClawVoiceConfig } from "../config";
 import * as path from "path";
@@ -85,14 +86,18 @@ export class TwilioMediaSessionHandler {
     socket: TwilioWebSocket,
     session: StreamSession,
     teardownFn: (detail: string) => void,
-    systemPrompt: string,
+    purpose: string,
   ): void {
     const timeoutSec = this.options.silenceTimeoutSeconds ?? 30;
     if (timeoutSec <= 0) return;
 
-    // Skip silence timeout if purpose/prompt mentions "hold" or "wait"
-    const promptLower = systemPrompt.toLowerCase();
-    if (promptLower.includes("hold") || promptLower.includes("wait")) return;
+    // Skip silence timeout only when the call PURPOSE specifically mentions
+    // hold/wait phrases. Previously this scanned the full system prompt, which
+    // always matched because voicemail instructions contain "Wait for the beep".
+    const purposeLower = (purpose ?? "").toLowerCase();
+    const holdPhrases = ["on hold", "hold music", "please hold", "stay on hold", "wait on the line", "remain on hold"];
+    const shouldSkipTimeout = holdPhrases.some(phrase => purposeLower.includes(phrase));
+    if (shouldSkipTimeout) return;
 
     this.clearSilenceTimer(session);
     session.silenceTimer = setTimeout(() => {
@@ -106,9 +111,9 @@ export class TwilioMediaSessionHandler {
     socket: TwilioWebSocket,
     session: StreamSession,
     teardownFn: (detail: string) => void,
-    systemPrompt: string,
+    purpose: string,
   ): void {
-    this.startSilenceTimer(socket, session, teardownFn, systemPrompt);
+    this.startSilenceTimer(socket, session, teardownFn, purpose);
   }
 
   /** Clear the silence timer for a session. */
@@ -189,6 +194,9 @@ export class TwilioMediaSessionHandler {
     // Resolve purpose/greeting from in-memory store via reference ID.
     // Twilio delivers ref and token as customParameters (from TwiML <Parameter> elements)
     // since <Stream> URLs strip query params.
+    // Note: clawvoice_token is available in customParameters for future auth
+    // validation but is not currently enforced (auth was removed from WebSocket
+    // upgrade since Twilio strips query params from <Stream> URLs).
     const cp = message.start?.customParameters ?? {};
     const qp = socket._queryParams ?? {};
     const refId = cp.clawvoice_ref || cp.ref || qp.ref || "";
@@ -251,20 +259,7 @@ export class TwilioMediaSessionHandler {
 
       // Append voicemail and IVR handling instructions for outbound calls
       if (!isInbound) {
-        parts.push(
-          "If you reach a voicemail or answering machine:\n" +
-          "- Wait for the beep\n" +
-          "- Leave a clear, concise message stating: who is calling, on whose behalf, the purpose, and a callback number\n" +
-          "- Then end the call"
-        );
-        parts.push(
-          "If you encounter an automated phone system (IVR):\n" +
-          "- Listen to the options carefully\n" +
-          "- If asked to press a number, say the number clearly (e.g., \"one\" or \"zero\")\n" +
-          "- If asked to say your name, say the name of the person you represent\n" +
-          "- If asked to hold, wait patiently\n" +
-          "- If you reach a dead end, hang up"
-        );
+        parts.push(OUTBOUND_CALL_INSTRUCTIONS);
       }
 
       const systemPrompt = parts.join("\n\n");
@@ -341,7 +336,7 @@ export class TwilioMediaSessionHandler {
               msgType === "AgentStartedSpeaking") {
             const sess = this.sessionsBySocket.get(socket);
             if (sess) {
-              this.resetSilenceTimer(socket, sess, teardownFromVoiceProvider, enrichedSystemPrompt);
+              this.resetSilenceTimer(socket, sess, teardownFromVoiceProvider, urlPurpose);
             }
           }
 
@@ -422,7 +417,7 @@ export class TwilioMediaSessionHandler {
     this.sessionsBySocket.set(socket, streamSession);
 
     // Start silence timeout — hangs up if no callee interaction within threshold
-    this.startSilenceTimer(socket, streamSession, teardownFromVoiceProvider, enrichedSystemPrompt);
+    this.startSilenceTimer(socket, streamSession, teardownFromVoiceProvider, urlPurpose);
 
     this.options.bridge.startHeartbeatMonitor(callId);
   }
