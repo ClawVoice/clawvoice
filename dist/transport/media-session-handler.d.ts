@@ -24,7 +24,7 @@ interface TwilioMediaSessionHandlerOptions {
     voiceModel?: string;
     /** Default voice system prompt for auto-created bridge sessions. */
     voiceSystemPrompt?: string;
-    /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
+    authToken?: string;
     allowAutoAccept?: boolean;
     /** Resolver for pending call context by reference ID (C2). */
     resolveCallContext?: (refId: string) => ResolvedCallContext | null;

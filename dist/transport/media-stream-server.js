@@ -68,8 +68,9 @@ class MediaStreamServer {
         });
         // Handle WebSocket upgrades only for the media-stream path
         this.httpServer.on("upgrade", (req, socket, head) => {
-            const pathname = parsePathname(req.url);
-            if (pathname !== this.options.path && !pathname.startsWith(this.options.path + "?")) {
+            const pathname = normalizePath(parsePathname(req.url));
+            const expectedPath = normalizePath(this.options.path);
+            if (pathname !== expectedPath) {
                 socket.destroy();
                 return;
             }
@@ -79,25 +80,6 @@ class MediaStreamServer {
                 socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
                 socket.destroy();
                 return;
-            }
-            // Validate auth token if configured
-            if (this.options.authToken) {
-                let tokenValid = false;
-                try {
-                    const parsed = new url_1.URL(req.url ?? "", "http://localhost");
-                    const queryToken = parsed.searchParams.get("token");
-                    const authHeader = req.headers["authorization"];
-                    const headerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-                        ? authHeader.slice(7)
-                        : undefined;
-                    tokenValid = queryToken === this.options.authToken || headerToken === this.options.authToken;
-                }
-                catch { /* malformed URL */ }
-                if (!tokenValid) {
-                    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-                    socket.destroy();
-                    return;
-                }
             }
             this.wss.handleUpgrade(req, socket, head, (ws) => {
                 this.wss.emit("connection", ws, req);
@@ -256,4 +238,9 @@ function parsePathname(url) {
         return "/";
     const qIdx = url.indexOf("?");
     return qIdx >= 0 ? url.slice(0, qIdx) : url;
+}
+function normalizePath(pathname) {
+    if (pathname === "/")
+        return "/";
+    return pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
 }

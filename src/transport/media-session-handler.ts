@@ -38,7 +38,7 @@ interface TwilioMediaSessionHandlerOptions {
   voiceModel?: string;
   /** Default voice system prompt for auto-created bridge sessions. */
   voiceSystemPrompt?: string;
-  /** Whether to auto-accept unknown callSids from cross-instance media streams. Defaults to true. */
+  authToken?: string;
   allowAutoAccept?: boolean;
   /** Resolver for pending call context by reference ID (C2). */
   resolveCallContext?: (refId: string) => ResolvedCallContext | null;
@@ -142,11 +142,18 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
-    // C2: Resolve purpose/greeting from in-memory store via reference ID instead of URL params.
-    // Falls back to customParameters for backwards compatibility.
+    // Resolve purpose/greeting from in-memory store via reference ID.
+    // Twilio delivers ref and token as customParameters (from TwiML <Parameter> elements)
+    // since <Stream> URLs strip query params.
     const cp = message.start?.customParameters ?? {};
     const qp = socket._queryParams ?? {};
-    const refId = cp.ref || qp.ref || "";
+    const expectedToken = this.options.authToken;
+    const receivedToken = cp.clawvoice_token || cp.token || qp.token || "";
+    if (expectedToken && receivedToken !== expectedToken) {
+      socket.close(1008, "Invalid media-stream token");
+      return;
+    }
+    const refId = cp.clawvoice_ref || cp.ref || qp.ref || "";
     const resolvedContext = refId && this.options.resolveCallContext
       ? this.options.resolveCallContext(refId)
       : null;
@@ -162,7 +169,7 @@ export class TwilioMediaSessionHandler {
     // plugin instance while the media stream arrives at another.
     let callId = this.options.resolveCallIdByProviderCallId(providerCallId);
     if (!callId) {
-      const allowAutoAccept = this.options.allowAutoAccept ?? true;
+      const allowAutoAccept = this.options.allowAutoAccept ?? false;
       if (!allowAutoAccept || !this.options.voiceProviderUrl) {
         socket.close(1008, "Unknown callSid and auto-accept is disabled or misconfigured");
         return;

@@ -342,6 +342,9 @@ export async function runSetupWizard(
   console.log("   │   agent only knows what you tell it                  │");
   console.log("   │ - The agent identifies itself as an AI assistant     │");
   console.log("   └──────────────────────────────────────────────────────┘\n");
+  console.log("   TIP: When placing calls, keep purpose and greeting separate:");
+  console.log("     --greeting = first sentence spoken aloud (short)");
+  console.log("     --purpose = background context (detailed, NOT read aloud)\n");
   if (voiceProvider === "elevenlabs-conversational") {
     console.log("4. Verify your ElevenLabs agent prompt includes:");
     console.log("     {{ _system_prompt_ }}");
@@ -751,6 +754,10 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
     "",
     "Make a test call:",
     "  openclaw clawvoice call +15559876543",
+    "",
+    "TIP: When placing calls, keep purpose and greeting separate:",
+    "  --greeting = first sentence spoken aloud (short)",
+    "  --purpose  = background context (detailed, NOT read aloud)",
   ];
 
   if (voiceProvider === "elevenlabs-conversational") {

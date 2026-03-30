@@ -24,15 +24,9 @@ class TwilioTelephonyAdapter {
             throw new Error("Twilio stream URL missing: set CLAWVOICE_TWILIO_STREAM_URL to your public wss:// media stream endpoint");
         }
         const callSidPlaceholder = "{CallSid}";
-        // C2: Pass only a short reference ID in the stream URL instead of purpose/greeting.
-        // The media session handler resolves the full context via an in-memory lookup.
-        // C1: Include auth token in the stream URL for WebSocket authentication.
-        const streamUrl = new URL(baseWebhookUrl);
-        if (input.refId)
-            streamUrl.searchParams.set("ref", input.refId);
-        if (input.mediaStreamAuthToken)
-            streamUrl.searchParams.set("token", input.mediaStreamAuthToken);
-        const enrichedStreamUrl = streamUrl.toString();
+        // Twilio's <Stream> element strips ALL query parameters from the URL,
+        // so auth token and ref ID are passed as <Parameter> elements instead.
+        // They arrive in the `start` event's customParameters on the media stream.
         let recordAttr = "";
         if (this.config.recordCalls) {
             // Derive HTTPS webhook URL from the WSS stream URL for recording status callback
@@ -43,10 +37,12 @@ class TwilioTelephonyAdapter {
         }
         // XML-escape values to prevent TwiML parse errors from special chars in purpose/greeting
         const xmlEscape = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;").replace(/\t/g, "&#9;");
-        const safeStreamUrl = xmlEscape(enrichedStreamUrl);
+        const safeStreamUrl = xmlEscape(baseWebhookUrl);
         const safePurpose = xmlEscape(input.purpose ?? "");
         const safeGreeting = xmlEscape(input.greeting ?? "");
-        const twiml = `<Response><Connect${recordAttr}><Stream url="${safeStreamUrl}" name="clawvoice" track="inbound_track"><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${safePurpose}"/><Parameter name="greeting" value="${safeGreeting}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
+        const safeRef = xmlEscape(input.refId ?? "");
+        const safeToken = xmlEscape(input.mediaStreamAuthToken ?? "");
+        const twiml = `<Response><Connect${recordAttr}><Stream url="${safeStreamUrl}" name="clawvoice" track="inbound_track"><Parameter name="clawvoice_token" value="${safeToken}"/><Parameter name="clawvoice_ref" value="${safeRef}"/><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${safePurpose}"/><Parameter name="greeting" value="${safeGreeting}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
         const body = new URLSearchParams({
             To: normalizedTo,
             From: from ?? "",

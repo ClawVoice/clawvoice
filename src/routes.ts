@@ -437,17 +437,13 @@ function buildTwilioVoiceTwiml(config: ClawVoiceConfig, authToken?: string, from
   const xmlEscape = (s: string): string => s
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;");
-  let streamUrl = rawStreamUrl;
-  if (authToken) {
-    const parsed = new URL(rawStreamUrl);
-    parsed.searchParams.set("token", authToken);
-    streamUrl = parsed.toString();
-  }
+  const safeStreamUrl = xmlEscape(rawStreamUrl);
   const params = [
+    authToken ? `<Parameter name="clawvoice_token" value="${xmlEscape(authToken)}"/>` : "",
     from ? `<Parameter name="from" value="${xmlEscape(from)}"/>` : "",
-    to ? `<Parameter name="calledNumber" value="${xmlEscape(to)}"/>` : "",
+    to ? `<Parameter name="to" value="${xmlEscape(to)}"/>` : "",
   ].filter(Boolean).join("");
-  return `<Response><Connect><Stream url="${xmlEscape(streamUrl)}" track="inbound_track">${params}</Stream></Connect></Response>`;
+  return `<Response><Connect><Stream url="${safeStreamUrl}" track="inbound_track">${params}</Stream></Connect></Response>`;
 }
 
 interface ParsedWebhookBody {
