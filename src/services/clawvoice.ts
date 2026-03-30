@@ -149,12 +149,27 @@ export class ClawVoiceService {
           ? (config.elevenlabsVoiceId ?? "")
           : config.deepgramVoice,
         voiceSystemPrompt: config.voiceSystemPrompt,
+        authToken: this.mediaStreamAuthToken,
         allowAutoAccept: true,
         /** Resolver for pending call context references (C2). */
         resolveCallContext: (refId: string) => this.pendingCallContext.get(refId) ?? null,
         onCallCompleted: (callId, summary, transcript, meta) => {
+          const call = this.activeCalls.get(callId);
+          if (call) {
+            call.status = "completed";
+            call.endedAt = new Date().toISOString();
+            this.activeCalls.delete(callId);
+            this.callIdByProviderCallId.delete(call.providerCallId);
+          }
+          const timer = this.callTimers.get(callId);
+          if (timer) {
+            clearTimeout(timer);
+            this.callTimers.delete(callId);
+          }
           if (!summary) return;
-          void this.postCall.processCompletedCall(summary, transcript, undefined, meta).catch(() => undefined);
+          void this.postCall
+            .processCompletedCall(summary, transcript, call?.recordingUrl, meta)
+            .catch(() => undefined);
         },
       })
       : null;

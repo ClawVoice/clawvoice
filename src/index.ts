@@ -602,7 +602,7 @@ function initPlugin(api: PluginAPI): void {
         const botUrl = `https://api.telegram.org/bot${botToken}`;
         try {
           // Send the summary message
-          await globalThis.fetch(`${botUrl}/sendMessage`, {
+          const summaryResp = await globalThis.fetch(`${botUrl}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -611,6 +611,10 @@ function initPlugin(api: PluginAPI): void {
               parse_mode: "HTML",
             }),
           });
+          if (!summaryResp.ok) {
+            const body = await summaryResp.text().catch(() => "");
+            throw new Error(`sendMessage failed (${summaryResp.status}): ${body}`);
+          }
 
           // Send transcript file attachment if available
           if (notification.file) {
@@ -629,11 +633,15 @@ function initPlugin(api: PluginAPI): void {
               fileBuf,
               Buffer.from(`\r\n--${boundary}--\r\n`),
             ]);
-            await globalThis.fetch(`${botUrl}/sendDocument`, {
+            const documentResp = await globalThis.fetch(`${botUrl}/sendDocument`, {
               method: "POST",
               headers: { "Content-Type": `multipart/form-data; boundary=${boundary}` },
               body,
             });
+            if (!documentResp.ok) {
+              const respBody = await documentResp.text().catch(() => "");
+              throw new Error(`sendDocument failed (${documentResp.status}): ${respBody}`);
+            }
           }
         } catch { /* best-effort delivery */ }
       });

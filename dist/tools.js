@@ -9,7 +9,7 @@ function readString(value) {
 function registerTools(api, config, callService, memoryService) {
     api.tools.register({
         name: "clawvoice_call",
-        description: "Initiate an outbound voice call. The voice agent on the call is a separate AI — it only knows what you tell it via the `purpose` field. You MUST provide a detailed purpose so the voice agent knows why it is calling, who it represents, and what to accomplish. Without purpose, the agent will not know what to say.",
+        description: "Initiate an outbound voice call. The voice agent on the call is a separate AI — it only knows what you tell it via the `purpose` field. You MUST provide a detailed purpose so the voice agent knows why it is calling, who it represents, and what to accomplish. Without purpose, the agent will not know what to say. IMPORTANT: purpose and greeting serve different roles. greeting is spoken aloud as the first sentence. purpose is background context the agent uses but does NOT read aloud. Never put the same intent in both fields.",
         parameters: {
             type: "object",
             properties: {
@@ -19,11 +19,11 @@ function registerTools(api, config, callService, memoryService) {
                 },
                 purpose: {
                     type: "string",
-            description: "REQUIRED. The voice agent's instructions for this call. This is the ONLY context the agent receives — it has no access to your conversation history. Include: (1) why you are calling, (2) who you are calling on behalf of, (3) specific questions to ask or information to convey, (4) any relevant details like account numbers, appointment preferences, prior interactions. Example: 'Calling Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental.'",
+                    description: "Background context for the voice agent. Include: who you represent, what to accomplish, relevant details, callback number. The agent uses this to guide the conversation but does NOT read it aloud. Example: 'Calling Dr. Smith's office on behalf of Alex Harper to schedule a dental cleaning. Prefer mornings, any day next week. Insurance is Delta Dental. Callback: 555-010-2468.'",
                 },
                 greeting: {
                     type: "string",
-                    description: "Custom opening line spoken at the start of the call. If omitted, a default disclosure greeting is used.",
+                    description: "The exact first sentence the agent speaks. Keep it short — one sentence only. Do NOT repeat the call purpose here. If omitted, a default disclosure greeting is used.",
                 },
             },
             required: ["phoneNumber", "purpose"],
