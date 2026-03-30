@@ -44,6 +44,7 @@ export interface ClawVoiceConfig {
   amdEnabled: boolean;
   restrictTools: boolean;
   deniedTools: string[];
+  silenceTimeoutSeconds: number;
   smsAutoReply: boolean;
   notifyTelegram: boolean;
   notifyDiscord: boolean;
@@ -75,6 +76,7 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   mediaStreamBind: "127.0.0.1",
   mediaStreamPort: 3101,
   mediaStreamPath: "/media-stream",
+  silenceTimeoutSeconds: 30,
   smsAutoReply: true,
   restrictTools: true,
   deniedTools: [
@@ -223,6 +225,7 @@ export function resolveConfig(
     "CLAWVOICE_DISCLOSURE_STATEMENT",
   );
   const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
+  const envSilenceTimeoutSeconds = envString(env, "CLAWVOICE_SILENCE_TIMEOUT");
   const envSmsAutoReply = envString(env, "CLAWVOICE_SMS_AUTO_REPLY");
   const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
   const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
@@ -313,6 +316,10 @@ export function resolveConfig(
     inboundEnabled: parseBoolean(
       getValue(envInboundEnabled, typeof pluginConfig.inboundEnabled === "undefined" ? undefined : String(pluginConfig.inboundEnabled), String(DEFAULT_CONFIG.inboundEnabled)),
       DEFAULT_CONFIG.inboundEnabled
+    ),
+    silenceTimeoutSeconds: parseNumber(
+      getValue(envSilenceTimeoutSeconds, typeof pluginConfig.silenceTimeoutSeconds === "undefined" ? undefined : String(pluginConfig.silenceTimeoutSeconds), String(DEFAULT_CONFIG.silenceTimeoutSeconds)),
+      DEFAULT_CONFIG.silenceTimeoutSeconds
     ),
     smsAutoReply: parseBoolean(
       getValue(envSmsAutoReply, typeof pluginConfig.smsAutoReply === "undefined" ? undefined : String(pluginConfig.smsAutoReply), String(DEFAULT_CONFIG.smsAutoReply)),

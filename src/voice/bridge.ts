@@ -511,7 +511,14 @@ export class VoiceBridgeService {
       (fc) => `${fc.name}(${JSON.stringify(fc.input)})`,
     );
 
-    const outcome = this.determineOutcome(bridge);
+    let outcome = this.determineOutcome(bridge);
+
+    // Short/unanswered call detection: if duration < 5s and no transcript,
+    // mark as "unanswered" instead of generic "failed"
+    if (durationMs < 5000 && bridge.transcript.length === 0) {
+      outcome = "unanswered";
+    }
+
     const retryContext = outcome !== "completed"
       ? this.buildRetryContext(bridge, pendingActions)
       : null;

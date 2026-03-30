@@ -33,6 +33,8 @@ interface TwilioMediaSessionHandlerOptions {
         callerPhone?: string;
         direction?: "inbound" | "outbound";
     }) => void;
+    /** Silence timeout in seconds (default 30). Hangs up if no callee interaction. */
+    silenceTimeoutSeconds?: number;
 }
 export declare class TwilioMediaSessionHandler {
     private readonly options;
@@ -41,6 +43,12 @@ export declare class TwilioMediaSessionHandler {
     private static readonly MAX_COMPLETED;
     private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);
+    /** Start (or restart) the silence timer for a session. */
+    private startSilenceTimer;
+    /** Reset the silence timer (called when meaningful activity occurs). */
+    private resetSilenceTimer;
+    /** Clear the silence timer for a session. */
+    private clearSilenceTimer;
     handleMessage(socket: TwilioWebSocket, payload: string): Promise<void>;
     handleClose(socket: TwilioWebSocket): void;
     private handleStart;

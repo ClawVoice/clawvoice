@@ -152,6 +152,7 @@ export class ClawVoiceService {
         allowAutoAccept: true,
         /** Resolver for pending call context references (C2). */
         resolveCallContext: (refId: string) => this.pendingCallContext.get(refId) ?? null,
+        silenceTimeoutSeconds: config.silenceTimeoutSeconds,
         onCallCompleted: (callId, summary, transcript, meta) => {
           if (!summary) return;
           void this.postCall.processCompletedCall(summary, transcript, undefined, meta).catch(() => undefined);
@@ -431,9 +432,7 @@ export class ClawVoiceService {
       voiceProviderCodec: "mulaw",
       sampleRate: 8000,
       greeting,
-      systemPrompt: this.config.voiceSystemPrompt
-        ? (request.purpose ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${request.purpose}` : this.config.voiceSystemPrompt)
-        : (request.purpose ?? ""),
+      systemPrompt: this.buildSystemPrompt(request.purpose),
       voiceModel: this.config.voiceProvider === "elevenlabs-conversational"
         ? (this.config.elevenlabsVoiceId ?? "")
         : this.config.deepgramVoice,
@@ -738,6 +737,35 @@ export class ClawVoiceService {
 
   public getRecentTexts(): TextMessageRecord[] {
     return [...this.textMessages];
+  }
+
+  private buildSystemPrompt(purpose?: string): string {
+    const parts: string[] = [];
+    if (this.config.voiceSystemPrompt) {
+      parts.push(purpose
+        ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${purpose}`
+        : this.config.voiceSystemPrompt);
+    } else if (purpose) {
+      parts.push(purpose);
+    }
+
+    parts.push(
+      "If you reach a voicemail or answering machine:\n" +
+      "- Wait for the beep\n" +
+      "- Leave a clear, concise message stating: who is calling, on whose behalf, the purpose, and a callback number\n" +
+      "- Then end the call"
+    );
+
+    parts.push(
+      "If you encounter an automated phone system (IVR):\n" +
+      "- Listen to the options carefully\n" +
+      "- If asked to press a number, say the number clearly (e.g., \"one\" or \"zero\")\n" +
+      "- If asked to say your name, say the name of the person you represent\n" +
+      "- If asked to hold, wait patiently\n" +
+      "- If you reach a dead end, hang up"
+    );
+
+    return parts.join("\n\n");
   }
 
   private async completeCall(callId: string, providerCallId: string): Promise<void> {

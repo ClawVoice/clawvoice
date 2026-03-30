@@ -27,6 +27,7 @@ const DEFAULT_CONFIG = {
     mediaStreamBind: "127.0.0.1",
     mediaStreamPort: 3101,
     mediaStreamPath: "/media-stream",
+    silenceTimeoutSeconds: 30,
     smsAutoReply: true,
     restrictTools: true,
     deniedTools: [
@@ -154,6 +155,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
     const envDisclosureEnabled = envString(env, "CLAWVOICE_DISCLOSURE_ENABLED");
     const envDisclosureStatement = envString(env, "CLAWVOICE_DISCLOSURE_STATEMENT");
     const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
+    const envSilenceTimeoutSeconds = envString(env, "CLAWVOICE_SILENCE_TIMEOUT");
     const envSmsAutoReply = envString(env, "CLAWVOICE_SMS_AUTO_REPLY");
     const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
     const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
@@ -199,6 +201,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
         amdEnabled: parseBoolean(getValue(envAmdEnabled, typeof pluginConfig.amdEnabled === "undefined" ? undefined : String(pluginConfig.amdEnabled), String(DEFAULT_CONFIG.amdEnabled)), DEFAULT_CONFIG.amdEnabled),
         voiceSystemPrompt: getValue(envVoiceSystemPrompt, typeof pluginConfig.voiceSystemPrompt === "string" ? pluginConfig.voiceSystemPrompt : undefined, DEFAULT_CONFIG.voiceSystemPrompt),
         inboundEnabled: parseBoolean(getValue(envInboundEnabled, typeof pluginConfig.inboundEnabled === "undefined" ? undefined : String(pluginConfig.inboundEnabled), String(DEFAULT_CONFIG.inboundEnabled)), DEFAULT_CONFIG.inboundEnabled),
+        silenceTimeoutSeconds: parseNumber(getValue(envSilenceTimeoutSeconds, typeof pluginConfig.silenceTimeoutSeconds === "undefined" ? undefined : String(pluginConfig.silenceTimeoutSeconds), String(DEFAULT_CONFIG.silenceTimeoutSeconds)), DEFAULT_CONFIG.silenceTimeoutSeconds),
         smsAutoReply: parseBoolean(getValue(envSmsAutoReply, typeof pluginConfig.smsAutoReply === "undefined" ? undefined : String(pluginConfig.smsAutoReply), String(DEFAULT_CONFIG.smsAutoReply)), DEFAULT_CONFIG.smsAutoReply),
         restrictTools: parseBoolean(getValue(envRestrictTools, typeof pluginConfig.restrictTools === "undefined" ? undefined : String(pluginConfig.restrictTools), String(DEFAULT_CONFIG.restrictTools)), DEFAULT_CONFIG.restrictTools),
         deniedTools: parseStringArray(getValue(envDeniedTools, pluginConfig.deniedTools, DEFAULT_CONFIG.deniedTools), DEFAULT_CONFIG.deniedTools),
