@@ -39,6 +39,7 @@ export interface ClawVoiceConfig {
     dailyCallLimit: number;
     recordCalls: boolean;
     amdEnabled: boolean;
+    silenceTimeoutSeconds: number;
     restrictTools: boolean;
     deniedTools: string[];
     smsAutoReply: boolean;

@@ -116,7 +116,7 @@ export type VoiceAgentMessageResult = {
 /**
  * Completion status of a call.
  */
-export type CallOutcome = "completed" | "partial" | "failed";
+export type CallOutcome = "completed" | "partial" | "failed" | "unanswered";
 /**
  * Specific failure that occurred during a call.
  */

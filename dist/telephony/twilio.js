@@ -48,6 +48,18 @@ class TwilioTelephonyAdapter {
             From: from ?? "",
             Twiml: twiml,
         });
+        if (this.config.amdEnabled) {
+            const streamPath = this.config.mediaStreamPath || "/media-stream";
+            const escapedPath = streamPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const amdCallbackUrl = baseWebhookUrl
+                .replace(/^wss:/i, "https:")
+                .replace(new RegExp(escapedPath + "/?$"), "/clawvoice/webhooks/twilio/amd");
+            body.set("MachineDetection", "DetectMessageEnd");
+            body.set("MachineDetectionTimeout", "10");
+            body.set("AsyncAmd", "true");
+            body.set("AsyncAmdStatusCallback", amdCallbackUrl);
+            body.set("AsyncAmdStatusCallbackMethod", "POST");
+        }
         const auth = Buffer.from(`${this.config.twilioAccountSid}:${this.config.twilioAuthToken}`).toString("base64");
         const response = await this.fetchFn(url, {
             method: "POST",

@@ -24,6 +24,8 @@ interface TwilioMediaSessionHandlerOptions {
     voiceModel?: string;
     /** Default voice system prompt for auto-created bridge sessions. */
     voiceSystemPrompt?: string;
+    /** Silence timeout in seconds — hangs up if no callee interaction. */
+    silenceTimeoutSeconds?: number;
     authToken?: string;
     allowAutoAccept?: boolean;
     /** Resolver for pending call context by reference ID (C2). */
@@ -41,6 +43,12 @@ export declare class TwilioMediaSessionHandler {
     private static readonly MAX_COMPLETED;
     private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);
+    /** Start (or restart) the silence timer for a session. */
+    private startSilenceTimer;
+    /** Reset the silence timer (called when meaningful activity occurs). */
+    private resetSilenceTimer;
+    /** Clear the silence timer for a session. */
+    private clearSilenceTimer;
     handleMessage(socket: TwilioWebSocket, payload: string): Promise<void>;
     handleClose(socket: TwilioWebSocket): void;
     private handleStart;

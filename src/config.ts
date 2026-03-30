@@ -42,6 +42,7 @@ export interface ClawVoiceConfig {
   dailyCallLimit: number;
   recordCalls: boolean;
   amdEnabled: boolean;
+  silenceTimeoutSeconds: number;
   restrictTools: boolean;
   deniedTools: string[];
   smsAutoReply: boolean;
@@ -74,6 +75,7 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   dailyCallLimit: 50,
   recordCalls: false,
   amdEnabled: true,
+  silenceTimeoutSeconds: 30,
   mediaStreamBind: "127.0.0.1",
   mediaStreamPort: 3101,
   mediaStreamPath: "/media-stream",
@@ -231,6 +233,7 @@ export function resolveConfig(
     "CLAWVOICE_DISCLOSURE_STATEMENT",
   );
   const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
+  const envSilenceTimeout = envString(env, "CLAWVOICE_SILENCE_TIMEOUT");
   const envSmsAutoReply = envString(env, "CLAWVOICE_SMS_AUTO_REPLY");
   const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
   const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
@@ -316,6 +319,10 @@ export function resolveConfig(
     amdEnabled: parseBoolean(
       getValue(envAmdEnabled, typeof pluginConfig.amdEnabled === "undefined" ? undefined : String(pluginConfig.amdEnabled), String(DEFAULT_CONFIG.amdEnabled)),
       DEFAULT_CONFIG.amdEnabled
+    ),
+    silenceTimeoutSeconds: parseNumber(
+      getValue(envSilenceTimeout, typeof pluginConfig.silenceTimeoutSeconds === "undefined" ? undefined : String(pluginConfig.silenceTimeoutSeconds), String(DEFAULT_CONFIG.silenceTimeoutSeconds)),
+      DEFAULT_CONFIG.silenceTimeoutSeconds
     ),
     voiceSystemPrompt: getValue(envVoiceSystemPrompt, typeof pluginConfig.voiceSystemPrompt === "string" ? pluginConfig.voiceSystemPrompt : undefined, DEFAULT_CONFIG.voiceSystemPrompt),
     inboundEnabled: parseBoolean(

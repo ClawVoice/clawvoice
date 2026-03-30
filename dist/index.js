@@ -545,7 +545,7 @@ function initPlugin(api) {
                 const botUrl = `https://api.telegram.org/bot${botToken}`;
                 try {
                     // Send the summary message
-                    const summaryResp = await globalThis.fetch(`${botUrl}/sendMessage`, {
+                    const resp = await globalThis.fetch(`${botUrl}/sendMessage`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -554,9 +554,9 @@ function initPlugin(api) {
                             parse_mode: "HTML",
                         }),
                     });
-                    if (!summaryResp.ok) {
-                        const body = await summaryResp.text().catch(() => "");
-                        throw new Error(`sendMessage failed (${summaryResp.status}): ${body}`);
+                    if (!resp.ok) {
+                        console.error(`[clawvoice] Telegram notification failed: ${resp.status}`);
+                        return;
                     }
                     // Send transcript file attachment if available
                     if (notification.file) {

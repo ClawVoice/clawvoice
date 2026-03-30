@@ -24,6 +24,7 @@ const DEFAULT_CONFIG = {
     dailyCallLimit: 50,
     recordCalls: false,
     amdEnabled: true,
+    silenceTimeoutSeconds: 30,
     mediaStreamBind: "127.0.0.1",
     mediaStreamPort: 3101,
     mediaStreamPath: "/media-stream",
@@ -159,6 +160,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
     const envDisclosureEnabled = envString(env, "CLAWVOICE_DISCLOSURE_ENABLED");
     const envDisclosureStatement = envString(env, "CLAWVOICE_DISCLOSURE_STATEMENT");
     const envAmdEnabled = envString(env, "CLAWVOICE_AMD_ENABLED");
+    const envSilenceTimeout = envString(env, "CLAWVOICE_SILENCE_TIMEOUT");
     const envSmsAutoReply = envString(env, "CLAWVOICE_SMS_AUTO_REPLY");
     const envRestrictTools = envString(env, "CLAWVOICE_RESTRICT_TOOLS");
     const envDeniedTools = envString(env, "CLAWVOICE_DENIED_TOOLS");
@@ -202,6 +204,7 @@ function resolveConfig(pluginConfig = {}, env = process.env) {
         dailyCallLimit: parseNumber(getValue(envDailyCallLimit, typeof pluginConfig.dailyCallLimit === "undefined" ? undefined : String(pluginConfig.dailyCallLimit), String(DEFAULT_CONFIG.dailyCallLimit)), DEFAULT_CONFIG.dailyCallLimit),
         recordCalls: parseBoolean(getValue(envRecordCalls, typeof pluginConfig.recordCalls === "undefined" ? undefined : String(pluginConfig.recordCalls), String(DEFAULT_CONFIG.recordCalls)), DEFAULT_CONFIG.recordCalls),
         amdEnabled: parseBoolean(getValue(envAmdEnabled, typeof pluginConfig.amdEnabled === "undefined" ? undefined : String(pluginConfig.amdEnabled), String(DEFAULT_CONFIG.amdEnabled)), DEFAULT_CONFIG.amdEnabled),
+        silenceTimeoutSeconds: parseNumber(getValue(envSilenceTimeout, typeof pluginConfig.silenceTimeoutSeconds === "undefined" ? undefined : String(pluginConfig.silenceTimeoutSeconds), String(DEFAULT_CONFIG.silenceTimeoutSeconds)), DEFAULT_CONFIG.silenceTimeoutSeconds),
         voiceSystemPrompt: getValue(envVoiceSystemPrompt, typeof pluginConfig.voiceSystemPrompt === "string" ? pluginConfig.voiceSystemPrompt : undefined, DEFAULT_CONFIG.voiceSystemPrompt),
         inboundEnabled: parseBoolean(getValue(envInboundEnabled, typeof pluginConfig.inboundEnabled === "undefined" ? undefined : String(pluginConfig.inboundEnabled), String(DEFAULT_CONFIG.inboundEnabled)), DEFAULT_CONFIG.inboundEnabled),
         smsAutoReply: parseBoolean(getValue(envSmsAutoReply, typeof pluginConfig.smsAutoReply === "undefined" ? undefined : String(pluginConfig.smsAutoReply), String(DEFAULT_CONFIG.smsAutoReply)), DEFAULT_CONFIG.smsAutoReply),
