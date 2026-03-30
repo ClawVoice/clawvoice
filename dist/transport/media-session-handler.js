@@ -102,11 +102,12 @@ class TwilioMediaSessionHandler {
             socket.close(1008, "Missing callSid");
             return;
         }
-        // C2: Resolve purpose/greeting from in-memory store via reference ID instead of URL params.
-        // Falls back to customParameters for backwards compatibility.
+        // Resolve purpose/greeting from in-memory store via reference ID.
+        // Twilio delivers ref and token as customParameters (from TwiML <Parameter> elements)
+        // since <Stream> URLs strip query params.
         const cp = message.start?.customParameters ?? {};
         const qp = socket._queryParams ?? {};
-        const refId = cp.ref || qp.ref || "";
+        const refId = cp.clawvoice_ref || cp.ref || qp.ref || "";
         const resolvedContext = refId && this.options.resolveCallContext
             ? this.options.resolveCallContext(refId)
             : null;

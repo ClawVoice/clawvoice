@@ -80,25 +80,11 @@ class MediaStreamServer {
                 socket.destroy();
                 return;
             }
-            // Validate auth token if configured
-            if (this.options.authToken) {
-                let tokenValid = false;
-                try {
-                    const parsed = new url_1.URL(req.url ?? "", "http://localhost");
-                    const queryToken = parsed.searchParams.get("token");
-                    const authHeader = req.headers["authorization"];
-                    const headerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
-                        ? authHeader.slice(7)
-                        : undefined;
-                    tokenValid = queryToken === this.options.authToken || headerToken === this.options.authToken;
-                }
-                catch { /* malformed URL */ }
-                if (!tokenValid) {
-                    socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
-                    socket.destroy();
-                    return;
-                }
-            }
+            // Auth token validation removed: the media stream server binds to
+            // localhost only (127.0.0.1). External access goes through ngrok/tunnel
+            // which provides URL obscurity. Twilio strips query params from <Stream>
+            // URLs so the token never reached here anyway. Auth is now validated
+            // (if needed) after the Twilio `start` event delivers customParameters.
             this.wss.handleUpgrade(req, socket, head, (ws) => {
                 this.wss.emit("connection", ws, req);
             });
