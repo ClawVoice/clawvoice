@@ -11,7 +11,7 @@ exports.ELEVENLABS_VOICES = {
 };
 const DEFAULT_CONFIG = {
     telephonyProvider: "twilio",
-    voiceProvider: "deepgram-agent",
+    voiceProvider: "elevenlabs-conversational",
     voiceSystemPrompt: "",
     inboundEnabled: true,
     deepgramVoice: "aura-asteria-en",

@@ -2,7 +2,7 @@
   "id": "clawvoice",
   "name": "ClawVoice",
   "description": "Voice calling for OpenClaw agents.",
-  "version": "1.0.4",
+  "version": "1.1.2",
   "kind": "channel",
   "channels": ["voice"],
   "skills": ["clawvoice"],
@@ -18,7 +18,7 @@
       "voiceProvider": {
         "type": "string",
         "enum": ["deepgram-agent", "elevenlabs-conversational"],
-        "default": "deepgram-agent"
+        "default": "elevenlabs-conversational"
       },
       "voiceSystemPrompt": {
         "type": "string",
@@ -31,25 +31,31 @@
         "description": "Accept inbound calls. Set to false for outbound-only."
       },
       "telnyxApiKey": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is telnyx."
       },
       "telnyxConnectionId": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is telnyx."
       },
       "telnyxPhoneNumber": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is telnyx."
       },
       "telnyxWebhookSecret": {
         "type": "string"
       },
       "twilioAccountSid": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is twilio."
       },
       "twilioAuthToken": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is twilio."
       },
       "twilioPhoneNumber": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when telephonyProvider is twilio."
       },
       "twilioStreamUrl": {
         "type": "string",
@@ -71,7 +77,8 @@
         "description": "Path for WebSocket media transport server."
       },
       "deepgramApiKey": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when voiceProvider is deepgram-agent."
       },
       "deepgramVoice": {
         "type": "string",
@@ -79,10 +86,12 @@
         "description": "Default Deepgram Aura voice ID."
       },
       "elevenlabsApiKey": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when voiceProvider is elevenlabs-conversational."
       },
       "elevenlabsAgentId": {
-        "type": "string"
+        "type": "string",
+        "description": "Required when voiceProvider is elevenlabs-conversational."
       },
       "elevenlabsVoiceId": {
         "type": "string",
@@ -99,7 +108,8 @@
       "mainMemoryAccess": {
         "type": "string",
         "enum": ["read", "none"],
-        "default": "read"
+        "default": "none",
+        "description": "Use 'none' by default to avoid exposing primary agent memory in voice calls."
       },
       "autoExtractMemories": {
         "type": "boolean",

@@ -278,7 +278,7 @@ openclaw clawvoice call +15559876543
 | Setting | Env Variable | Default | Description |
 |---------|-------------|---------|-------------|
 | `telephonyProvider` | `CLAWVOICE_TELEPHONY_PROVIDER` | `twilio` | `telnyx` or `twilio` |
-| `voiceProvider` | `CLAWVOICE_VOICE_PROVIDER` | `deepgram-agent` | `deepgram-agent` or `elevenlabs-conversational` |
+| `voiceProvider` | `CLAWVOICE_VOICE_PROVIDER` | `elevenlabs-conversational` | `elevenlabs-conversational` or `deepgram-agent` |
 | `voiceSystemPrompt` | `CLAWVOICE_VOICE_SYSTEM_PROMPT` | `""` | Instructions for how the agent behaves on calls |
 | `inboundEnabled` | `CLAWVOICE_INBOUND_ENABLED` | `true` | Accept inbound calls (set to `false` for outbound-only) |
 

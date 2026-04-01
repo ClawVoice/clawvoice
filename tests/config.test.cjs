@@ -7,7 +7,7 @@ test("resolveConfig uses defaults when no values are provided", () => {
   const config = resolveConfig({}, {});
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.voiceProvider, "deepgram-agent");
+  assert.equal(config.voiceProvider, "elevenlabs-conversational");
   assert.equal(config.maxCallDuration, 1800);
   assert.equal(config.dailyCallLimit, 50);
   assert.equal(config.disclosureEnabled, true);
@@ -113,7 +113,7 @@ test("resolveConfig falls back to defaults for invalid env enum values", () => {
   );
 
   assert.equal(config.telephonyProvider, "twilio");
-  assert.equal(config.voiceProvider, "deepgram-agent");
+  assert.equal(config.voiceProvider, "elevenlabs-conversational");
 });
 
 test("resolveConfig handles empty string env vars as absent", () => {
