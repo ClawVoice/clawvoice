@@ -14,6 +14,10 @@ export declare function verifyTelnyxSignature(payload: string, signatureHeader: 
 /**
  * Verify Twilio webhook signature using HMAC-SHA1.
  * Twilio computes HMAC-SHA1 of the request URL + sorted POST params.
+ *
+ * Twilio is inconsistent about whether the port is included in the signed
+ * URL, so we check both with and without the port — matching the official
+ * Twilio Node SDK's `validateRequest` behaviour.
  */
 export declare function verifyTwilioSignature(url: string, params: Record<string, string>, signatureHeader: string | undefined, authToken: string | undefined): WebhookVerificationResult;
 /**
