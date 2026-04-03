@@ -83,7 +83,26 @@ async function saveConfig(api: PluginAPI, values: Record<string, unknown>): Prom
     return;
   }
 
-  throw new Error("Config store is not writable in this runtime");
+  // Fallback: write directly to openclaw.json when the config store is read-only
+  // (common when loaded via plugins.load.paths instead of openclaw plugins install)
+  const configPath = process.env.OPENCLAW_CONFIG_PATH
+    ?? require("path").join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".openclaw", "openclaw.json");
+  try {
+    const fs = require("fs");
+    const raw = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+    if (!raw.plugins) raw.plugins = {};
+    if (!raw.plugins.entries) raw.plugins.entries = {};
+    if (!raw.plugins.entries.clawvoice) raw.plugins.entries.clawvoice = {};
+    if (!raw.plugins.entries.clawvoice.config) raw.plugins.entries.clawvoice.config = {};
+    Object.assign(raw.plugins.entries.clawvoice.config, values);
+    fs.writeFileSync(configPath, JSON.stringify(raw, null, 2));
+    return;
+  } catch (err) {
+    throw new Error(
+      "Config store is not writable in this runtime and fallback to " +
+      configPath + " failed: " + (err as Error).message
+    );
+  }
 }
 
 export async function runSetupWizard(
