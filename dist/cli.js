@@ -41,6 +41,66 @@ const health_1 = require("./diagnostics/health");
 const user_profile_1 = require("./services/user-profile");
 const tailscale_1 = require("./tunnel/tailscale");
 const path = __importStar(require("path"));
+/**
+ * Parse JSON that may contain single-line comments, block comments, and
+ * trailing commas — the subset of JSON5 syntax that OpenClaw config files use.
+ * Falls back to strict JSON.parse when stripping is unnecessary.
+ */
+function parseJsonTolerant(text) {
+    // Strip single-line comments (// ...) and block comments (/* ... */)
+    // only outside of quoted strings
+    let cleaned = "";
+    let i = 0;
+    let inString = false;
+    let escaped = false;
+    while (i < text.length) {
+        const ch = text[i];
+        if (escaped) {
+            cleaned += ch;
+            escaped = false;
+            i++;
+            continue;
+        }
+        if (inString) {
+            if (ch === "\\") {
+                escaped = true;
+                cleaned += ch;
+                i++;
+                continue;
+            }
+            if (ch === '"') {
+                inString = false;
+            }
+            cleaned += ch;
+            i++;
+            continue;
+        }
+        if (ch === '"') {
+            inString = true;
+            cleaned += ch;
+            i++;
+            continue;
+        }
+        if (ch === "/" && text[i + 1] === "/") {
+            // skip to end of line
+            while (i < text.length && text[i] !== "\n")
+                i++;
+            continue;
+        }
+        if (ch === "/" && text[i + 1] === "*") {
+            i += 2;
+            while (i < text.length && !(text[i] === "*" && text[i + 1] === "/"))
+                i++;
+            i += 2; // skip closing */
+            continue;
+        }
+        cleaned += ch;
+        i++;
+    }
+    // Strip trailing commas before } or ]
+    cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
+    return JSON.parse(cleaned);
+}
 function maskSecret(value) {
     if (!value) {
         return "(not set)";
@@ -103,7 +163,8 @@ async function saveConfig(api, values) {
         ?? require("path").join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".openclaw", "openclaw.json");
     try {
         const fs = require("fs");
-        const raw = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = fs.existsSync(configPath) ? parseJsonTolerant(fs.readFileSync(configPath, "utf8")) : {};
         if (!raw.plugins)
             raw.plugins = {};
         if (!raw.plugins.entries)
@@ -1078,7 +1139,7 @@ function registerCLI(api, config, callService, memoryService, workspacePath) {
                     if (configPath) {
                         try {
                             const fs = require("fs");
-                            const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
+                            const cfg = parseJsonTolerant(fs.readFileSync(configPath, "utf8"));
                             return cfg?.agents?.defaults?.workspace ?? cfg?.workspace ?? null;
                         }
                         catch { /* ignore */ }

@@ -8,6 +8,45 @@ import { readUserProfile, writeDefaultProfile } from "./services/user-profile";
 import { exposeViaTailscale, getTailscaleDnsName, type TailscaleMode } from "./tunnel/tailscale";
 import * as path from "path";
 
+/**
+ * Parse JSON that may contain single-line comments, block comments, and
+ * trailing commas — the subset of JSON5 syntax that OpenClaw config files use.
+ * Falls back to strict JSON.parse when stripping is unnecessary.
+ */
+function parseJsonTolerant(text: string): unknown {
+  // Strip single-line comments (// ...) and block comments (/* ... */)
+  // only outside of quoted strings
+  let cleaned = "";
+  let i = 0;
+  let inString = false;
+  let escaped = false;
+  while (i < text.length) {
+    const ch = text[i];
+    if (escaped) { cleaned += ch; escaped = false; i++; continue; }
+    if (inString) {
+      if (ch === "\\") { escaped = true; cleaned += ch; i++; continue; }
+      if (ch === '"') { inString = false; }
+      cleaned += ch; i++; continue;
+    }
+    if (ch === '"') { inString = true; cleaned += ch; i++; continue; }
+    if (ch === "/" && text[i + 1] === "/") {
+      // skip to end of line
+      while (i < text.length && text[i] !== "\n") i++;
+      continue;
+    }
+    if (ch === "/" && text[i + 1] === "*") {
+      i += 2;
+      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
+      i += 2; // skip closing */
+      continue;
+    }
+    cleaned += ch; i++;
+  }
+  // Strip trailing commas before } or ]
+  cleaned = cleaned.replace(/,\s*([}\]])/g, "$1");
+  return JSON.parse(cleaned);
+}
+
 export interface SetupPrompter {
   ask(question: string): Promise<string>;
   close(): void;
@@ -89,7 +128,8 @@ async function saveConfig(api: PluginAPI, values: Record<string, unknown>): Prom
     ?? require("path").join(process.env.HOME ?? process.env.USERPROFILE ?? "", ".openclaw", "openclaw.json");
   try {
     const fs = require("fs");
-    const raw = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, "utf8")) : {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = fs.existsSync(configPath) ? parseJsonTolerant(fs.readFileSync(configPath, "utf8")) as any : {} as any;
     if (!raw.plugins) raw.plugins = {};
     if (!raw.plugins.entries) raw.plugins.entries = {};
     if (!raw.plugins.entries.clawvoice) raw.plugins.entries.clawvoice = {};
@@ -1136,7 +1176,7 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
           if (configPath) {
             try {
               const fs = require("fs");
-              const cfg = JSON.parse(fs.readFileSync(configPath, "utf8"));
+              const cfg = parseJsonTolerant(fs.readFileSync(configPath, "utf8")) as Record<string, any>;
               return cfg?.agents?.defaults?.workspace ?? cfg?.workspace ?? null;
             } catch { /* ignore */ }
           }
