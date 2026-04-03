@@ -178,6 +178,9 @@ async function runSetupWizard(api, args, prompter = createReadlinePrompter()) {
         console.log("   Your ElevenLabs agent's system prompt MUST include this placeholder:");
         console.log("   {{ _system_prompt_ }}");
         console.log("");
+        console.log("   This applies whether you use an ElevenLabs personality template or your own custom personality.");
+        console.log("   Keep your style/personality text, but include {{ _system_prompt_ }} in the same system prompt.");
+        console.log("");
         console.log("   This is how ClawVoice passes call context to your agent.");
         console.log("   Without it, the agent won't know why it's calling or who it represents.");
         console.log("");
@@ -561,6 +564,8 @@ async function runInteractiveSetupWizard(api, config) {
                 return "Agent ID is required"; } }));
         note("Your ElevenLabs agent's system prompt MUST include:\n\n" +
             "  {{ _system_prompt_ }}\n\n" +
+            "This applies whether you use a built-in ElevenLabs personality or your own custom prompt.\n" +
+            "Keep your personality text, but include {{ _system_prompt_ }} in the same system prompt.\n\n" +
             "This is how ClawVoice passes call context to your agent.\n" +
             "Without it, the agent won't know why it's calling.\n\n" +
             "Example system prompt:\n" +
@@ -721,7 +726,7 @@ async function runInteractiveSetupWizard(api, config) {
         "  --purpose  = background context (detailed, NOT read aloud)",
     ];
     if (voiceProvider === "elevenlabs-conversational") {
-        nextSteps.unshift("Verify your ElevenLabs agent prompt includes:", "  {{ _system_prompt_ }}", "");
+        nextSteps.unshift("Verify your ElevenLabs agent prompt includes:", "  {{ _system_prompt_ }}", "(required for both preset personality templates and custom personalities)", "");
     }
     note(nextSteps.join("\n"), "Next Steps");
     outro("Setup complete! Run: openclaw clawvoice status");

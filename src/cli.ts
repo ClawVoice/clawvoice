@@ -187,6 +187,9 @@ export async function runSetupWizard(
     console.log("   Your ElevenLabs agent's system prompt MUST include this placeholder:");
     console.log("   {{ _system_prompt_ }}");
     console.log("");
+    console.log("   This applies whether you use an ElevenLabs personality template or your own custom personality.");
+    console.log("   Keep your style/personality text, but include {{ _system_prompt_ }} in the same system prompt.");
+    console.log("");
     console.log("   This is how ClawVoice passes call context to your agent.");
     console.log("   Without it, the agent won't know why it's calling or who it represents.");
     console.log("");
@@ -582,6 +585,8 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
     note(
       "Your ElevenLabs agent's system prompt MUST include:\n\n" +
       "  {{ _system_prompt_ }}\n\n" +
+      "This applies whether you use a built-in ElevenLabs personality or your own custom prompt.\n" +
+      "Keep your personality text, but include {{ _system_prompt_ }} in the same system prompt.\n\n" +
       "This is how ClawVoice passes call context to your agent.\n" +
       "Without it, the agent won't know why it's calling.\n\n" +
       "Example system prompt:\n" +
@@ -764,6 +769,7 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
     nextSteps.unshift(
       "Verify your ElevenLabs agent prompt includes:",
       "  {{ _system_prompt_ }}",
+      "(required for both preset personality templates and custom personalities)",
       ""
     );
   }

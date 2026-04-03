@@ -231,26 +231,6 @@ function wrapExpressHandler(expressHandler, method) {
         }
     };
 }
-/**
- * !! FRAGILE — INTERNAL MODULE PROBING !!
- *
- * This function probes OpenClaw's minified/bundled internal modules to locate
- * the `registerPluginHttpRoute` function. It is inherently fragile and may
- * break on new OpenClaw versions if the bundler renames exports or restructures
- * the dist output.
- *
- * Fallback chain:
- *   1. Try `mod.l` — the known minified export name in current versions.
- *   2. Search all single-letter exports for a function whose source contains
- *      "httpRoutes" and "pluginId" (heuristic signature match).
- *   3. If both fail, return null — the caller falls back to
- *      `api.registerHttpRoute` (which may not work in all runtimes) and the
- *      standalone webhook server on port 3101 handles webhooks regardless.
- *
- * This registers routes in the shared gateway HTTP registry (which the gateway
- * HTTP server actually dispatches from), unlike api.registerHttpRoute which
- * stores routes in a Pi-scoped registry that the gateway server never reads.
- */
 async function resolveInternalRouteRegistrar(api) {
     try {
         const path = require("path");

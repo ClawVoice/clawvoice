@@ -60,12 +60,12 @@ export interface ValidationResult {
 
 const DEFAULT_CONFIG: ClawVoiceConfig = {
   telephonyProvider: "twilio",
-  voiceProvider: "deepgram-agent",
+  voiceProvider: "elevenlabs-conversational",
   voiceSystemPrompt: "",
   inboundEnabled: true,
   deepgramVoice: "aura-asteria-en",
   analysisModel: "gpt-4o-mini",
-  mainMemoryAccess: "read",
+  mainMemoryAccess: "none",
   autoExtractMemories: true,
   maxCallDuration: 1800,
   disclosureEnabled: true,

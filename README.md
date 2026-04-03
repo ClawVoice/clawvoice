@@ -166,6 +166,9 @@ On the [ElevenLabs Dashboard](https://elevenlabs.io/app/conversational-ai):
 
    ClawVoice injects per-call context through this variable. Without it, the agent has zero context.
 
+   This is required whether you use an ElevenLabs built-in personality template or write your own custom personality.
+   Keep your personality/style text, but include `{{ _system_prompt_ }}` in the same system prompt.
+
    Example system prompt:
    ```
    You are a professional AI phone assistant.
@@ -385,7 +388,7 @@ The voice agent (e.g., "Jessica" on ElevenLabs) runs on the phone call as a **se
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `telephonyProvider` | `twilio` | `twilio` or `telnyx` |
-| `voiceProvider` | `deepgram-agent` | `elevenlabs-conversational` or `deepgram-agent` |
+| `voiceProvider` | `elevenlabs-conversational` | `elevenlabs-conversational` or `deepgram-agent` |
 | `twilioStreamUrl` | — | Public `wss://` URL for media streams **(required)** |
 | `inboundEnabled` | `true` | Accept inbound calls and SMS |
 | `smsAutoReply` | `true` | Auto-acknowledge inbound texts |

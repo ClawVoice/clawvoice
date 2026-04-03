@@ -15,6 +15,14 @@ Use this skill when handling phone call workflows through ClawVoice.
 - Do not use blocked tools during voice sessions.
 - Keep responses short, clear, and call-focused.
 
+## Secrets Handling — CRITICAL
+
+- Never ask users to paste API keys, auth tokens, or secrets into chat.
+- In chat, ask users to set secrets locally with `openclaw config set ...` commands using placeholders.
+- Accept only explicit completion confirmations like "done" or "configured" after they set values.
+- If a user already pasted a secret, instruct immediate rotation and removal from any shared logs/history.
+- Do not echo secrets back in output.
+
 ## URL Configuration — CRITICAL
 
 **NEVER generate, guess, or invent tunnel URLs, webhook URLs, or media stream URLs.**
@@ -47,7 +55,7 @@ Walk through these steps one at a time:
 1. **Account**: "Do you have a Twilio account? If not, create one at [console.twilio.com](https://console.twilio.com)"
 2. **Phone number**: "You need a Twilio phone number with Voice capability. Go to **Phone Numbers > Manage > Active Numbers**. Do you have one, or do you need to buy one?"
    - Trial accounts can only call verified numbers. Mention this if relevant.
-3. **Account SID + Auth Token**: "On the Twilio Console dashboard under 'Account Info', you'll see your **Account SID** and **Auth Token**. Give me both."
+3. **Account SID + Auth Token**: "On the Twilio Console dashboard under 'Account Info', find your **Account SID** and **Auth Token**. Do not paste them here; set them locally with the commands below and tell me when done."
 4. **Configure**: Set via `openclaw config set`:
    ```
    openclaw config set clawvoice.telephonyProvider twilio
@@ -68,7 +76,7 @@ Walk through these steps one at a time:
 
 1. **Account**: "Do you have a Telnyx account? If not, create one at [telnyx.com](https://telnyx.com)"
 2. **Phone number + Connection**: "You need a Telnyx phone number and a Call Control connection. In Mission Control, create a Call Control App and assign your number to it."
-3. **Credentials**: "I need your **API Key**, **Connection ID**, and **phone number** (E.164 format like +15551234567)."
+3. **Credentials**: "Get your **API Key**, **Connection ID**, and **phone number** (E.164 format like +15551234567). Do not paste secrets in chat; set them locally with the commands below and tell me when done."
 4. **Configure**:
    ```
    openclaw config set clawvoice.telephonyProvider telnyx
@@ -194,6 +202,14 @@ If diagnostics fail, read the remediation text — it tells you exactly what's w
 | **Deepgram** | API Key (Speech + Voice Agent permissions) | [console.deepgram.com](https://console.deepgram.com) |
 | **ElevenLabs** | API Key (ElevenAgents: Write), Agent ID | [elevenlabs.io](https://elevenlabs.io) |
 | **Tunnel** | Public ngrok/CF URL for webhooks + WSS | `ngrok http 3101` |
+
+## Credential Requirement Notes
+
+- ClawVoice has provider-specific credential requirements.
+- Twilio path requires Twilio credentials + stream URL.
+- Telnyx path requires Telnyx credentials (+ webhook secret recommended).
+- Deepgram and ElevenLabs each require their own API credentials.
+- Optional post-call analysis may use `openaiApiKey`.
 
 ### Alternative: CLI Setup Wizard
 
