@@ -14,6 +14,7 @@ import { MediaStreamServer } from "../transport/media-stream-server";
 import { VoiceProviderClient } from "../transport/voice-provider-bridge";
 import { VoiceBridgeService } from "../voice/bridge";
 import { CallSummary } from "../voice/types";
+import { OUTBOUND_CALL_INSTRUCTIONS } from "./call-instructions";
 import { PostCallService } from "./post-call";
 import { readUserProfile } from "./user-profile";
 
@@ -149,6 +150,7 @@ export class ClawVoiceService {
           ? (config.elevenlabsVoiceId ?? "")
           : config.deepgramVoice,
         voiceSystemPrompt: config.voiceSystemPrompt,
+        silenceTimeoutSeconds: config.silenceTimeoutSeconds,
         authToken: this.mediaStreamAuthToken,
         allowAutoAccept: true,
         /** Resolver for pending call context references (C2). */
@@ -446,9 +448,7 @@ export class ClawVoiceService {
       voiceProviderCodec: "mulaw",
       sampleRate: 8000,
       greeting,
-      systemPrompt: this.config.voiceSystemPrompt
-        ? (request.purpose ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${request.purpose}` : this.config.voiceSystemPrompt)
-        : (request.purpose ?? ""),
+      systemPrompt: this.buildSystemPrompt(request.purpose),
       voiceModel: this.config.voiceProvider === "elevenlabs-conversational"
         ? (this.config.elevenlabsVoiceId ?? "")
         : this.config.deepgramVoice,
@@ -753,6 +753,19 @@ export class ClawVoiceService {
 
   public getRecentTexts(): TextMessageRecord[] {
     return [...this.textMessages];
+  }
+
+  private buildSystemPrompt(purpose?: string): string {
+    const parts: string[] = [];
+    if (this.config.voiceSystemPrompt) {
+      parts.push(purpose
+        ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${purpose}`
+        : this.config.voiceSystemPrompt);
+    } else if (purpose) {
+      parts.push(purpose);
+    }
+    parts.push(OUTBOUND_CALL_INSTRUCTIONS);
+    return parts.join("\n\n");
   }
 
   private async completeCall(callId: string, providerCallId: string): Promise<void> {

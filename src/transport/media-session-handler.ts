@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import { OUTBOUND_CALL_INSTRUCTIONS } from "../services/call-instructions";
 import { VoiceProviderClient, VoiceProviderSession } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
 import { readUserProfile, buildCallPrompt } from "../services/user-profile";
@@ -16,6 +17,7 @@ interface StreamSession {
   voiceSession: VoiceProviderSession;
   callerPhone?: string;
   direction: "inbound" | "outbound";
+  silenceTimer?: NodeJS.Timeout;
 }
 
 /** Resolved call context from the pending call context store (C2). */
@@ -38,6 +40,8 @@ interface TwilioMediaSessionHandlerOptions {
   voiceModel?: string;
   /** Default voice system prompt for auto-created bridge sessions. */
   voiceSystemPrompt?: string;
+  /** Silence timeout in seconds — hangs up if no callee interaction. */
+  silenceTimeoutSeconds?: number;
   authToken?: string;
   allowAutoAccept?: boolean;
   /** Resolver for pending call context by reference ID (C2). */
@@ -76,6 +80,48 @@ export class TwilioMediaSessionHandler {
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
 
+  /** Start (or restart) the silence timer for a session. */
+  private startSilenceTimer(
+    socket: TwilioWebSocket,
+    session: StreamSession,
+    teardownFn: (detail: string) => void,
+    purpose?: string,
+  ): void {
+    const timeoutSec = this.options.silenceTimeoutSeconds ?? 30;
+    if (timeoutSec <= 0) return;
+
+    // Skip silence timeout only when the call PURPOSE specifically mentions
+    // hold/wait phrases.
+    const purposeLower = (purpose ?? "").toLowerCase();
+    const holdPhrases = ["on hold", "hold music", "please hold", "stay on hold", "wait on the line", "remain on hold"];
+    const shouldSkipTimeout = holdPhrases.some(phrase => purposeLower.includes(phrase));
+    if (shouldSkipTimeout) return;
+
+    this.clearSilenceTimer(session);
+    session.silenceTimer = setTimeout(() => {
+      teardownFn("No response from callee — silence timeout");
+    }, timeoutSec * 1000);
+    session.silenceTimer.unref?.();
+  }
+
+  /** Reset the silence timer (called when meaningful activity occurs). */
+  private resetSilenceTimer(
+    socket: TwilioWebSocket,
+    session: StreamSession,
+    teardownFn: (detail: string) => void,
+    purpose?: string,
+  ): void {
+    this.startSilenceTimer(socket, session, teardownFn, purpose);
+  }
+
+  /** Clear the silence timer for a session. */
+  private clearSilenceTimer(session: StreamSession): void {
+    if (session.silenceTimer) {
+      clearTimeout(session.silenceTimer);
+      session.silenceTimer = undefined;
+    }
+  }
+
   public async handleMessage(socket: TwilioWebSocket, payload: string): Promise<void> {
     let message: TwilioMessage;
     try {
@@ -105,6 +151,7 @@ export class TwilioMediaSessionHandler {
       return;
     }
 
+    this.clearSilenceTimer(session);
     this.localCloses.add(socket);
     session.voiceSession.close();
     this.sessionsBySocket.delete(socket);
@@ -210,6 +257,10 @@ export class TwilioMediaSessionHandler {
       if (this.options.voiceSystemPrompt) {
         parts.push(this.options.voiceSystemPrompt);
       }
+      // Append voicemail and IVR handling instructions for outbound calls
+      if (!isInbound) {
+        parts.push(OUTBOUND_CALL_INSTRUCTIONS);
+      }
       const systemPrompt = parts.join("\n\n");
 
       const autoConfig = {
@@ -280,6 +331,18 @@ export class TwilioMediaSessionHandler {
         buildSettings: (cfg) => this.options.bridge.buildSettingsMessage(cfg),
         onMessage: (voiceMessage) => {
           const action = this.options.bridge.handleVoiceAgentMessage(callId, voiceMessage);
+
+          // Reset silence timer on meaningful voice provider events
+          const msgType = (voiceMessage as Record<string, unknown>).type as string | undefined;
+          if (msgType === "ConversationText" || msgType === "AgentAudio" ||
+              msgType === "Audio" || msgType === "UserStartedSpeaking" ||
+              msgType === "AgentStartedSpeaking") {
+            const sess = this.sessionsBySocket.get(socket);
+            if (sess) {
+              this.resetSilenceTimer(socket, sess, teardownFromVoiceProvider, urlPurpose);
+            }
+          }
+
           if (action.action !== "audio") {
             return;
           }
@@ -344,14 +407,17 @@ export class TwilioMediaSessionHandler {
       get readyState() { return sessionClosed ? 3 : 1; },
     });
 
-    this.sessionsBySocket.set(socket, {
+    const streamSession: StreamSession = {
       callId,
       streamSid: message.streamSid ?? "",
       voiceSession,
       callerPhone: callerPhone || undefined,
       direction: isInbound ? "inbound" : "outbound",
-    });
+    };
+    this.sessionsBySocket.set(socket, streamSession);
 
+    // Start silence timeout — hangs up if no callee interaction within threshold
+    this.startSilenceTimer(socket, streamSession, teardownFromVoiceProvider, urlPurpose);
     this.options.bridge.startHeartbeatMonitor(callId);
   }
 
@@ -368,5 +434,15 @@ export class TwilioMediaSessionHandler {
     const chunk = Buffer.from(message.media.payload, "base64");
     session.voiceSession.sendAudio(chunk);
     this.options.bridge.recordActivity(session.callId);
+
+    // Reset silence timer on inbound audio — Twilio frames indicate the call
+    // is still active even when the voice provider hasn't responded yet.
+    if (session.silenceTimer) {
+      const teardown = (_detail: string) => {
+        session.voiceSession.close();
+        socket.close(1000, "Silence timeout");
+      };
+      this.resetSilenceTimer(socket, session, teardown);
+    }
   }
 }

@@ -136,6 +136,7 @@ export declare class ClawVoiceService {
      */
     waitForCallCompletion(callId: string, maxWaitMs?: number): Promise<CallSummary | null>;
     getRecentTexts(): TextMessageRecord[];
+    private buildSystemPrompt;
     private completeCall;
 }
 export {};

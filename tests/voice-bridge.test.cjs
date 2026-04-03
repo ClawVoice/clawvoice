@@ -625,7 +625,8 @@ describe("Call Summary and Retry Context (Story 2.4)", () => {
     });
 
     const summary = bridge.generateCallSummary("call-test-001");
-    assert.equal(summary.outcome, "failed");
+    // Short calls (<5s) with empty transcript are now classified as "unanswered"
+    assert.equal(summary.outcome, "unanswered");
     assert.ok(summary.retryContext !== null);
 
     bridge.destroySession("call-test-001");

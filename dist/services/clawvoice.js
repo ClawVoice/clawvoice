@@ -44,6 +44,7 @@ const elevenlabs_bridge_1 = require("../transport/elevenlabs-bridge");
 const media_session_handler_1 = require("../transport/media-session-handler");
 const media_stream_server_1 = require("../transport/media-stream-server");
 const bridge_1 = require("../voice/bridge");
+const call_instructions_1 = require("./call-instructions");
 const post_call_1 = require("./post-call");
 const user_profile_1 = require("./user-profile");
 class ClawVoiceService {
@@ -99,6 +100,7 @@ class ClawVoiceService {
                     ? (config.elevenlabsVoiceId ?? "")
                     : config.deepgramVoice,
                 voiceSystemPrompt: config.voiceSystemPrompt,
+                silenceTimeoutSeconds: config.silenceTimeoutSeconds,
                 authToken: this.mediaStreamAuthToken,
                 allowAutoAccept: true,
                 /** Resolver for pending call context references (C2). */
@@ -362,9 +364,7 @@ class ClawVoiceService {
             voiceProviderCodec: "mulaw",
             sampleRate: 8000,
             greeting,
-            systemPrompt: this.config.voiceSystemPrompt
-                ? (request.purpose ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${request.purpose}` : this.config.voiceSystemPrompt)
-                : (request.purpose ?? ""),
+            systemPrompt: this.buildSystemPrompt(request.purpose),
             voiceModel: this.config.voiceProvider === "elevenlabs-conversational"
                 ? (this.config.elevenlabsVoiceId ?? "")
                 : this.config.deepgramVoice,
@@ -630,6 +630,19 @@ class ClawVoiceService {
     }
     getRecentTexts() {
         return [...this.textMessages];
+    }
+    buildSystemPrompt(purpose) {
+        const parts = [];
+        if (this.config.voiceSystemPrompt) {
+            parts.push(purpose
+                ? `${this.config.voiceSystemPrompt}\n\nCall purpose: ${purpose}`
+                : this.config.voiceSystemPrompt);
+        }
+        else if (purpose) {
+            parts.push(purpose);
+        }
+        parts.push(call_instructions_1.OUTBOUND_CALL_INSTRUCTIONS);
+        return parts.join("\n\n");
     }
     async completeCall(callId, providerCallId) {
         const call = this.activeCalls.get(callId);
