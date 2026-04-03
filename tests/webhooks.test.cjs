@@ -105,6 +105,41 @@ describe("Webhook Signature Verification (Story 3.3)", () => {
       assert.equal(result.valid, true);
       assert.equal(result.provider, "twilio");
     });
+
+    it("accepts signature when Twilio signs URL with non-standard port", () => {
+      const authToken = "auth_token_port";
+      const urlWithPort = "https://example.com:10000/clawvoice/webhooks/twilio/voice";
+      const params = { CallSid: "CA456", CallStatus: "ringing" };
+      const sig = twilioHmac(authToken, urlWithPort, params);
+
+      // Verify passes when request URL includes the port (direct match)
+      const result = verifyTwilioSignature(urlWithPort, params, sig, authToken);
+      assert.equal(result.valid, true);
+    });
+
+    it("accepts signature signed without port when request URL has non-standard port", () => {
+      const authToken = "auth_token_port2";
+      const urlWithPort = "https://example.com:10000/clawvoice/webhooks/twilio/voice";
+      const urlWithoutPort = "https://example.com/clawvoice/webhooks/twilio/voice";
+      const params = { CallSid: "CA789", CallStatus: "ringing" };
+      // Twilio signed the URL without port
+      const sig = twilioHmac(authToken, urlWithoutPort, params);
+
+      // Request arrives with port in URL, but signature was computed without port
+      const result = verifyTwilioSignature(urlWithPort, params, sig, authToken);
+      assert.equal(result.valid, true, "Should match after trying URL without port");
+    });
+
+    it("rejects signature when neither port variant matches", () => {
+      const authToken = "auth_token_nomatch";
+      const url = "https://example.com:10000/clawvoice/webhooks/twilio/voice";
+      const params = { CallSid: "CA999", CallStatus: "ringing" };
+      const sig = twilioHmac(authToken, "https://totally-different.com/webhook", params);
+
+      const result = verifyTwilioSignature(url, params, sig, authToken);
+      assert.equal(result.valid, false);
+      assert.match(result.reason, /mismatch/i);
+    });
   });
 
   describe("HTTP 401 rejection", () => {
