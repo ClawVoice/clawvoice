@@ -65,7 +65,7 @@ const DEFAULT_CONFIG: ClawVoiceConfig = {
   inboundEnabled: true,
   deepgramVoice: "aura-asteria-en",
   analysisModel: "gpt-4o-mini",
-  mainMemoryAccess: "read",
+  mainMemoryAccess: "none",
   autoExtractMemories: true,
   maxCallDuration: 1800,
   disclosureEnabled: true,

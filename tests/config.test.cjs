@@ -17,7 +17,7 @@ test("resolveConfig uses defaults when no values are provided", () => {
   );
   assert.equal(config.restrictTools, true);
   assert.equal(config.analysisModel, "gpt-4o-mini");
-  assert.equal(config.mainMemoryAccess, "read");
+  assert.equal(config.mainMemoryAccess, "none");
   assert.equal(config.autoExtractMemories, true);
   assert.equal(config.recordCalls, false);
   assert.equal(config.amdEnabled, true);
@@ -100,7 +100,7 @@ test("resolveConfig falls back to defaults for invalid enum values", () => {
   );
 
   assert.equal(config.telephonyProvider, "twilio", "invalid telephony should fall back to default");
-  assert.equal(config.voiceProvider, "deepgram-agent", "invalid voice provider should fall back to default");
+  assert.equal(config.voiceProvider, "elevenlabs-conversational", "invalid voice provider should fall back to default");
 });
 
 test("resolveConfig falls back to defaults for invalid env enum values", () => {
