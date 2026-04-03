@@ -59,9 +59,36 @@ export function verifyTelnyxSignature(
   }
 }
 
+function computeTwilioSignature(
+  authToken: string,
+  url: string,
+  params: Record<string, string>,
+): string {
+  const sortedKeys = Object.keys(params).sort();
+  let dataToSign = url;
+  for (const key of sortedKeys) {
+    dataToSign += key + params[key];
+  }
+  return createHmac("sha1", authToken).update(dataToSign).digest("base64");
+}
+
+function twilioSignatureMatches(
+  signatureHeader: string,
+  expectedSig: string,
+): boolean {
+  const sigBuffer = Buffer.from(signatureHeader);
+  const expectedBuffer = Buffer.from(expectedSig);
+  if (sigBuffer.length !== expectedBuffer.length) return false;
+  return timingSafeEqual(sigBuffer, expectedBuffer);
+}
+
 /**
  * Verify Twilio webhook signature using HMAC-SHA1.
  * Twilio computes HMAC-SHA1 of the request URL + sorted POST params.
+ *
+ * Twilio is inconsistent about whether the port is included in the signed
+ * URL, so we check both with and without the port — matching the official
+ * Twilio Node SDK's `validateRequest` behaviour.
  */
 export function verifyTwilioSignature(
   url: string,
@@ -84,34 +111,29 @@ export function verifyTwilioSignature(
     };
   }
 
-  // Twilio signature = Base64(HMAC-SHA1(AuthToken, URL + sorted-params-concatenated))
-  const sortedKeys = Object.keys(params).sort();
-  let dataToSign = url;
-  for (const key of sortedKeys) {
-    dataToSign += key + params[key];
+  // Build candidate URLs: the original, plus a variant with/without port.
+  const urlsToTry = [url];
+  try {
+    const parsed = new URL(url);
+    if (parsed.port) {
+      const withoutPort = new URL(url);
+      withoutPort.port = "";
+      urlsToTry.push(withoutPort.toString());
+    } else {
+      const withStdPort = new URL(url);
+      withStdPort.port = parsed.protocol === "https:" ? "443" : "80";
+      urlsToTry.push(withStdPort.toString());
+    }
+  } catch { /* malformed URL — fall through to single-url check */ }
+
+  for (const candidate of urlsToTry) {
+    const expected = computeTwilioSignature(authToken, candidate, params);
+    if (twilioSignatureMatches(signatureHeader, expected)) {
+      return { valid: true, provider: "twilio" };
+    }
   }
 
-  const expectedSig = createHmac("sha1", authToken)
-    .update(dataToSign)
-    .digest("base64");
-
-  const sigBuffer = Buffer.from(signatureHeader);
-  const expectedBuffer = Buffer.from(expectedSig);
-
-  if (sigBuffer.length !== expectedBuffer.length) {
-    return {
-      valid: false,
-      provider: "twilio",
-      reason: "Signature mismatch",
-    };
-  }
-
-  const match = timingSafeEqual(sigBuffer, expectedBuffer);
-  if (!match) {
-    return { valid: false, provider: "twilio", reason: "Signature mismatch" };
-  }
-
-  return { valid: true, provider: "twilio" };
+  return { valid: false, provider: "twilio", reason: "Signature mismatch" };
 }
 
 /**
