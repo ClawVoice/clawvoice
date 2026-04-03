@@ -77,11 +77,16 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
     });
 
     if (this.config.amdEnabled) {
-      const streamPath = this.config.mediaStreamPath || "/media-stream";
-      const escapedPath = streamPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const amdCallbackUrl = baseWebhookUrl
-        .replace(/^wss:/i, "https:")
-        .replace(new RegExp(escapedPath + "/?$"), "/clawvoice/webhooks/twilio/amd");
+      const httpsUrl = baseWebhookUrl.replace(/^wss:/i, "https:");
+      let amdCallbackUrl: string;
+      try {
+        const parsed = new URL(httpsUrl);
+        parsed.pathname = "/clawvoice/webhooks/twilio/amd";
+        parsed.search = "";
+        amdCallbackUrl = parsed.toString();
+      } catch {
+        amdCallbackUrl = httpsUrl.split("?")[0].replace(/\/[^/]*$/, "/clawvoice/webhooks/twilio/amd");
+      }
       body.set("MachineDetection", "DetectMessageEnd");
       body.set("MachineDetectionTimeout", "10");
       body.set("AsyncAmd", "true");

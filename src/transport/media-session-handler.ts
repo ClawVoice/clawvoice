@@ -434,5 +434,15 @@ export class TwilioMediaSessionHandler {
     const chunk = Buffer.from(message.media.payload, "base64");
     session.voiceSession.sendAudio(chunk);
     this.options.bridge.recordActivity(session.callId);
+
+    // Reset silence timer on inbound audio — Twilio frames indicate the call
+    // is still active even when the voice provider hasn't responded yet.
+    if (session.silenceTimer) {
+      const teardown = (_detail: string) => {
+        session.voiceSession.close();
+        socket.close(1000, "Silence timeout");
+      };
+      this.resetSilenceTimer(socket, session, teardown);
+    }
   }
 }

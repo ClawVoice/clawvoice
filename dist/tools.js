@@ -268,8 +268,9 @@ function registerTools(api, config, callService, memoryService) {
             const completed = results.filter((r) => r.outcome === "completed").length;
             const failed = results.filter((r) => r.outcome === "failed" || r.outcome === "skipped").length;
             const partial = results.filter((r) => r.outcome === "partial").length;
+            const unanswered = results.filter((r) => r.outcome === "unanswered").length;
             const lines = [];
-            lines.push(`Batch call report: ${results.length} calls — ${completed} completed, ${partial} partial, ${failed} failed.`);
+            lines.push(`Batch call report: ${results.length} calls — ${completed} completed, ${partial} partial, ${failed} failed, ${unanswered} unanswered.`);
             lines.push("");
             for (const r of results) {
                 const dur = r.durationMs > 0 ? `${Math.round(r.durationMs / 1000)}s` : "n/a";
