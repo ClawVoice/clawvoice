@@ -51,6 +51,14 @@ class TwilioMediaSessionHandler {
         this.connecting = new Map();
         this.completedCallIds = new Set();
     }
+    /**
+     * Whether this socket has an established (authenticated) media session.
+     * Used by the transport to decide when to extend a socket's idle timeout —
+     * unauthenticated/garbage frames must not keep a connection slot alive.
+     */
+    hasSession(socket) {
+        return this.sessionsBySocket.has(socket);
+    }
     /** Start (or restart) the silence timer for a session. */
     startSilenceTimer(socket, session, teardownFn, purpose) {
         const timeoutSec = this.options.silenceTimeoutSeconds ?? 30;

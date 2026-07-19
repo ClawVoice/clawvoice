@@ -120,8 +120,12 @@ class MediaStreamServer {
             // An accepted WebSocket with no 'error' listener throws an uncaught
             // exception (killing the process) on any protocol violation or reset.
             socket.on("error", () => { });
-            // Idle guard: a socket that connects but never sends a valid frame (the
-            // pool-exhaustion vector) is closed after idleTimeoutMs. Reset on activity.
+            // Idle guard against pool exhaustion. The timer is armed once at connect
+            // as an AUTHENTICATION DEADLINE: a client that never establishes a valid
+            // media session within idleTimeoutMs is closed. It is only rearmed after a
+            // message that leaves the socket with an authenticated session (via
+            // hasSession) — so malformed / pre-auth / garbage frames cannot keep a
+            // connection slot alive by dribbling one frame per interval.
             const idleMs = this.options.idleTimeoutMs ?? 20000;
             let idleTimer = null;
             const armIdle = () => {
@@ -146,9 +150,14 @@ class MediaStreamServer {
                 catch { /* ignore malformed URLs */ }
             }
             socket.on("message", (payload) => {
-                armIdle();
                 const text = typeof payload === "string" ? payload : payload.toString("utf8");
-                void sessionHandler.handleMessage(twilioSocket, text).catch(() => {
+                void sessionHandler.handleMessage(twilioSocket, text).then(() => {
+                    // Only extend the socket's life once it has an authenticated session —
+                    // never for garbage/pre-auth frames (which would defeat the deadline).
+                    if (sessionHandler.hasSession(twilioSocket)) {
+                        armIdle();
+                    }
+                }).catch(() => {
                     twilioSocket.close(1011, "Invalid media stream message");
                 });
             });

@@ -87,6 +87,15 @@ export class TwilioMediaSessionHandler {
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
 
+  /**
+   * Whether this socket has an established (authenticated) media session.
+   * Used by the transport to decide when to extend a socket's idle timeout —
+   * unauthenticated/garbage frames must not keep a connection slot alive.
+   */
+  public hasSession(socket: TwilioWebSocket): boolean {
+    return this.sessionsBySocket.has(socket);
+  }
+
   /** Start (or restart) the silence timer for a session. */
   private startSilenceTimer(
     socket: TwilioWebSocket,
