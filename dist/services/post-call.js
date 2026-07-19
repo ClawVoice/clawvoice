@@ -129,7 +129,12 @@ class PostCallService {
         // Telegram parse_mode=HTML rejects the whole message if raw <, >, & appear
         // in dynamic text (caller names, transcript, reasons). Escape every
         // interpolated value so notifications aren't silently dropped.
-        const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const esc = (s) => s
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
         const duration = this.formatDuration(summary.durationMs);
         const time = new Date(summary.completedAt).toLocaleString("en-US", {
             timeZone: this.config.notificationTimezone,

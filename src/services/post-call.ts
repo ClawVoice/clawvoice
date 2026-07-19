@@ -228,7 +228,12 @@ export class PostCallService {
     // in dynamic text (caller names, transcript, reasons). Escape every
     // interpolated value so notifications aren't silently dropped.
     const esc = (s: string): string =>
-      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      s
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     const duration = this.formatDuration(summary.durationMs);
     const time = new Date(summary.completedAt).toLocaleString("en-US", {
       timeZone: this.config.notificationTimezone,
