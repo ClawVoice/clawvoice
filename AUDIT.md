@@ -68,13 +68,17 @@ require(esm). No `engines` field warns users. The readline-based `runSetupWizard
 (`src/cli.ts:148`) would work everywhere but is dead code — the registered command
 (`src/cli.ts:871-877`) only ever calls the clack wizard.
 
-### 1.5 HIGH — Setup is TTY-interactive only; the agent the install flow forces you to use can't drive it
-`src/cli.ts:871-877`
+### 1.5 HIGH — Setup is TTY-interactive only, with no non-interactive or flag-driven mode
+`src/cli.ts:871-877`, `skills/clawvoice/SKILL.md:34,216-218`
 
-`clawvoice setup` ignores its args; every value comes from clack TTY prompts.
-README.md:410 tells agents to exec it — an exec'd wizard has no TTY and hangs on the
-first prompt. Humans can't reach the wizard without hand-editing config; agents can't
-answer its prompts.
+`clawvoice setup` ignores its args; every value comes from clack TTY prompts, and no
+flag-driven mode exists. SKILL.md — the agent-guided install flow — instructs running
+`clawvoice setup` (lines 34, 216-218), but an agent that execs it (exec being the
+CLI-fallback pattern README.md:410 documents for `clawvoice call` when tools are
+missing) has no TTY and hangs on the first prompt; the wizard can only be completed
+by a human at an interactive terminal. So the guided flow cannot finish configuration
+end-to-end: it must hand the setup step back to the human, on a new-enough Node
+(see 1.4), with the wizard's own defects (1.7-1.11) in the way.
 
 ### 1.6 MEDIUM/HIGH — Fresh standalone/tunnel installs silently lose all webhooks
 `src/services/clawvoice.ts:240-244`, `src/index.ts:631`
