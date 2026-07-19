@@ -40,6 +40,8 @@ export declare class TwilioMediaSessionHandler {
     private readonly options;
     private readonly sessionsBySocket;
     private readonly localCloses;
+    private readonly connecting;
+    private static readonly MAX_CONNECT_BUFFER_CHUNKS;
     private static readonly MAX_COMPLETED;
     private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);

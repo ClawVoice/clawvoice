@@ -39,20 +39,30 @@ export class TelnyxTelephonyAdapter implements TelephonyProviderAdapter {
 
     const from = input.from ?? this.config.telnyxPhoneNumber;
 
+    // Request media streaming as part of the Dial command so the call has a live
+    // audio path when answered. Without a stream URL the call would connect to
+    // dead air (Telnyx never streams media unless asked). The stream endpoint is
+    // the same public WSS media URL used for Twilio.
+    const streamUrl = this.config.twilioStreamUrl?.trim();
+    const requestBody: Record<string, unknown> = {
+      connection_id: this.config.telnyxConnectionId,
+      to: normalizedTo,
+      from: from ?? "",
+      answering_machine_detection: this.config.amdEnabled ? "detect" : "disabled",
+    };
+    if (streamUrl) {
+      requestBody.stream_url = streamUrl;
+      requestBody.stream_track = "both_tracks";
+      requestBody.send_silence_when_idle = true;
+    }
+
     const response = await this.fetchFn("https://api.telnyx.com/v2/calls", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.config.telnyxApiKey}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        connection_id: this.config.telnyxConnectionId,
-        to: normalizedTo,
-        from: from ?? "",
-        answering_machine_detection: this.config.amdEnabled
-          ? "detect"
-          : "disabled",
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {

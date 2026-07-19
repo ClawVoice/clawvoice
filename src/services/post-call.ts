@@ -224,6 +224,11 @@ export class PostCallService {
     extracted?: { callerName?: string; company?: string; callbackNumber?: string; reason?: string },
   ): string {
     const dir = meta?.direction === "inbound" ? "Inbound" : "Outbound";
+    // Telegram parse_mode=HTML rejects the whole message if raw <, >, & appear
+    // in dynamic text (caller names, transcript, reasons). Escape every
+    // interpolated value so notifications aren't silently dropped.
+    const esc = (s: string): string =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     const duration = this.formatDuration(summary.durationMs);
     const time = new Date(summary.completedAt).toLocaleString("en-US", {
       timeZone: this.config.notificationTimezone,
@@ -240,8 +245,8 @@ export class PostCallService {
     // Caller identification — name if extracted, phone number always masked
     if (extracted?.callerName) {
       const nameLine = extracted.company
-        ? `${extracted.callerName} (${extracted.company})`
-        : extracted.callerName;
+        ? `${esc(extracted.callerName)} (${esc(extracted.company)})`
+        : esc(extracted.callerName);
       lines.push(`<b>Caller:</b> ${nameLine}`);
     }
     if (meta?.callerPhone) {
@@ -258,10 +263,10 @@ export class PostCallService {
     // Agent details
     const voiceProvider = this.config.voiceProvider === "elevenlabs-conversational" ? "ElevenLabs" : "Deepgram";
     const agentName = transcript.find((e) => e.speaker === "agent")?.text.match(/(?:my name is|I'm|I am)\s+([A-Z][a-z]+)/i)?.[1] ?? "Voice Agent";
-    lines.push(`<b>Agent:</b> ${agentName} (${voiceProvider})`);
+    lines.push(`<b>Agent:</b> ${esc(agentName)} (${voiceProvider})`);
 
     if (extracted?.reason) {
-      lines.push(`<b>Reason:</b> ${extracted.reason}`);
+      lines.push(`<b>Reason:</b> ${esc(extracted.reason)}`);
     }
 
     // Brief conversation summary (last 3 agent turns)
@@ -272,16 +277,16 @@ export class PostCallService {
       lines.push("<b>Key points:</b>");
       for (const turn of lastAgent) {
         const text = turn.text.length > 120 ? turn.text.slice(0, 117) + "..." : turn.text;
-        lines.push(`- ${text}`);
+        lines.push(`- ${esc(text)}`);
       }
     }
 
     if (summary.failures.length > 0) {
-      lines.push(`\n<b>Issues:</b> ${summary.failures.map((f) => f.description).join("; ")}`);
+      lines.push(`\n<b>Issues:</b> ${esc(summary.failures.map((f) => f.description).join("; "))}`);
     }
 
     if (recordingUrl) {
-      lines.push(`\n<a href="${recordingUrl}">Recording</a>`);
+      lines.push(`\n<a href="${esc(recordingUrl)}">Recording</a>`);
     }
 
     // Transcript file reference

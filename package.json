@@ -16,6 +16,9 @@
     "telephony"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=20.19"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/ClawVoice/clawvoice.git"
@@ -41,9 +44,5 @@
     "extensions": [
       "./openclaw-extension.mjs"
     ]
-  },
-  "bundleDependencies": [
-    "ws",
-    "@clack/prompts"
-  ]
+  }
 }

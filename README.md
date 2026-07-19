@@ -102,7 +102,7 @@ Download ClawVoice from ClawHub, install its dependencies, then register it as a
 # Download from ClawHub
 openclaw skills install clawvoice
 
-# Install runtime dependencies (required — bundled deps are not included in the ClawHub package)
+# Install runtime dependencies (required â€” bundled deps are not included in the ClawHub package)
 cd ~/.openclaw/workspace/skills/clawvoice && npm install
 ```
 
@@ -132,7 +132,7 @@ Restart your gateway for the plugin to load. Verify with:
 openclaw clawvoice --help
 ```
 
-> **Why not `openclaw plugins install`?** The built-in security scanner flags ClawVoice's legitimate use of environment variables (reading API keys) combined with network calls (sending them to Twilio/ElevenLabs/Deepgram) as "possible credential harvesting." This is a false positive — ClawVoice needs to read your API credentials and send them to your configured providers. The `plugins.load.paths` approach in `openclaw.json` bypasses the install scanner entirely while still loading the plugin normally.
+> **Why not `openclaw plugins install`?** The built-in security scanner flags ClawVoice's legitimate use of environment variables (reading API keys) combined with network calls (sending them to Twilio/ElevenLabs/Deepgram) as "possible credential harvesting." This is a false positive â€” ClawVoice needs to read your API credentials and send them to your configured providers. The `plugins.load.paths` approach in `openclaw.json` bypasses the install scanner entirely while still loading the plugin normally.
 
 #### Option B: Install from source (for contributors or pre-release versions)
 
@@ -507,8 +507,8 @@ CLAWVOICE_TAILSCALE_PATH=/media-stream
 
 | Problem | Cause | Fix |
 |---------|-------|-----|
-| `openclaw plugins install clawvoice` blocked by security scanner | False positive: env var reads + network sends flagged as credential harvesting | Use `plugins.load.paths` in `openclaw.json` instead — see [Install (Option A)](#1-install) |
-| `openclaw clawvoice setup` says "unknown command" | Plugin not loaded — ClawHub installs as a skill, which doesn't register CLI commands | Add plugin to `openclaw.json` via `plugins.load.paths` and restart gateway |
+| `openclaw plugins install clawvoice` blocked by security scanner | False positive: env var reads + network sends flagged as credential harvesting | Use `plugins.load.paths` in `openclaw.json` instead â€” see [Install (Option A)](#1-install) |
+| `openclaw clawvoice setup` says "unknown command" | Plugin not loaded â€” ClawHub installs as a skill, which doesn't register CLI commands | Add plugin to `openclaw.json` via `plugins.load.paths` and restart gateway |
 | Plugin fails to load: "Cannot find module ws" | Runtime dependencies not installed after ClawHub download | Run `cd ~/.openclaw/workspace/skills/clawvoice && npm install` |
 | Call disconnects immediately | ElevenLabs agent missing `{{ _system_prompt_ }}` or wrong audio format | Check ElevenLabs dashboard: system prompt has placeholder, audio input is ulaw 8000 |
 | Agent can't hear caller | Audio format mismatch | Set ElevenLabs input to **ulaw 8000**, output to **pcm 16000** |
@@ -575,7 +575,7 @@ cd clawvoice
 npm install                                # Install dependencies
 npm run build                              # Compile TypeScript
 npm test                                   # Run all tests (218 tests)
-# Then add to openclaw.json — see Install (Option B) above
+# Then add to openclaw.json â€” see Install (Option B) above
 ```
 
 ## License

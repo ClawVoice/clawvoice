@@ -14,6 +14,34 @@ and two unhandled-error paths let any internet client **crash the whole process*
 
 ---
 
+## Remediation status (this PR)
+
+Most findings below have been fixed in this branch (build + test suite green). Summary:
+
+**Fixed in code**
+- Telnyx signatures verified as base64 over the raw request body (2.1, 2.2).
+- Telnyx webhook payloads parsed at the correct `data.payload` nesting, with array-shaped `to` (2.4).
+- Telnyx outbound Dial now requests media streaming via `stream_url`/`stream_track` (2.3, partial — see remaining).
+- Deepgram binary audio frames forwarded instead of JSON-parsed (3.1).
+- ElevenLabs `client_tool_call` fields read from the correct nesting (3.2).
+- Barge-in now sends Twilio a `clear` event (3.4).
+- G.711 μ-law decode table corrected + regression test (4.2).
+- Media server: WS `error` handlers, HTTP body-read rejection guard, idle-socket timeout, non-hanging `stop()`, optional session handler so webhooks serve without voice creds (4.1, 4.5, 4.7, 1.6).
+- Caller audio buffered during voice-provider connect; silence timer no longer reset by continuous media frames; `localCloses` uses a WeakSet; media-token compare is timing-safe (4.3, 4.4, 4.6, 4.7).
+- `call.summary` stored on the natural completion path (5.1); memory extraction wired end-to-end (5.2); Telegram HTML escaped (5.3); rate limiter keys on `X-Forwarded-For` (5.5); `hangup` targets the most-recent call (5.6); daily limit resets in the configured timezone (5.6).
+- Config: `deniedTools: []` honored (5.6); `openclaw config set clawvoice.*` resolved via a top-level fallback (1.2).
+- CLI: setup falls back to the readline wizard when the ESM TUI can't load (1.4/1.5); Twilio webhook auto-config checks the response (1.9); `clawvoice test` now performs real reachability + credential probes (1.3).
+- Packaging/docs: `engines.node >=20.19`, deduped `bundledDependencies` (1.4/1.12); manifest version + `mediaStreamBind` default aligned (1.14); README invalid UTF-8 bytes fixed (1.14); SKILL.md `clawvoice diagnostics` → `clawvoice test` (1.13); `normalizeE164` accepts short E.164; Twilio recording-callback URL derived via `URL`; inert `{CallSid}` TwiML placeholder removed.
+
+**Remaining (feature-scope or external, not fixed here)**
+- Mid-call function *execution* (3.3/3.5): requests now parse and route, but no tool executor exists to run them and return results — a follow-up feature.
+- Telnyx voice *media protocol* (2.3): the Dial now requests streaming, but the port-3101 media server speaks Twilio's frame format; a Telnyx-format media handler is still needed for end-to-end Telnyx audio.
+- ElevenLabs agent output-format override (3.5): provider-config-dependent; left as-is.
+- Install scanner false-positive / ClawHub no-npm packaging (1.1): external to this repo.
+- Wizard `process.exit` on Esc (1.11), JSON5-comment-preserving config save (1.10), and the Tailscale-funnel wizard branch (1.7) are unchanged.
+
+---
+
 ## 1. Onboarding / install flow (why "you need Claude to install it")
 
 ### 1.1 CRITICAL — No automated self-serve install path

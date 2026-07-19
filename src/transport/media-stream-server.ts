@@ -27,11 +27,18 @@ interface MediaStreamServerOptions {
   host: string;
   port: number;
   path: string;
-  sessionHandler: TwilioMediaSessionHandler;
+  /**
+   * Media session handler. Optional: when absent (e.g. no voice-provider
+   * credentials configured) the server still serves HTTP webhook routes, but
+   * WebSocket media-stream upgrades are rejected instead of crashing.
+   */
+  sessionHandler?: TwilioMediaSessionHandler;
   /** Optional auth token for WebSocket connections. If set, connections must provide it via ?token= query param or Authorization header. */
   authToken?: string;
   /** Maximum concurrent WebSocket connections (default: 20). */
   maxConnections?: number;
+  /** Idle timeout (ms) for a connected socket that never sends a valid frame. Default: 20s. */
+  idleTimeoutMs?: number;
 }
 
 /** Simple in-memory per-IP rate limiter. */
@@ -66,8 +73,22 @@ export class MediaStreamServer {
       return;
     }
 
-    this.httpServer = http.createServer(async (req, res) => {
-      await this.handleHttpRequest(req, res);
+    this.httpServer = http.createServer((req, res) => {
+      // A client that aborts mid-body makes the async body read reject; that
+      // rejection must never escape as an unhandled rejection (which kills the
+      // process on Node 15+). Catch it here and on the request/response streams.
+      req.on("error", () => { /* client aborted — handled below */ });
+      res.on("error", () => { /* downstream closed — nothing to do */ });
+      void this.handleHttpRequest(req, res).catch((e) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error("[clawvoice] standalone request error:", msg);
+        if (!res.headersSent) {
+          try {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "Bad Request" }));
+          } catch { /* response already torn down */ }
+        }
+      });
     });
 
     this.wss = new WebSocketServer({
@@ -76,9 +97,20 @@ export class MediaStreamServer {
 
     // Handle WebSocket upgrades only for the media-stream path
     this.httpServer.on("upgrade", (req, socket, head) => {
+      // A raw upgrade socket with no error listener throws on ECONNRESET.
+      socket.on("error", () => { /* upgrade socket failed — ignore */ });
+
       const pathname = normalizePath(parsePathname(req.url));
       const expectedPath = normalizePath(this.options.path);
       if (pathname !== expectedPath) {
+        socket.destroy();
+        return;
+      }
+
+      // Without a session handler (no voice provider configured) we cannot
+      // service media streams — reject the upgrade rather than crash later.
+      if (!this.options.sessionHandler) {
+        socket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
         socket.destroy();
         return;
       }
@@ -97,8 +129,30 @@ export class MediaStreamServer {
     });
 
     this.wss.on("connection", (socket, req) => {
+      const sessionHandler = this.options.sessionHandler;
+      if (!sessionHandler) {
+        socket.close(1011, "No media session handler");
+        return;
+      }
       this.activeConnections++;
       const twilioSocket = socket as unknown as TwilioWebSocket;
+
+      // An accepted WebSocket with no 'error' listener throws an uncaught
+      // exception (killing the process) on any protocol violation or reset.
+      socket.on("error", () => { /* handled by close */ });
+
+      // Idle guard: a socket that connects but never sends a valid frame (the
+      // pool-exhaustion vector) is closed after idleTimeoutMs. Reset on activity.
+      const idleMs = this.options.idleTimeoutMs ?? 20_000;
+      let idleTimer: NodeJS.Timeout | null = null;
+      const armIdle = (): void => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          try { twilioSocket.close(1008, "Idle timeout"); } catch { /* already closed */ }
+        }, idleMs);
+        idleTimer.unref?.();
+      };
+      armIdle();
 
       // Attach URL query params from the WebSocket upgrade request so the
       // session handler can read purpose/greeting context set by the Twilio adapter.
@@ -109,15 +163,17 @@ export class MediaStreamServer {
         } catch { /* ignore malformed URLs */ }
       }
       socket.on("message", (payload) => {
+        armIdle();
         const text = typeof payload === "string" ? payload : payload.toString("utf8");
-        void this.options.sessionHandler.handleMessage(twilioSocket, text).catch(() => {
+        void sessionHandler.handleMessage(twilioSocket, text).catch(() => {
           twilioSocket.close(1011, "Invalid media stream message");
         });
       });
 
       socket.on("close", () => {
+        if (idleTimer) clearTimeout(idleTimer);
         this.activeConnections--;
-        this.options.sessionHandler.handleClose(twilioSocket);
+        sessionHandler.handleClose(twilioSocket);
       });
     });
 
@@ -138,13 +194,24 @@ export class MediaStreamServer {
     this.wss = null;
 
     if (wss) {
+      // Terminate live client sockets first — wss.close()/server.close() wait
+      // for open (upgraded) connections and would otherwise hang for the entire
+      // duration of any in-progress call.
+      for (const client of wss.clients) {
+        try { client.terminate(); } catch { /* already gone */ }
+      }
       await new Promise<void>((resolve) => {
         wss.close(() => resolve());
       });
     }
 
     await new Promise<void>((resolve) => {
-      server.close(() => resolve());
+      let settled = false;
+      const done = (): void => { if (!settled) { settled = true; resolve(); } };
+      server.close(() => done());
+      // Safety net: don't let a lingering keep-alive socket block shutdown.
+      const t = setTimeout(done, 5_000);
+      t.unref?.();
     });
   }
 
@@ -220,6 +287,8 @@ export class MediaStreamServer {
     // Build Express-like req shim
     const expressReq = Object.assign(req, {
       body: parsedBody,
+      // Preserve exact bytes for signature verification (Telnyx Ed25519).
+      rawBody,
       protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "https",
     });
 

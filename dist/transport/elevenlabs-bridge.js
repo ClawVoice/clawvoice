@@ -204,9 +204,13 @@ function normalizeMessage(raw) {
         case "agent_response_correction":
             return null;
         case "client_tool_call": {
-            const toolCallId = raw.tool_call_id ?? raw.client_tool_call_id ?? "";
-            const toolName = raw.tool_name ?? "";
-            const parameters = raw.parameters ?? {};
+            // ElevenLabs nests these fields under `client_tool_call`, not at the top
+            // level. Read from the nested event (falling back to top-level for
+            // forward-compat) so tool calls carry a real name/id/args.
+            const evt = raw.client_tool_call;
+            const toolCallId = evt?.tool_call_id ?? raw.tool_call_id ?? raw.client_tool_call_id ?? "";
+            const toolName = evt?.tool_name ?? raw.tool_name ?? "";
+            const parameters = evt?.parameters ?? raw.parameters ?? {};
             return {
                 type: "FunctionCallRequest",
                 function_call_id: toolCallId,

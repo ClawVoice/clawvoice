@@ -20,22 +20,15 @@ exports.elevenLabsToTwilio = elevenLabsToTwilio;
  */
 const MULAW_DECODE_TABLE = new Int16Array(256);
 {
+    // Standard ITU-T G.711 / Sun reference decode: invert the byte, rebuild the
+    // magnitude as ((mantissa << 3) + BIAS) << exponent, subtract the bias, and
+    // apply the sign. Verified vectors: 0x00 -> -32124, 0xFF -> 0, 0x7F -> 0.
     const BIAS = 0x84;
-    const CLIP = 32635;
     for (let i = 0; i < 256; i++) {
-        const sign = i & 0x80;
-        let exponent = (i >> 4) & 0x07;
-        let mantissa = i & 0x0f;
-        // Invert all bits for mulaw
-        exponent = (~exponent) & 0x07;
-        mantissa = (~mantissa) & 0x0f;
-        let sample = ((mantissa << 1) | 1) << (exponent + 2);
-        sample -= BIAS;
-        if (sample > CLIP)
-            sample = CLIP;
-        if (sample < -CLIP)
-            sample = -CLIP;
-        MULAW_DECODE_TABLE[i] = sign ? sample : -sample;
+        const u = (~i) & 0xff;
+        let sample = ((u & 0x0f) << 3) + BIAS;
+        sample <<= (u & 0x70) >> 4;
+        MULAW_DECODE_TABLE[i] = (u & 0x80) ? (BIAS - sample) : (sample - BIAS);
     }
 }
 /**

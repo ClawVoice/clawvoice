@@ -1,9 +1,11 @@
 export function normalizeE164(phoneNumber: string): string {
   if (phoneNumber.startsWith("+")) {
     const digits = phoneNumber.replace(/\D/g, "");
-    if (digits.length < 10) {
+    // E.164 allows 7–15 digits total (some national plans are shorter than 10);
+    // the previous >=10 floor rejected legitimate short international numbers.
+    if (digits.length < 7 || digits.length > 15) {
       throw new Error(
-        "Invalid international phone number. Must contain at least 10 digits.",
+        "Invalid international phone number. Provide a valid E.164 number (7–15 digits).",
       );
     }
     return `+${digits}`;

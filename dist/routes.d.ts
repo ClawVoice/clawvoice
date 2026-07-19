@@ -4,6 +4,8 @@ import { InboundCallRecord } from "./inbound/types";
 import { MediaStreamServer } from "./transport/media-stream-server";
 interface WebhookRequest {
     body?: unknown;
+    /** Exact raw request bytes as received, used for signature verification. */
+    rawBody?: string;
     headers?: Record<string, string>;
     protocol?: string;
     url?: string;

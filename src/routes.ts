@@ -12,6 +12,8 @@ import { MediaStreamServer } from "./transport/media-stream-server";
 
 interface WebhookRequest {
   body?: unknown;
+  /** Exact raw request bytes as received, used for signature verification. */
+  rawBody?: string;
   headers?: Record<string, string>;
   protocol?: string;
   url?: string;
@@ -42,8 +44,13 @@ class WebhookRateLimiter {
   }
 
   check(req: WebhookRequest): boolean {
+    // Behind the documented tunnels (ngrok/Cloudflare/Tailscale) every request
+    // shares the proxy's socket address, which would collapse all traffic into a
+    // single bucket. Prefer the real client IP from X-Forwarded-For.
+    const fwd = req.headers?.["x-forwarded-for"];
+    const forwardedIp = typeof fwd === "string" ? fwd.split(",")[0]?.trim() : "";
     const rawReq = req as unknown as { socket?: { remoteAddress?: string }; connection?: { remoteAddress?: string } };
-    const ip = rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
+    const ip = forwardedIp || rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
     const now = Date.now();
     const entry = this.map.get(ip);
     if (!entry || now >= entry.resetAt) {
@@ -91,7 +98,15 @@ export function createWebhookHandlers(
       return;
     }
     const request = req as WebhookRequest;
-    const body = typeof request.body === "string" ? request.body : JSON.stringify(request.body ?? "");
+    // Ed25519 verification must run over the EXACT signed bytes. Prefer the raw
+    // request body; only fall back to re-serialization when it isn't available
+    // (e.g. legacy callers that pass a pre-parsed body and no rawBody).
+    const body =
+      typeof request.rawBody === "string"
+        ? request.rawBody
+        : typeof request.body === "string"
+          ? request.body
+          : JSON.stringify(request.body ?? "");
     const result = verifyTelnyxSignature(
       body,
       request.headers?.["telnyx-signature-ed25519"],
@@ -465,11 +480,25 @@ function parseWebhookBody(body: unknown): ParsedWebhookBody | null {
     return null;
   }
 
-  const b = body as Record<string, unknown>;
+  const root = body as Record<string, unknown>;
+
+  // Twilio delivers flat form params at the root (CallSid/From/To).
+  // Telnyx v2 nests everything under data.payload — resolve that first and use
+  // it as the effective object, falling back to the root for Twilio.
+  const data = root.data;
+  const payload =
+    typeof data === "object" && data !== null
+      ? (data as Record<string, unknown>).payload
+      : undefined;
+  const b =
+    typeof payload === "object" && payload !== null
+      ? (payload as Record<string, unknown>)
+      : root;
 
   const providerCallId =
-    typeof b.CallSid === "string" ? b.CallSid
+    typeof root.CallSid === "string" ? root.CallSid
     : typeof b.call_control_id === "string" ? b.call_control_id
+    : typeof root.call_control_id === "string" ? root.call_control_id
     : undefined;
 
   if (!providerCallId) {
@@ -477,13 +506,15 @@ function parseWebhookBody(body: unknown): ParsedWebhookBody | null {
   }
 
   const from =
-    typeof b.From === "string" ? b.From
+    typeof root.From === "string" ? root.From
     : typeof b.from === "string" ? b.from
+    : typeof root.from === "string" ? root.from
     : "";
 
   const to =
-    typeof b.To === "string" ? b.To
+    typeof root.To === "string" ? root.To
     : typeof b.to === "string" ? b.to
+    : typeof root.to === "string" ? root.to
     : "";
 
   return { providerCallId, from, to };
@@ -495,27 +526,31 @@ function parseTelnyxSmsBody(body: unknown): ParsedTelnyxSmsBody | null {
   }
 
   const root = body as Record<string, unknown>;
-  if (root.event_type !== "message.received") {
-    return null;
-  }
-
   const data = root.data;
-  if (typeof data !== "object" || data === null) {
+  const dataObj =
+    typeof data === "object" && data !== null ? (data as Record<string, unknown>) : undefined;
+
+  // Telnyx v2 nests event_type under `data`; tolerate a root-level event_type too.
+  const eventType = (dataObj?.event_type ?? root.event_type);
+  if (eventType !== "message.received") {
     return null;
   }
 
-  const payload = (data as Record<string, unknown>).payload;
+  const payload = dataObj?.payload;
   if (typeof payload !== "object" || payload === null) {
     return null;
   }
 
   const sms = payload as Record<string, unknown>;
-  const from = typeof sms.from === "object" && sms.from !== null
-    ? ((sms.from as Record<string, unknown>).phone_number as string | undefined)
-    : undefined;
-  const to = typeof sms.to === "object" && sms.to !== null
-    ? ((sms.to as Record<string, unknown>).phone_number as string | undefined)
-    : undefined;
+  // `from` is an object { phone_number, ... }. `to` is an ARRAY of
+  // { phone_number, ... } on real Telnyx messaging webhooks (but tolerate a
+  // single object shape as well).
+  const phoneOf = (v: unknown): string | undefined =>
+    typeof v === "object" && v !== null
+      ? ((v as Record<string, unknown>).phone_number as string | undefined)
+      : undefined;
+  const from = phoneOf(sms.from);
+  const to = Array.isArray(sms.to) ? phoneOf(sms.to[0]) : phoneOf(sms.to);
   const text = typeof sms.text === "string" ? sms.text : "";
   const id = typeof sms.id === "string" ? sms.id : undefined;
 

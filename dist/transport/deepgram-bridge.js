@@ -80,16 +80,28 @@ class DeepgramBridgeClient {
                     },
                 });
             });
-            ws.on("message", (payload) => {
+            ws.on("message", (payload, isBinary) => {
+                // Deepgram Voice Agent sends the agent's TTS audio as BINARY frames and
+                // control/events as TEXT (JSON). Only JSON-parse text frames — binary
+                // frames are raw agent audio and must be forwarded straight through,
+                // otherwise the caller hears dead air.
+                if (isBinary === true || payload instanceof ArrayBuffer) {
+                    const buf = Buffer.isBuffer(payload)
+                        ? payload
+                        : payload instanceof ArrayBuffer
+                            ? Buffer.from(payload)
+                            : null;
+                    if (buf && buf.length > 0) {
+                        options.onMessage({ type: "Audio", data: buf });
+                    }
+                    return;
+                }
                 let text = "";
                 if (typeof payload === "string") {
                     text = payload;
                 }
                 else if (Buffer.isBuffer(payload)) {
                     text = payload.toString("utf8");
-                }
-                else if (payload instanceof ArrayBuffer) {
-                    text = Buffer.from(payload).toString("utf8");
                 }
                 if (!text) {
                     return;

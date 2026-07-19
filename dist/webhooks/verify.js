@@ -27,7 +27,8 @@ function verifyTelnyxSignature(payload, signatureHeader, timestampHeader, public
     }
     try {
         const signedPayload = `${timestampHeader}|${payload}`;
-        const signatureBytes = Buffer.from(signatureHeader, "hex");
+        // Telnyx sends the `telnyx-signature-ed25519` header base64-encoded (not hex).
+        const signatureBytes = Buffer.from(signatureHeader, "base64");
         const publicKeyDer = Buffer.concat([
             Buffer.from("302a300506032b6570032100", "hex"),
             Buffer.from(publicKey, "base64"),
