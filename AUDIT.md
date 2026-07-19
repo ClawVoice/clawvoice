@@ -8,9 +8,9 @@ speculative.
 
 **Headline:** the project currently has **no automated self-serve install path**, the
 **Telnyx calling and inbound paths are non-functional** (four independent bugs;
-outbound SMS is the one working Telnyx capability), **Deepgram calls are silent**, **ElevenLabs tool-calling is broken at both ends of the pipe**, caller audio
-decoding is mathematically wrong, and two unhandled-error paths let any internet
-client **crash the whole process**.
+outbound SMS is the one working Telnyx capability), **Deepgram calls are silent**, **ElevenLabs tool-calling is broken at both ends of the pipe**, the G.711 μ-law
+decoder is mathematically wrong (dormant today, a landmine for any future consumer),
+and two unhandled-error paths let any internet client **crash the whole process**.
 
 ---
 
@@ -119,14 +119,19 @@ If the host runs plugin CLI commands in the gateway process (the `registerCli` b
 at `src/index.ts:55-121` makes this plausible), pressing Esc during setup kills the
 entire OpenClaw process.
 
-### 1.12 MEDIUM — Manual publish ships a broken tarball
+### 1.12 MEDIUM — Bundled dependencies silently omitted, breaking no-npm distribution channels
 `package.json:31-34,45-48`
 
 `bundleDependencies` is declared (under both spellings), but `npm pack`/`publish`
-with no `node_modules` present silently produces a tarball without `ws` or
-`@clack/prompts` — the media server and wizard can't load. CI is safe (`npm ci`
-first), but README.md:105-106 confirms this exact broken artifact already shipped to
-ClawHub, which is why the docs need the extra `npm install` step.
+with no `node_modules` present silently produces a tarball with no bundled copies of
+`ws` or `@clack/prompts`. Scope: both packages are also regular `dependencies`, so a
+normal `npm install` of the published tarball still resolves them — npm consumers are
+fine. The failure hits distribution channels that deliver the raw tarball without
+running npm: the ClawHub skill download ships exactly this artifact (README.md:105-106),
+where the media server and wizard can't load until the user manually runs
+`npm install` — the extra step the install docs have to compensate for. CI publishes
+are safe (`npm ci` first); the fix is verifying bundle contents at pack time or
+having the ClawHub channel run an install step.
 
 ### 1.13 MEDIUM — SKILL.md instructs running a nonexistent command
 `skills/clawvoice/SKILL.md:35`
@@ -249,15 +254,18 @@ agent config — the code's own comment (lines 88-90) notes overrides are locked
   try/catch; a client aborting mid-POST produces an unhandled rejection →
   process exit (Node 15+ default).
 
-### 4.2 HIGH — G.711 mulaw decode table is mathematically wrong
+### 4.2 MEDIUM — G.711 mulaw decode table is mathematically wrong (currently dormant)
 `src/transport/audio-convert.ts:27`
 
 `((mantissa << 1) | 1) << (exponent + 2)` omits the implicit leading bit (correct:
 `((mantissa << 3) + 0x84) << exponent` minus bias). Verified: `0x00` → −15740
-instead of −32124; `0xFF` → −128 instead of 0 (small codes flip sign). Every consumer
-of `mulawToPcm16`/`twilioToElevenLabs` feeds severely distorted caller audio to the
-voice provider (currently latent in the ElevenLabs path only because raw ulaw is
-forwarded). The encode table is correct, so round-trips garble.
+instead of −32124; `0xFF` → −128 instead of 0 (small codes flip sign). Scope: no live
+call path currently invokes the decoder — `mulawToPcm16` is reachable only through
+`twilioToElevenLabs`, which nothing outside `audio-convert.ts` calls; the live
+ElevenLabs path forwards raw μ-law inbound and uses only `elevenLabsToTwilio` (the
+encode direction, whose table is correct). This is a landmine for any future consumer
+of the decode path (e.g. a provider needing linear PCM input), not a current
+caller-audio corruption bug — fix or delete it before wiring anything to it.
 
 ### 4.3 MEDIUM — Silence timeout can never fire
 `src/transport/media-session-handler.ts:438-446`
