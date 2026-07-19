@@ -33,6 +33,27 @@ export interface WebhookCallbacks {
 const WEBHOOK_RATE_LIMIT_WINDOW_MS = 60_000;
 const WEBHOOK_RATE_LIMIT_MAX = 100;
 
+/**
+ * Whether the immediate TCP peer is loopback or RFC1918/ULA private — i.e. a
+ * local reverse proxy or tunnel we can trust to have set X-Forwarded-For.
+ * A public peer is a direct client whose XFF header is untrusted.
+ */
+function isPrivatePeer(ip: string): boolean {
+  if (!ip || ip === "unknown") return false;
+  const a = ip.replace(/^::ffff:/i, ""); // unwrap IPv4-mapped IPv6
+  if (a === "::1" || a.startsWith("127.")) return true;
+  if (a.startsWith("10.")) return true;
+  if (a.startsWith("192.168.")) return true;
+  const m = a.match(/^172\.(\d+)\./);
+  if (m) {
+    const octet = Number(m[1]);
+    if (octet >= 16 && octet <= 31) return true;
+  }
+  if (/^(fc|fd)/i.test(a)) return true; // ULA fc00::/7
+  if (/^fe80:/i.test(a)) return true;   // link-local
+  return false;
+}
+
 class WebhookRateLimiter {
   private readonly map = new Map<string, { count: number; resetAt: number }>();
   private cleanupTimer: NodeJS.Timeout | null = null;
@@ -44,13 +65,21 @@ class WebhookRateLimiter {
   }
 
   check(req: WebhookRequest): boolean {
+    const rawReq = req as unknown as { socket?: { remoteAddress?: string }; connection?: { remoteAddress?: string } };
+    const socketIp = rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
     // Behind the documented tunnels (ngrok/Cloudflare/Tailscale) every request
     // shares the proxy's socket address, which would collapse all traffic into a
-    // single bucket. Prefer the real client IP from X-Forwarded-For.
-    const fwd = req.headers?.["x-forwarded-for"];
-    const forwardedIp = typeof fwd === "string" ? fwd.split(",")[0]?.trim() : "";
-    const rawReq = req as unknown as { socket?: { remoteAddress?: string }; connection?: { remoteAddress?: string } };
-    const ip = forwardedIp || rawReq.socket?.remoteAddress || rawReq.connection?.remoteAddress || "unknown";
+    // single bucket — so prefer the real client IP from X-Forwarded-For. But
+    // only when the immediate peer is loopback/private (i.e. an actual local
+    // proxy). On a directly-exposed server the header is attacker-controlled and
+    // rotating it would bypass the limit, so fall back to the un-spoofable
+    // socket address there.
+    let ip = socketIp;
+    if (isPrivatePeer(socketIp)) {
+      const fwd = req.headers?.["x-forwarded-for"];
+      const forwardedIp = typeof fwd === "string" ? fwd.split(",")[0]?.trim() : "";
+      if (forwardedIp) ip = forwardedIp;
+    }
     const now = Date.now();
     const entry = this.map.get(ip);
     if (!entry || now >= entry.resetAt) {
