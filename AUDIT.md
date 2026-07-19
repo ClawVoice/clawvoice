@@ -33,14 +33,22 @@ A careful human can complete these manual steps by hand, but nothing automates t
 the only guided path is an AI agent following SKILL.md, which is why in practice
 "you have to use Claude to install it."
 
-### 1.2 HIGH — SKILL.md/README write config to a namespace the plugin never reads
-`skills/clawvoice/SKILL.md:60-65,99-103,151-156` vs `src/index.ts:465-471` and `src/cli.ts:127-139`
+### 1.2 MEDIUM — Config-write paths disagree; the documented `config set` flow is host-version-dependent
+`skills/clawvoice/SKILL.md:60-65,99-103,151-156`, `src/index.ts:462-471`, `src/cli.ts:127-139`, `docs/OPENCLAW_PLUGIN_GUIDE.md:135,849-850`
 
-The plugin reads `api.pluginConfig ?? plugins.entries.clawvoice.config ?? top-level`;
-its own wizard writes `plugins.entries.clawvoice.config`; SKILL.md and README.md:359
-instead instruct `openclaw config set clawvoice.*` — a third location that resolves to
-a top-level `clawvoice:{}` object `resolveConfig` never looks at. The Claude-guided
-setup silently produces a dead config.
+The `openclaw config set clawvoice.*` flow that SKILL.md and README.md:359 instruct is
+the repo's documented config source (plugin guide, backed by the manifest
+`configSchema`) and is consumed through the `api.pluginConfig` branch
+(`src/index.ts:470`) on conforming hosts — it is not universally dead. The gap: the
+code's own comment (index.ts:462-464) acknowledges OpenClaw versions that leave
+`api.pluginConfig` undefined and pass the raw config as `api.config`; on those hosts
+`clawvoice.*` values live under `api.config.clawvoice`, a key `resolveConfig` never
+inspects, so the SKILL.md-guided setup silently yields defaults. Meanwhile the
+wizard's own fallback writes a *different* location, `plugins.entries.clawvoice.config`
+(`src/cli.ts:127-139`) — so the two guided setup paths disagree, and which one takes
+effect depends on the host version. Fix: extend the fallback chain in
+`initPlugin` to also check `api.config.clawvoice`, so every documented write path
+resolves on every host version.
 
 ### 1.3 HIGH — `clawvoice test` performs zero network I/O despite README claims
 `README.md:338-344` vs `src/diagnostics/health.ts`
