@@ -72,6 +72,7 @@ export declare class ClawVoiceService {
     private dailyCallCount;
     private dailyResetDate;
     private systemEventEmitter;
+    private memoryExtractor;
     private readonly smsReplyTimestamps;
     /** In-memory map for passing call context via short reference IDs instead of URL query params. */
     readonly pendingCallContext: Map<string, PendingCallContextEntry>;
@@ -101,6 +102,8 @@ export declare class ClawVoiceService {
     getProviderSummary(): string;
     private createCallId;
     private findInternalCallIdByProviderCallId;
+    /** Current calendar date (YYYY-MM-DD) in the configured notification timezone. */
+    private currentDateInTimezone;
     private checkDailyLimit;
     private validateCallReadiness;
     startCall(request: StartCallRequest): Promise<StartCallResponse>;
@@ -121,6 +124,8 @@ export declare class ClawVoiceService {
     sendText(request: SendTextRequest): Promise<SendTextResponse>;
     trackInboundText(from: string, to: string, body: string, providerMessageId?: string): void;
     setSystemEventEmitter(emitter: SystemEventEmitter): void;
+    /** Wire a memory extractor invoked with the transcript when a call completes. */
+    setMemoryExtractor(extractor: (callId: string, transcript: import("../voice/types").TranscriptEntry[]) => void): void;
     /**
      * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
      */

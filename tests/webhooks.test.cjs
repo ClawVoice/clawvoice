@@ -16,7 +16,8 @@ const publicKeyBase64 = ed25519PublicKey
 function telnyxEd25519Sign(timestamp, payload) {
   const data = `${timestamp}|${payload}`;
   const sig = sign(null, Buffer.from(data), ed25519PrivateKey);
-  return sig.toString("hex");
+  // Telnyx sends the signature base64-encoded.
+  return sig.toString("base64");
 }
 
 function twilioHmac(authToken, url, params) {

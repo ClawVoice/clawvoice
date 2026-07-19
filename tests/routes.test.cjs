@@ -16,7 +16,8 @@ const publicKeyBase64 = ed25519PublicKey
 function telnyxEd25519Sign(timestamp, payload) {
   const data = `${timestamp}|${payload}`;
   const sig = sign(null, Buffer.from(data), ed25519PrivateKey);
-  return sig.toString("hex");
+  // Telnyx sends the signature base64-encoded.
+  return sig.toString("base64");
 }
 
 function baseConfig(overrides) {
@@ -101,13 +102,20 @@ describe("Route Handlers — inboundEnabled guard (Minor #5)", () => {
     const calls = [];
     registerRoutes(api, config, (record) => calls.push(record));
 
-    const bodyObj = { call_control_id: "telnyx-123", from: "+15551234", to: "+15559999" };
+    // Real Telnyx v2 call webhook shape: everything nested under data.payload.
+    const bodyObj = {
+      data: {
+        event_type: "call.initiated",
+        payload: { call_control_id: "telnyx-123", from: "+15551234", to: "+15559999" },
+      },
+    };
     const timestamp = "1678901234";
     const bodyStr = JSON.stringify(bodyObj);
     const sig = telnyxEd25519Sign(timestamp, bodyStr);
 
     const req = {
       body: bodyObj,
+      rawBody: bodyStr,
       headers: {
         "telnyx-signature-ed25519": sig,
         "telnyx-timestamp": timestamp,
@@ -120,6 +128,7 @@ describe("Route Handlers — inboundEnabled guard (Minor #5)", () => {
     assert.equal(res.getStatus(), 200);
     assert.equal(calls.length, 1, "onInbound should be called when inboundEnabled=true");
     assert.equal(calls[0].provider, "telnyx");
+    assert.equal(calls[0].from, "+15551234");
   });
 
   it("telnyx webhook does NOT invoke onInbound when inboundEnabled=false", async () => {
@@ -128,13 +137,19 @@ describe("Route Handlers — inboundEnabled guard (Minor #5)", () => {
     const calls = [];
     registerRoutes(api, config, (record) => calls.push(record));
 
-    const bodyObj = { call_control_id: "telnyx-456", from: "+15551234", to: "+15559999" };
+    const bodyObj = {
+      data: {
+        event_type: "call.initiated",
+        payload: { call_control_id: "telnyx-456", from: "+15551234", to: "+15559999" },
+      },
+    };
     const timestamp = "1678901234";
     const bodyStr = JSON.stringify(bodyObj);
     const sig = telnyxEd25519Sign(timestamp, bodyStr);
 
     const req = {
       body: bodyObj,
+      rawBody: bodyStr,
       headers: {
         "telnyx-signature-ed25519": sig,
         "telnyx-timestamp": timestamp,
@@ -224,13 +239,14 @@ describe("Route Handlers — SMS webhooks", () => {
       (from, to, body, messageId) => texts.push({ from, to, body, messageId }),
     );
 
+    // Real Telnyx v2 messaging webhook: event_type under data, `to` is an array.
     const bodyObj = {
-      event_type: "message.received",
       data: {
+        event_type: "message.received",
         payload: {
           id: "sms-telnyx-1",
           from: { phone_number: "+15552223333" },
-          to: { phone_number: "+15550001111" },
+          to: [{ phone_number: "+15550001111" }],
           text: "Hello from Telnyx",
         },
       },
@@ -241,6 +257,7 @@ describe("Route Handlers — SMS webhooks", () => {
 
     const req = {
       body: bodyObj,
+      rawBody: bodyStr,
       headers: {
         "telnyx-signature-ed25519": sig,
         "telnyx-timestamp": timestamp,

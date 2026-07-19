@@ -47,28 +47,38 @@ export class TwilioTelephonyAdapter implements TelephonyProviderAdapter {
       );
     }
 
-    const callSidPlaceholder = "{CallSid}";
-
     // Twilio's <Stream> element strips ALL query parameters from the URL,
     // so auth token and ref ID are passed as <Parameter> elements instead.
     // They arrive in the `start` event's customParameters on the media stream.
 
-    let recordAttr = "";
-    if (this.config.recordCalls) {
-      // Derive HTTPS webhook URL from the WSS stream URL for recording status callback
-      const recordingCallbackUrl = baseWebhookUrl
-        .replace(/^wss:/i, "https:")
-        .replace(/\/media-stream\/?$/, "/clawvoice/webhooks/twilio/recording");
-      recordAttr = ` record="record-from-answer" recordingStatusCallback="${recordingCallbackUrl}" recordingStatusCallbackEvent="completed"`;
-    }
     // XML-escape values to prevent TwiML parse errors from special chars in purpose/greeting
     const xmlEscape = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/\r/g, "&#13;").replace(/\n/g, "&#10;").replace(/\t/g, "&#9;");
+
+    let recordAttr = "";
+    if (this.config.recordCalls) {
+      // Derive the HTTPS recording-status callback from the media stream URL via
+      // URL parsing so it works for any path (not just `.../media-stream`) and
+      // for ws:// as well as wss://.
+      const httpsBase = baseWebhookUrl.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+      let recordingCallbackUrl: string;
+      try {
+        const parsed = new URL(httpsBase);
+        parsed.pathname = "/clawvoice/webhooks/twilio/recording";
+        parsed.search = "";
+        recordingCallbackUrl = parsed.toString();
+      } catch {
+        recordingCallbackUrl = httpsBase.split("?")[0].replace(/\/[^/]*$/, "/clawvoice/webhooks/twilio/recording");
+      }
+      recordAttr = ` record="record-from-answer" recordingStatusCallback="${xmlEscape(recordingCallbackUrl)}" recordingStatusCallbackEvent="completed"`;
+    }
     const safeStreamUrl = xmlEscape(baseWebhookUrl);
     const safePurpose = xmlEscape(input.purpose ?? "");
     const safeGreeting = xmlEscape(input.greeting ?? "");
     const safeRef = xmlEscape(input.refId ?? "");
     const safeToken = xmlEscape(input.mediaStreamAuthToken ?? "");
-    const twiml = `<Response><Connect${recordAttr}><Stream url="${safeStreamUrl}" name="clawvoice" track="inbound_track"><Parameter name="clawvoice_token" value="${safeToken}"/><Parameter name="clawvoice_ref" value="${safeRef}"/><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${safePurpose}"/><Parameter name="greeting" value="${safeGreeting}"/><Parameter name="callSid" value="${callSidPlaceholder}"/></Stream></Connect></Response>`;
+    // NOTE: TwiML has no template expansion, so the media-stream handler reads
+    // the protocol-level start.callSid rather than a <Parameter> placeholder.
+    const twiml = `<Response><Connect${recordAttr}><Stream url="${safeStreamUrl}" name="clawvoice" track="inbound_track"><Parameter name="clawvoice_token" value="${safeToken}"/><Parameter name="clawvoice_ref" value="${safeRef}"/><Parameter name="to" value="${normalizedTo}"/><Parameter name="purpose" value="${safePurpose}"/><Parameter name="greeting" value="${safeGreeting}"/></Stream></Connect></Response>`;
 
     const body = new URLSearchParams({
       To: normalizedTo,

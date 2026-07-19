@@ -132,8 +132,9 @@ function parseNumber(value: unknown, fallback: number): number {
 
 function parseStringArray(value: unknown, fallback: string[]): string[] {
   if (Array.isArray(value)) {
-    const filtered = value.filter((entry): entry is string => typeof entry === "string");
-    return filtered.length > 0 ? filtered : fallback;
+    // An explicit array is authoritative — an empty array [] must be honored as
+    // "no denied tools", not silently replaced with the default deny list.
+    return value.filter((entry): entry is string => typeof entry === "string");
   }
 
   if (typeof value === "string") {

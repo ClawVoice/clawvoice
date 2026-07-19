@@ -94,8 +94,9 @@ export class ClawVoiceService {
   private readonly callTimers = new Map<string, NodeJS.Timeout>();
   private readonly telephonyAdapter: TelephonyProviderAdapter;
   private dailyCallCount = 0;
-  private dailyResetDate = new Date().toISOString().slice(0, 10);
+  private dailyResetDate = "";
   private systemEventEmitter: SystemEventEmitter | null = null;
+  private memoryExtractor: ((callId: string, transcript: import("../voice/types").TranscriptEntry[]) => void) | null = null;
   private readonly smsReplyTimestamps = new Map<string, number>();
   /** In-memory map for passing call context via short reference IDs instead of URL query params. */
   public readonly pendingCallContext = new Map<string, PendingCallContextEntry>();
@@ -160,8 +161,16 @@ export class ClawVoiceService {
           if (call) {
             call.status = "completed";
             call.endedAt = new Date().toISOString();
+            // Persist the summary on the record (which is shared with
+            // recentCalls) so getCallSummary/status/batch reporting work on the
+            // natural hang-up path, not just manual/auto hangup.
+            call.summary = summary ?? undefined;
             this.activeCalls.delete(callId);
             this.callIdByProviderCallId.delete(call.providerCallId);
+          }
+          // Feed the transcript to the memory extractor (auto-extract candidates).
+          if (transcript.length > 0) {
+            try { this.memoryExtractor?.(callId, transcript); } catch { /* best-effort */ }
           }
           const timer = this.callTimers.get(callId);
           if (timer) {
@@ -237,18 +246,28 @@ export class ClawVoiceService {
     if (this.config.telephonyProvider !== "twilio") {
       return;
     }
-    if (!this.config.twilioStreamUrl) {
-      throw new Error("twilioStreamUrl is required. Set CLAWVOICE_TWILIO_STREAM_URL to your public WSS endpoint.");
-    }
-    if (!this.mediaSessionHandler) {
-      throw new Error("Voice provider credentials are required for Twilio media streaming.");
-    }
     if (this.mediaStreamServer) {
       return;
     }
 
+    // The standalone server hosts ALL webhook routes — including inbound SMS,
+    // which needs no media streaming at all. Start it even when the media
+    // stream URL or voice-provider credentials are missing (those only disable
+    // live call audio, not webhooks). Warn instead of throwing so a fresh or
+    // partially-configured install still receives inbound SMS and call webhooks.
+    if (!this.config.twilioStreamUrl) {
+      console.warn(
+        "[clawvoice] CLAWVOICE_TWILIO_STREAM_URL is not set — inbound/outbound voice media is disabled, but SMS and other webhooks will still be served.",
+      );
+    }
+    if (!this.mediaSessionHandler) {
+      console.warn(
+        "[clawvoice] Voice provider credentials are missing — media streaming is disabled; SMS and webhooks remain active.",
+      );
+    }
+
     const streamPath = this.config.mediaStreamPath;
-    const streamHost = this.config.mediaStreamBind || "0.0.0.0";
+    const streamHost = this.config.mediaStreamBind || "127.0.0.1";
     const streamPort =
       Number.isFinite(this.config.mediaStreamPort) && this.config.mediaStreamPort > 0
         ? this.config.mediaStreamPort
@@ -258,7 +277,7 @@ export class ClawVoiceService {
       host: streamHost,
       port: streamPort,
       path: streamPath,
-      sessionHandler: this.mediaSessionHandler,
+      sessionHandler: this.mediaSessionHandler ?? undefined,
       authToken: this.mediaStreamAuthToken,
     });
 
@@ -337,8 +356,19 @@ export class ClawVoiceService {
     return this.callIdByProviderCallId.get(providerCallId) ?? null;
   }
 
+  /** Current calendar date (YYYY-MM-DD) in the configured notification timezone. */
+  private currentDateInTimezone(): string {
+    try {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: this.config.notificationTimezone,
+      }).format(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
+  }
+
   private checkDailyLimit(): void {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = this.currentDateInTimezone();
     if (today !== this.dailyResetDate) {
       this.dailyCallCount = 0;
       this.dailyResetDate = today;
@@ -470,7 +500,10 @@ export class ClawVoiceService {
   }
 
   public async hangup(callId?: string): Promise<HangupResponse> {
-    const selectedCallId = callId ?? this.activeCalls.keys().next().value;
+    // Omitting callId hangs up the MOST RECENT call (Map insertion order is
+    // oldest-first, so take the last key), matching the tool's documented behavior.
+    const activeKeys = Array.from(this.activeCalls.keys());
+    const selectedCallId = callId ?? activeKeys[activeKeys.length - 1];
     if (typeof selectedCallId !== "string") {
       throw new Error("No active call found to hang up.");
     }
@@ -641,6 +674,13 @@ export class ClawVoiceService {
     this.systemEventEmitter = emitter;
   }
 
+  /** Wire a memory extractor invoked with the transcript when a call completes. */
+  public setMemoryExtractor(
+    extractor: (callId: string, transcript: import("../voice/types").TranscriptEntry[]) => void,
+  ): void {
+    this.memoryExtractor = extractor;
+  }
+
   /**
    * Handle an inbound SMS: record it, send auto-reply, and notify owner agent.
    */
@@ -777,6 +817,10 @@ export class ClawVoiceService {
     const transcript = this.bridge.getTranscript(callId);
     const summary = this.bridge.generateCallSummary(callId);
     call.summary = summary ?? undefined;
+
+    if (transcript.length > 0) {
+      try { this.memoryExtractor?.(callId, transcript); } catch { /* best-effort */ }
+    }
 
     // Hang up first, then destroy session — ensures telephony provider
     // receives the hangup before we tear down the local bridge session.

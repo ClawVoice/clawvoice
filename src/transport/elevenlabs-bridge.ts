@@ -234,9 +234,15 @@ function normalizeMessage(raw: Record<string, unknown>): Record<string, unknown>
       return null;
 
     case "client_tool_call": {
-      const toolCallId = raw.tool_call_id as string ?? raw.client_tool_call_id as string ?? "";
-      const toolName = raw.tool_name as string ?? "";
-      const parameters = raw.parameters as Record<string, unknown> ?? {};
+      // ElevenLabs nests these fields under `client_tool_call`, not at the top
+      // level. Read from the nested event (falling back to top-level for
+      // forward-compat) so tool calls carry a real name/id/args.
+      const evt = raw.client_tool_call as Record<string, unknown> | undefined;
+      const toolCallId =
+        (evt?.tool_call_id as string) ?? (raw.tool_call_id as string) ?? (raw.client_tool_call_id as string) ?? "";
+      const toolName = (evt?.tool_name as string) ?? (raw.tool_name as string) ?? "";
+      const parameters =
+        (evt?.parameters as Record<string, unknown>) ?? (raw.parameters as Record<string, unknown>) ?? {};
       return {
         type: "FunctionCallRequest",
         function_call_id: toolCallId,

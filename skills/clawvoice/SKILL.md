@@ -32,7 +32,7 @@ Twilio requires real, publicly reachable endpoints. If a URL is not configured:
 1. Tell the user to start a tunnel (e.g., `ngrok http 3101`)
 2. Have them copy the public URL and set `CLAWVOICE_TWILIO_STREAM_URL`
 3. Or run `clawvoice setup` for guided configuration
-4. Run `clawvoice diagnostics` to verify before calling
+4. Run `clawvoice test` to verify before calling
 
 Do NOT set placeholder URLs. A fake URL causes silent call failure — the caller hears an error message or silence with no useful debugging information.
 
@@ -191,7 +191,7 @@ https://<your-ngrok-subdomain>.ngrok-free.dev/clawvoice/webhooks/twilio/voice
 2. **Test call**: "Try `openclaw clawvoice call +1XXXXXXXXXX` to make a test call."
 3. **Inbound test**: "If you configured inbound webhooks, call your Twilio/Telnyx number from another phone."
 
-If diagnostics fail, read the remediation text — it tells you exactly what's wrong and how to fix it.
+If `clawvoice test` reports failures, read the remediation text — it tells you exactly what's wrong and how to fix it.
 
 ### Quick Reference: What Each Provider Needs
 

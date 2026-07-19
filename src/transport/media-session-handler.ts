@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import { OUTBOUND_CALL_INSTRUCTIONS } from "../services/call-instructions";
 import { VoiceProviderClient, VoiceProviderSession } from "./voice-provider-bridge";
 import { VoiceBridgeService, VoiceWebSocket } from "../voice/bridge";
@@ -74,11 +74,27 @@ type TwilioMessage = TwilioStartMessage | TwilioMediaMessage | TwilioStopMessage
 
 export class TwilioMediaSessionHandler {
   private readonly sessionsBySocket = new Map<TwilioWebSocket, StreamSession>();
-  private readonly localCloses = new Set<TwilioWebSocket>();
+  // WeakSet so entries for provider-initiated closes are reclaimed by GC rather
+  // than leaking (a plain Set entry is never removed when the socket closes
+  // itself and no second 'close' event fires).
+  private readonly localCloses = new WeakSet<TwilioWebSocket>();
+  // Caller audio that arrives while the voice-provider connect is still in
+  // flight, buffered per-socket so the caller's opening words aren't dropped.
+  private readonly connecting = new Map<TwilioWebSocket, Buffer[]>();
+  private static readonly MAX_CONNECT_BUFFER_CHUNKS = 250;
   private static readonly MAX_COMPLETED = 1000;
   private readonly completedCallIds = new Set<string>();
 
   public constructor(private readonly options: TwilioMediaSessionHandlerOptions) {}
+
+  /**
+   * Whether this socket has an established (authenticated) media session.
+   * Used by the transport to decide when to extend a socket's idle timeout —
+   * unauthenticated/garbage frames must not keep a connection slot alive.
+   */
+  public hasSession(socket: TwilioWebSocket): boolean {
+    return this.sessionsBySocket.has(socket);
+  }
 
   /** Start (or restart) the silence timer for a session. */
   private startSilenceTimer(
@@ -196,7 +212,7 @@ export class TwilioMediaSessionHandler {
     const qp = socket._queryParams ?? {};
     const expectedToken = this.options.authToken;
     const receivedToken = cp.clawvoice_token || cp.token || qp.token || "";
-    if (expectedToken && receivedToken !== expectedToken) {
+    if (expectedToken && !timingSafeStringEqual(receivedToken, expectedToken)) {
       socket.close(1008, "Invalid media-stream token");
       return;
     }
@@ -323,6 +339,10 @@ export class TwilioMediaSessionHandler {
     // Must be declared before connect() so the onClose callback can capture it.
     let sessionClosed = false;
 
+    // Buffer caller audio that arrives during the (possibly multi-second)
+    // connect so the opening words aren't lost. Flushed once the session is up.
+    this.connecting.set(socket, []);
+
     let voiceSession: VoiceProviderSession;
     try {
       voiceSession = await this.options.voiceProviderClient.connect({
@@ -343,17 +363,29 @@ export class TwilioMediaSessionHandler {
             }
           }
 
-          if (action.action !== "audio") {
+          if (action.action === "audio") {
+            socket.send(
+              JSON.stringify({
+                event: "media",
+                streamSid: message.streamSid ?? "",
+                media: { payload: action.data.toString("base64") },
+              }),
+            );
             return;
           }
 
-          socket.send(
-            JSON.stringify({
-              event: "media",
-              streamSid: message.streamSid ?? "",
-              media: { payload: action.data.toString("base64") },
-            }),
-          );
+          // Barge-in: the caller started talking over the agent. Twilio buffers
+          // outbound media, so we must send a `clear` to flush already-queued
+          // agent audio — otherwise the agent keeps talking over the caller.
+          if (action.action === "barge_in") {
+            socket.send(
+              JSON.stringify({
+                event: "clear",
+                streamSid: message.streamSid ?? "",
+              }),
+            );
+            return;
+          }
         },
         onClose: (_code, reason) => {
           sessionClosed = true;
@@ -365,12 +397,14 @@ export class TwilioMediaSessionHandler {
         },
       });
     } catch {
+      this.connecting.delete(socket);
       this.options.bridge.reportDisconnection(callId, "voice_provider_error", "Voice provider connect failed");
       socket.close(1011, "Voice provider connect failed");
       return;
     }
 
     if (socket.readyState !== 1) {
+      this.connecting.delete(socket);
       voiceSession.close();
       this.options.bridge.reportDisconnection(
         callId,
@@ -416,18 +450,36 @@ export class TwilioMediaSessionHandler {
     };
     this.sessionsBySocket.set(socket, streamSession);
 
+    // Flush caller audio captured during the connect window (finding: opening
+    // words were dropped while awaiting the voice-provider connection).
+    const bufferedAudio = this.connecting.get(socket);
+    this.connecting.delete(socket);
+    if (bufferedAudio && bufferedAudio.length > 0) {
+      for (const chunk of bufferedAudio) {
+        voiceSession.sendAudio(chunk);
+      }
+      this.options.bridge.recordActivity(callId);
+    }
+
     // Start silence timeout — hangs up if no callee interaction within threshold
     this.startSilenceTimer(socket, streamSession, teardownFromVoiceProvider, urlPurpose);
     this.options.bridge.startHeartbeatMonitor(callId);
   }
 
   private handleMedia(socket: TwilioWebSocket, message: TwilioMediaMessage): void {
-    const session = this.sessionsBySocket.get(socket);
-    if (!session) {
+    if (!message.media?.payload) {
       return;
     }
 
-    if (!message.media?.payload) {
+    const session = this.sessionsBySocket.get(socket);
+    if (!session) {
+      // The voice-provider connect may still be in flight; buffer the caller's
+      // audio (bounded) so their opening words aren't dropped. Flushed in
+      // handleStart once the session is attached.
+      const pending = this.connecting.get(socket);
+      if (pending && pending.length < TwilioMediaSessionHandler.MAX_CONNECT_BUFFER_CHUNKS) {
+        pending.push(Buffer.from(message.media.payload, "base64"));
+      }
       return;
     }
 
@@ -435,14 +487,20 @@ export class TwilioMediaSessionHandler {
     session.voiceSession.sendAudio(chunk);
     this.options.bridge.recordActivity(session.callId);
 
-    // Reset silence timer on inbound audio — Twilio frames indicate the call
-    // is still active even when the voice provider hasn't responded yet.
-    if (session.silenceTimer) {
-      const teardown = (_detail: string) => {
-        session.voiceSession.close();
-        socket.close(1000, "Silence timeout");
-      };
-      this.resetSilenceTimer(socket, session, teardown);
-    }
+    // NOTE: do NOT reset the silence timer on raw Twilio media frames — Twilio
+    // delivers a continuous ~50 frames/sec (silence included) for the life of
+    // the call, so resetting here would mean the "no callee interaction" timer
+    // could never fire. The timer is reset only on meaningful voice-provider
+    // events (UserStartedSpeaking / ConversationText, in handleStart.onMessage).
   }
+}
+
+/** Constant-time string comparison that tolerates length mismatch. */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
 }

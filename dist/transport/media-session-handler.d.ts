@@ -40,9 +40,17 @@ export declare class TwilioMediaSessionHandler {
     private readonly options;
     private readonly sessionsBySocket;
     private readonly localCloses;
+    private readonly connecting;
+    private static readonly MAX_CONNECT_BUFFER_CHUNKS;
     private static readonly MAX_COMPLETED;
     private readonly completedCallIds;
     constructor(options: TwilioMediaSessionHandlerOptions);
+    /**
+     * Whether this socket has an established (authenticated) media session.
+     * Used by the transport to decide when to extend a socket's idle timeout —
+     * unauthenticated/garbage frames must not keep a connection slot alive.
+     */
+    hasSession(socket: TwilioWebSocket): boolean;
     /** Start (or restart) the silence timer for a session. */
     private startSilenceTimer;
     /** Reset the silence timer (called when meaningful activity occurs). */

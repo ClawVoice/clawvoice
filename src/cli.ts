@@ -728,7 +728,7 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
           const phoneSid = listData.incoming_phone_numbers?.[0]?.sid;
 
           if (phoneSid) {
-            await globalThis.fetch(
+            const updateResp = await globalThis.fetch(
               `https://api.twilio.com/2010-04-01/Accounts/${sid}/IncomingPhoneNumbers/${phoneSid}.json`,
               {
                 method: "POST",
@@ -744,10 +744,19 @@ export async function runInteractiveSetupWizard(api: PluginAPI, config?: ReturnT
                 }).toString(),
               },
             );
-            ws.stop("Twilio webhooks configured");
-            clackLog.success(`Voice: ${voiceWebhookUrl}`);
-            clackLog.success(`SMS:   ${smsWebhookUrl}`);
-            webhooksConfigured = true;
+            // Don't claim success on a 4xx/5xx (e.g. insufficient API key
+            // permissions) — that would make the user skip manual webhook setup
+            // and leave inbound calls broken.
+            if (updateResp.ok) {
+              ws.stop("Twilio webhooks configured");
+              clackLog.success(`Voice: ${voiceWebhookUrl}`);
+              clackLog.success(`SMS:   ${smsWebhookUrl}`);
+              webhooksConfigured = true;
+            } else {
+              const errText = await updateResp.text().catch(() => "");
+              ws.stop(`Twilio webhook update failed (${updateResp.status}). Configure webhooks manually in the Twilio console.`);
+              if (errText) clackLog.warn(errText.slice(0, 300));
+            }
           } else {
             ws.stop(`Could not find phone number ${phone} in your Twilio account`);
           }
@@ -857,6 +866,87 @@ function formatDuration(ms: number): string {
   return minutes > 0 ? `${minutes}m ${remaining}s` : `${seconds}s`;
 }
 
+interface LiveCheck { name: string; ok: boolean; detail: string; }
+
+/**
+ * Live connectivity probes for `clawvoice test`: verify the media-stream host is
+ * reachable and that telephony/voice provider credentials are actually accepted.
+ * Each probe is bounded by a short timeout and degrades gracefully.
+ */
+export async function runLiveConnectivityChecks(
+  config: ClawVoiceConfig,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
+): Promise<LiveCheck[]> {
+  const checks: LiveCheck[] = [];
+  const timeout = (ms: number): AbortSignal => AbortSignal.timeout(ms);
+
+  // Media stream host reachability (any HTTP response = reachable).
+  if (config.twilioStreamUrl) {
+    try {
+      const httpsUrl = config.twilioStreamUrl.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+      const host = new URL(httpsUrl);
+      host.pathname = "/";
+      host.search = "";
+      await fetchFn(host.toString(), { method: "GET", signal: timeout(4000) });
+      checks.push({ name: "Media stream host", ok: true, detail: `${host.hostname} reachable` });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      checks.push({ name: "Media stream host", ok: false, detail: `unreachable (${msg})` });
+    }
+  }
+
+  // Telephony credentials.
+  if (config.telephonyProvider === "twilio" && config.twilioAccountSid && config.twilioAuthToken) {
+    try {
+      const auth = Buffer.from(`${config.twilioAccountSid}:${config.twilioAuthToken}`).toString("base64");
+      const resp = await fetchFn(
+        `https://api.twilio.com/2010-04-01/Accounts/${config.twilioAccountSid}.json`,
+        { headers: { Authorization: `Basic ${auth}` }, signal: timeout(6000) },
+      );
+      checks.push({ name: "Twilio credentials", ok: resp.ok, detail: resp.ok ? "accepted" : `rejected (HTTP ${resp.status})` });
+    } catch (e) {
+      checks.push({ name: "Twilio credentials", ok: false, detail: `probe failed (${e instanceof Error ? e.message : String(e)})` });
+    }
+  }
+  if (config.telephonyProvider === "telnyx" && config.telnyxApiKey) {
+    try {
+      const resp = await fetchFn("https://api.telnyx.com/v2/phone_numbers?page[size]=1", {
+        headers: { Authorization: `Bearer ${config.telnyxApiKey}` },
+        signal: timeout(6000),
+      });
+      checks.push({ name: "Telnyx credentials", ok: resp.ok, detail: resp.ok ? "accepted" : `rejected (HTTP ${resp.status})` });
+    } catch (e) {
+      checks.push({ name: "Telnyx credentials", ok: false, detail: `probe failed (${e instanceof Error ? e.message : String(e)})` });
+    }
+  }
+
+  // Voice provider credentials.
+  if (config.voiceProvider === "deepgram-agent" && config.deepgramApiKey) {
+    try {
+      const resp = await fetchFn("https://api.deepgram.com/v1/projects", {
+        headers: { Authorization: `Token ${config.deepgramApiKey}` },
+        signal: timeout(6000),
+      });
+      checks.push({ name: "Deepgram credentials", ok: resp.ok, detail: resp.ok ? "accepted" : `rejected (HTTP ${resp.status})` });
+    } catch (e) {
+      checks.push({ name: "Deepgram credentials", ok: false, detail: `probe failed (${e instanceof Error ? e.message : String(e)})` });
+    }
+  }
+  if (config.voiceProvider === "elevenlabs-conversational" && config.elevenlabsApiKey) {
+    try {
+      const resp = await fetchFn("https://api.elevenlabs.io/v1/user", {
+        headers: { "xi-api-key": config.elevenlabsApiKey },
+        signal: timeout(6000),
+      });
+      checks.push({ name: "ElevenLabs credentials", ok: resp.ok, detail: resp.ok ? "accepted" : `rejected (HTTP ${resp.status})` });
+    } catch (e) {
+      checks.push({ name: "ElevenLabs credentials", ok: false, detail: `probe failed (${e instanceof Error ? e.message : String(e)})` });
+    }
+  }
+
+  return checks;
+}
+
 export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService: ClawVoiceService, memoryService?: MemoryExtractionService, workspacePath?: string): void {
   const raw = api as unknown as Record<string, unknown>;
   const logSource = (api.log && typeof api.log.info === "function") ? api.log
@@ -871,8 +961,23 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
   api.cli.register({
     name: "clawvoice setup",
     description: "Set up ClawVoice (configure telephony and voice providers)",
-    run: async (_args) => {
-      await runInteractiveSetupWizard(api, config);
+    run: async (args) => {
+      try {
+        await runInteractiveSetupWizard(api, config);
+      } catch (err) {
+        // @clack/prompts is ESM-only; on Node without require(esm) (20.0–20.18,
+        // 22.0–22.11) the dynamic import compiles to require() and throws
+        // ERR_REQUIRE_ESM. Fall back to the readline wizard, which works on every
+        // supported Node version, instead of crashing the setup flow.
+        const code = (err as NodeJS.ErrnoException)?.code;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (code === "ERR_REQUIRE_ESM" || /ERR_REQUIRE_ESM|Cannot use import statement|@clack\/prompts/.test(msg)) {
+          log.warn?.("Interactive TUI unavailable on this Node version — falling back to the basic setup wizard.");
+          await runSetupWizard(api, args ?? []);
+          return;
+        }
+        throw err;
+      }
     },
   });
 
@@ -1082,7 +1187,20 @@ export function registerCLI(api: PluginAPI, config: ClawVoiceConfig, callService
         }
         return;
       }
-      log.info("Connectivity test PASSED — all providers configured.", {});
+
+      // Live network probes — actually verify the tunnel is reachable and the
+      // provider credentials are accepted (config-shape checks above can't).
+      const live = await runLiveConnectivityChecks(config);
+      const liveFailures = live.filter((c) => !c.ok);
+      for (const c of live) {
+        log.info(`  ${c.ok ? "✓" : "✗"} ${c.name}: ${c.detail}`, {});
+      }
+      if (liveFailures.length > 0) {
+        log.info("Connectivity test FAILED — some live checks did not pass (see above).", {});
+        return;
+      }
+
+      log.info("Connectivity test PASSED — configuration valid and providers reachable.", {});
       const warnings = report.checks.filter((c) => c.status === "warn");
       if (warnings.length > 0) {
         log.info("Warnings:", {});

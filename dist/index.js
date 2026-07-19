@@ -200,6 +200,8 @@ function wrapExpressHandler(expressHandler, method) {
         }
         const expressReq = Object.assign(req, {
             body: parsedBody,
+            // Preserve exact bytes for signature verification (Telnyx Ed25519).
+            rawBody,
             // Default to https — Twilio webhook signature validation requires the correct protocol,
             // and behind a reverse proxy/tunnel the connection is typically https.
             protocol: req.headers["x-forwarded-proto"]?.toString().split(",")[0]?.trim() || "https",
@@ -422,7 +424,14 @@ function initPlugin(api) {
     const rawCfg = api.config;
     const nestedPluginCfg = rawCfg?.plugins
         ?.entries?.clawvoice;
-    const pluginCfg = api.pluginConfig ?? nestedPluginCfg?.config ?? api.config;
+    // `openclaw config set clawvoice.*` (the documented / SKILL.md-guided setup)
+    // lands here as a top-level `clawvoice` object on hosts that don't populate
+    // api.pluginConfig. Check it before falling back to the raw config so that
+    // documented setup path actually reaches resolveConfig on every host version.
+    const topLevelClawvoice = typeof rawCfg?.clawvoice === "object" && rawCfg.clawvoice !== null
+        ? rawCfg.clawvoice
+        : undefined;
+    const pluginCfg = api.pluginConfig ?? nestedPluginCfg?.config ?? topLevelClawvoice ?? api.config;
     const config = (0, config_1.resolveConfig)(pluginCfg);
     const validation = (0, config_1.validateConfig)(config);
     if (!validation.ok) {
@@ -457,8 +466,9 @@ function initPlugin(api) {
     const callService = new clawvoice_1.ClawVoiceService(config, undefined, workspacePath);
     const memoryService = new memory_extraction_1.MemoryExtractionService(config);
     // Wire filesystem-based memory writer for post-call transcript persistence
+    // and memory-candidate promotion. Shared by postCall and the memory service.
     if (workspacePath) {
-        callService.postCall.setMemoryWriter(async (namespace, key, value) => {
+        const fsMemoryWriter = async (namespace, key, value) => {
             // M8: Whitelist key characters to prevent path traversal and injection
             if (!/^[a-zA-Z0-9\-_\/]+$/.test(key)) {
                 throw new Error(`Invalid memory key: ${key}`);
@@ -494,8 +504,22 @@ function initPlugin(api) {
                 }
                 await fsp.writeFile(summaryPath, lines.join("\n") + "\n");
             }
-        });
+        };
+        callService.postCall.setMemoryWriter(fsMemoryWriter);
+        // Wire the same writer to the memory service so promoted candidates persist.
+        memoryService.setMemoryWriter(fsMemoryWriter);
     }
+    // Auto-extract memory candidates from each completed call's transcript so
+    // clawvoice_promote_memory has candidates to work with (previously the
+    // extractor was never invoked, making the whole feature dead code).
+    callService.setMemoryExtractor((callId, transcript) => {
+        if (!config.autoExtractMemories)
+            return;
+        try {
+            memoryService.extractFromTranscript(callId, transcript);
+        }
+        catch { /* best-effort extraction */ }
+    });
     // Wire system event emitter for immediate post-call summary delivery
     // and inbound call/SMS notifications
     resolveSystemEventEmitter(api)
