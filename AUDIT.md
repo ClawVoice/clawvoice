@@ -6,9 +6,9 @@ ElevenLabs), and the core plugin services. Every finding below was verified agai
 the actual source (and provider docs where protocol behavior mattered) — none are
 speculative.
 
-**Headline:** the project currently has **no working self-serve install path**, the
-**entire Telnyx path is non-functional** (four independent bugs), **Deepgram calls are
-silent**, **ElevenLabs tool-calling is broken at both ends of the pipe**, caller audio
+**Headline:** the project currently has **no automated self-serve install path**, the
+**Telnyx calling and inbound paths are non-functional** (four independent bugs;
+outbound SMS is the one working Telnyx capability), **Deepgram calls are silent**, **ElevenLabs tool-calling is broken at both ends of the pipe**, caller audio
 decoding is mathematically wrong, and two unhandled-error paths let any internet
 client **crash the whole process**.
 
@@ -16,7 +16,7 @@ client **crash the whole process**.
 
 ## 1. Onboarding / install flow (why "you need Claude to install it")
 
-### 1.1 CRITICAL — No working self-serve install path
+### 1.1 CRITICAL — No automated self-serve install path
 `README.md:97-135`, `src/index.ts:655-660`, `skills/clawvoice/SKILL.md`
 
 Every documented route dead-ends:
@@ -29,7 +29,8 @@ Every documented route dead-ends:
   into `~/.openclaw/openclaw.json`, running `npm install` inside the skill directory,
   and restarting the gateway. No command, script, or postinstall automates any of it.
 
-The only actor that can complete the flow is an AI agent following SKILL.md — hence
+A careful human can complete these manual steps by hand, but nothing automates them —
+the only guided path is an AI agent following SKILL.md, which is why in practice
 "you have to use Claude to install it."
 
 ### 1.2 HIGH — SKILL.md/README write config to a namespace the plugin never reads
@@ -67,14 +68,17 @@ README.md:410 tells agents to exec it — an exec'd wizard has no TTY and hangs 
 first prompt. Humans can't reach the wizard without hand-editing config; agents can't
 answer its prompts.
 
-### 1.6 MEDIUM/HIGH — Fresh installs silently lose all webhooks
+### 1.6 MEDIUM/HIGH — Fresh standalone/tunnel installs silently lose all webhooks
 `src/services/clawvoice.ts:240-244`, `src/index.ts:631`
 
 `startStandaloneTransport` throws when `twilioStreamUrl` or voice credentials are
-missing; `start()` rethrows and `initPlugin` merely logs it. The standalone server
-hosts *all* webhook routes (`routes.ts:417` calls it "the primary webhook handler"),
-so inbound SMS and voice are completely dead on a fresh install — including SMS,
-which needs no stream URL. The default `voiceProvider` is `elevenlabs-conversational`
+missing; `start()` rethrows and `initPlugin` merely logs it, so the standalone
+port-3101 server (which `routes.ts:417` calls "the primary webhook handler") never
+starts. Scope: `initPlugin` continues and still registers the same routes through the
+host gateway (`src/index.ts:662-679`), so deployments whose provider webhooks point at
+an OpenClaw-dispatched HTTP route keep working — but in the documented standalone/
+tunnel setup, where Twilio/Telnyx point at port 3101, inbound SMS and voice are
+completely dead on a fresh install — including SMS, which needs no stream URL. The default `voiceProvider` is `elevenlabs-conversational`
 — the highest-friction option (requires a pre-created ElevenLabs agent + key), and
 without both, this failure triggers.
 
@@ -145,7 +149,13 @@ verification step.
 
 ---
 
-## 2. Telnyx path (entirely non-functional — four stacked bugs)
+## 2. Telnyx path (calling and inbound are non-functional — four stacked bugs)
+
+Scope note: outbound Telnyx SMS does *not* traverse the broken
+call-control/webhook/media path — `ClawVoiceService.sendText` →
+`TelnyxTelephonyAdapter.sendSms` posts directly to `/v2/messages` with only the API
+key and phone number (`src/services/clawvoice.ts:586-624`, `src/telephony/telnyx.ts:73-106`)
+and works. Everything else on Telnyx is broken:
 
 ### 2.1 CRITICAL — Signature verified as hex; Telnyx sends base64
 `src/webhooks/verify.ts:39`
