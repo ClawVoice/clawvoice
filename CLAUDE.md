@@ -1,5 +1,3 @@
-
-
 <!-- PLAIN-REPORTING:START (synced from ~/claude/AGENTS.md — edit there, re-stamp everywhere) -->
 ## Reporting to Cody (MANDATORY — applies to cloud sessions too)
 
@@ -25,4 +23,13 @@ Cody is not a developer. All recaps and summaries must follow these rules:
 6. **Recommend closing the session** once the original goal is done: say it's
    finished, list what shipped in plain terms + issues filed, and state the
    session is safe to close.
+7. **Write the goal down first.** Record the original request in one plain
+   sentence somewhere durable (PR description first line, the issue, or
+   .planning/). Every recap quotes it verbatim — never reconstruct from memory.
+8. **Issue quality.** Filed issues get a plain-English title, one plain opening
+   paragraph (what / why it matters / cost of ignoring), technical detail below,
+   and the `ai-found` label (create it if missing).
+9. **Wrap-up clock.** Goal met = ONE more cleanup round, then file remaining
+   work as `ai-found` issues and end the session. Sessions older than 24h must
+   justify in plain language, at each recap, why they're still open.
 <!-- PLAIN-REPORTING:END -->
