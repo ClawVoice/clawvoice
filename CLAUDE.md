@@ -32,4 +32,7 @@ Cody is not a developer. All recaps and summaries must follow these rules:
 9. **Wrap-up clock.** Goal met = ONE more cleanup round, then file remaining
    work as `ai-found` issues and end the session. Sessions older than 24h must
    justify in plain language, at each recap, why they're still open.
+10. **Short recaps.** 12 short lines max; progress notes 3 lines. Never paste
+    logs, diffs, or file contents into chat — conclusion + file path only.
+    Full detail lives in commits, PR descriptions, and issues.
 <!-- PLAIN-REPORTING:END -->
